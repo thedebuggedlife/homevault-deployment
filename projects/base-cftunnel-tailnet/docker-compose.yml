@@ -1,0 +1,202 @@
+networks:
+  proxy:
+    name: ${DOCKER_NETWORK:-proxy}
+    external: true
+
+secrets:
+  authelia_session_secret:
+    file: ${APPDATA_LOCATION:-/srv/appdata}/secrets/authelia_session_secret
+  authelia_storage_encryption_key:
+    file: ${APPDATA_LOCATION:-/srv/appdata}/secrets/authelia_storage_encryption_key
+  smtp_password:
+    file: ${APPDATA_LOCATION:-/srv/appdata}/secrets/smtp_password
+  ldap_jwt_secret:
+    file: ${APPDATA_LOCATION:-/srv/appdata}/secrets/ldap_jwt_secret
+  ldap_key_seed:
+    file: ${APPDATA_LOCATION:-/srv/appdata}/secrets/ldap_key_seed
+  ldap_admin_password:
+    file: ${APPDATA_LOCATION:-/srv/appdata}/secrets/ldap_admin_password
+  ldap_authelia_password:
+    file: ${APPDATA_LOCATION:-/srv/appdata}/secrets/ldap_authelia_password
+  oidc_hmac_secret:
+    file: ${APPDATA_LOCATION:-/srv/appdata}/secrets/oidc_hmac_secret
+  oidc_jwks_key:
+    file: ${APPDATA_LOCATION:-/srv/appdata}/secrets/oidc_jwks_key
+  oidc_immich_digest:
+    file: ${APPDATA_LOCATION:-/srv/appdata}/secrets/oidc_immich_digest
+  oidc_immich_password:
+    file: ${APPDATA_LOCATION:-/srv/appdata}/secrets/oidc_immich_password
+  oidc_nextcloud_digest:
+    file: ${APPDATA_LOCATION:-/srv/appdata}/secrets/oidc_nextcloud_digest
+  oidc_nextcloud_password:
+    file: ${APPDATA_LOCATION:-/srv/appdata}/secrets/oidc_nextcloud_password
+  oidc_grafana_digest:
+    file: ${APPDATA_LOCATION:-/srv/appdata}/secrets/oidc_grafana_digest
+  oidc_grafana_password:
+    file: ${APPDATA_LOCATION:-/srv/appdata}/secrets/oidc_grafana_password
+  cloudflare_dns_api_token:
+    file: ${APPDATA_LOCATION:-/srv/appdata}/secrets/cloudflare_dns_api_token
+  portainer_admin_password:
+    file: ${APPDATA_LOCATION:-/srv/appdata}/secrets/portainer_admin_password
+  cloudflare_tunnel_token:
+    file: ${APPDATA_LOCATION:-/srv/appdata}/secrets/cloudflare_tunnel_token
+
+services:
+  cloudflared:
+    container_name: cloudflared
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    networks: 
+      - proxy
+    command: ['tunnel', 'run', '${CF_TUNNEL_ID}']
+    secrets:
+      - cloudflare_tunnel_token
+    environment:
+      NO_AUTOUPDATE: true
+      TUNNEL_CRED_FILE: /run/secrets/cloudflare_tunnel_token
+      TUNNEL_URL: http://traefik:80
+  traefik:
+    container_name: traefik
+    image: traefik:v3.3
+    restart: unless-stopped
+    networks:
+      - proxy
+    deploy:
+      resources:
+        limits:
+          pids: ${TRAEFIK_PID_LIMIT:-2048}
+    ports:
+      - 443:443
+    volumes: 
+      - ${APPDATA_LOCATION:-/srv/appdata}/traefik:/etc/traefik
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    secrets:
+      - cloudflare_dns_api_token
+    environment:
+      TZ: ${TZ:-America/Los_Angeles}
+      HOST_HOSTNAME: ${TRAEFIK_HOSTNAME:-traefik}
+      HOST_CONTAINERNAME: traefik
+      CF_DNS_API_TOKEN_FILE: /run/secrets/cloudflare_dns_api_token
+      TRAEFIK_HOSTNAME: traefik
+      TRAEFIK_ENTRYPOINTS_tailnet_HTTP_TLS_DOMAINS_0_MAIN: "*.${CF_DOMAIN_NAME}"
+      TRAEFIK_ENTRYPOINTS_tailnet_HTTP_TLS_DOMAINS_0_SANS: ${CF_DOMAIN_NAME}
+      TRAEFIK_CERTIFICATERESOLVERS_tailnetResolver_ACME_EMAIL: ${CF_ADMIN_EMAIL}
+      TRAEFIK_SERVERSTRANSPORT_INSECURESKIPVERIFY: true
+      TRAEFIK_HTTP_MIDDLEWARES_AUTH_FORWARDAUTH_ADDRESS: http://authelia:9091/api/verify?rd=https://authelia.${CF_DOMAIN_NAME}/
+    labels:
+      dns.manage: true
+      dns.content: ${TAILSCALE_IP}
+      traefik.enable: true
+      traefik.http.routers.api.entryPoints: tailnet
+      traefik.http.routers.api.service: api@internal
+      traefik.http.routers.api.rule: Host(`traefik.${CF_DOMAIN_NAME}`)
+      # traefik.http.routers.api.middlewares: authelia@file
+  lldap:
+    container_name: lldap
+    image: lldap/lldap:stable
+    restart: unless-stopped
+    networks:
+      - proxy
+    volumes: 
+      - ${APPDATA_LOCATION:-/srv/appdata}/lldap:/data
+    secrets:
+      - ldap_jwt_secret
+      - ldap_key_seed
+      - ldap_admin_password
+    environment:
+      TZ: ${TZ:-America/Los_Angeles}
+      LLDAP_JWT_SECRET_FILE: /run/secrets/ldap_jwt_secret
+      LLDAP_KEY_SEED_FILE: /run/secrets/ldap_key_seed
+      LLDAP_LDAP_BASE_DN: ${CF_DOMAIN_CN}
+      LLDAP_LDAP_USER_PASS_FILE: /run/secrets/ldap_admin_password
+    labels:
+      dns.manage: true
+      dns.content: ${TAILSCALE_IP}
+      traefik.enable: true
+      traefik.http.routers.lldap.entryPoints: tailnet
+      traefik.http.routers.lldap.rule: Host(`lldap.${CF_DOMAIN_NAME}`)
+      traefik.http.services.lldap.loadbalancer.server.port: 17170
+      # traefik.http.routers.api.middlewares: authelia@file
+  authelia:
+    container_name: authelia
+    image: authelia/authelia:latest
+    restart: unless-stopped
+    networks:
+      - proxy
+    volumes: 
+      - ${APPDATA_LOCATION:-/srv/appdata}/authelia:/config
+    secrets:
+      - authelia_session_secret
+      - authelia_storage_encryption_key
+      - smtp_password
+      - ldap_jwt_secret
+      - ldap_authelia_password
+      - oidc_hmac_secret
+      - oidc_jwks_key
+      - oidc_immich_digest
+      - oidc_nextcloud_digest
+      - oidc_grafana_digest
+    environment:
+      CF_DOMAIN_NAME: ${CF_DOMAIN_NAME}
+      CF_DOMAIN_CN: ${CF_DOMAIN_CN}
+      AUTHELIA_THEME: ${AUTHELIA_THEME}
+      AUTHELIA_IDENTITY_VALIDATION_RESET_PASSWORD_JWT_SECRET_FILE: /run/secrets/ldap_jwt_secret
+      AUTHELIA_TOTP_ISSUER: ${CF_DOMAIN_NAME}
+      AUTHELIA_AUTHENTICATION_BACKEND_LDAP_PASSWORD_FILE: /run/secrets/ldap_authelia_password
+      AUTHELIA_SESSION_SECRET_FILE: /run/secrets/authelia_session_secret
+      AUTHELIA_STORAGE_ENCRYPTION_KEY_FILE: /run/secrets/authelia_storage_encryption_key
+      AUTHELIA_NOTIFIER_SMTP_USERNAME: ${SMTP_USERNAME}
+      AUTHELIA_NOTIFIER_SMTP_PASSWORD_FILE: /run/secrets/smtp_password
+      AUTHELIA_NOTIFIER_SMTP_ADDRESS: smtp://${SMTP_SERVER}:${SMTP_PORT}
+      AUTHELIA_NOTIFIER_SMTP_SENDER: ${SMTP_SENDER}
+      AUTHELIA_IDENTITY_PROVIDERS_OIDC_HMAC_SECRET_FILE: /run/secrets/oidc_hmac_secret
+      OIDC_IMMICH_CLIENT_ID: ${OIDC_IMMICH_CLIENT_ID}
+      OIDC_NEXTCLOUD_CLIENT_ID: ${OIDC_NEXTCLOUD_CLIENT_ID}
+      OIDC_GRAFANA_CLIENT_ID: ${OIDC_GRAFANA_CLIENT_ID}
+      X_AUTHELIA_CONFIG_FILTERS: template
+    labels:
+      dns.manage: true
+      dns.cloudflare.proxied: true
+      traefik.enable: true
+      traefik.http.routers.authelia.entryPoints: cloudflare
+      traefik.http.routers.authelia.rule: Host(`authelia.${CF_DOMAIN_NAME}`)
+      traefik.http.services.authelia.loadbalancer.server.port: 9091
+  trafego:
+    container_name: trafego
+    image: avargaskun/trafegodns:latest
+    restart: unless-stopped
+    networks:
+      - proxy
+    volumes: 
+      - ${APPDATA_LOCATION:-/srv/appdata}/trafego:/config
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    secrets:
+      - cloudflare_dns_api_token
+    environment:
+      DNS_PROVIDER: cloudflare
+      DNS_DEFAULT_MANAGE: false
+      DNS_DEFAULT_PROXIED: false
+      DNS_DEFAULT_CONTENT: ${CF_TUNNEL_ID}.cfargotunnel.com
+      CLOUDFLARE_TOKEN_FILE: /run/secrets/cloudflare_dns_api_token
+      CLOUDFLARE_ZONE: ${CF_DOMAIN_NAME}
+      TRAEFIK_API_URL: http://traefik:8080/api
+      S6_CMD_WAIT_FOR_SERVICES_MAXTIME: 0
+  portainer:
+    container_name: portainer
+    image: portainer/portainer-ce:latest
+    restart: unless-stopped
+    command: ['--admin-password-file', '/run/secrets/portainer_admin_password']
+    networks:
+      - proxy
+    volumes:
+      - ${APPDATA_LOCATION:-/srv/appdata}/portainer:/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    secrets:
+      - portainer_admin_password
+    labels:
+      # dns.manage: true
+      dns.content: ${TAILSCALE_IP}
+      # traefik.enable: true
+      traefik.http.routers.portainer.entryPoints: tailnet
+      traefik.http.services.portainer.loadbalancer.server.port: 8000
+      # traefik.http.routers.api.middlewares: authelia@file

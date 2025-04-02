@@ -1,0 +1,77 @@
+global:
+  checkNewVersion: false
+  sendAnonymousUsage: false
+
+entryPoints:
+  cloudflare:
+    address: :80
+  # Increase timeouts to support large file uploads to immich
+    transport:
+      respondingTimeouts:
+        readTimeout: 600s
+        idleTimeout: 600s
+        writeTimeout: 600s
+    forwardedHeaders:
+      # Trust all forwarded headers
+      insecure: true
+    http:
+      middlewares:
+        - securityHeaders@file
+  
+  tailnet:
+    address: :443
+    http:
+      middlewares:
+        - securityHeaders@file
+      tls:
+        certResolver: tailnetResolver
+        # domains:
+        #   - main: ==> Use $TRAEFIK_ENTRYPOINTS_tailnet_HTTP_TLS_DOMAINS_0_MAIN ("*.example.com")
+        #     sans: ==> Use $TRAEFIK_ENTRYPOINTS_tailnet_HTTP_TLS_DOMAINS_0_SANS ("example.com")
+
+# Certificate resolvers for SSL connections
+certificatesResolvers:
+  tailnetResolver:
+    acme:
+      email: # ==> Use $TRAEFIK_CERTIFICATERESOLVERS_tailnetResolver_ACME_EMAIL ("user@example.com")
+      storage: /etc/traefik/acme.json
+      dnsChallenge:
+        provider: cloudflare
+        propagation:
+          delayBeforeChecks: 120s
+
+providers:
+  providersThrottleDuration: 2s
+  file:
+    filename: /etc/traefik/dynamic-config.yml
+    watch: true
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    watch: true
+    exposedByDefault: false
+
+# serversTransport:
+#   insecureSkipVerify: ==> Use $TRAEFIK_SERVERSTRANSPORT_INSECURESKIPVERIFY ("true")
+
+# Enable admin web UI
+api:
+  dashboard: true
+  insecure: true
+
+# Enable Prometheus scrape endpoint
+metrics:
+  prometheus:
+    entryPoint: traefik
+    addEntryPointsLabels: true
+    addServicesLabels: true
+    buckets:
+      - 0.1
+      - 0.3
+      - 1.2
+      - 5.0
+
+# Log level INFO|DEBUG|ERROR
+log:
+  level: INFO
+
+# accessLog: {}

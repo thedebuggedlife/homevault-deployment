@@ -1,0 +1,158 @@
+# theme: ==> Use $AUTHELIA_THEME
+
+# identity_validation:
+#   reset_password:
+#     jwt_secret: ==> Use $AUTHELIA_IDENTITY_VALIDATION_RESET_PASSWORD_JWT_SECRET
+
+server:
+  address: 'tcp://0.0.0.0:9091/'
+  buffers:
+    read: 4096
+    write: 4096
+  endpoints:
+    enable_pprof: false
+    enable_expvars: false
+  disable_healthcheck: false
+  tls:
+    key: ""
+    certificate: ""
+
+log:
+  level: info
+
+telemetry:
+  metrics:
+    enabled: true
+    address: 'tcp://:9959/metrics'
+
+totp:
+  # issuer: ==> Use: $AUTHELIA_TOTP_ISSUER
+  period: 30
+  skew: 1
+
+authentication_backend:
+  password_reset:
+      disable: false
+  refresh_interval: 1m
+  ldap:
+      implementation: lldap
+      address: ldap://lldap:3890
+      base_dn: {{ env "CF_DOMAIN_CN" }}
+      user: {{ expandenv "uid=authelia,ou=people,$CF_DOMAIN_CN" }}
+      # password: Use ==> $AUTHELIA_AUTHENTICATION_BACKEND_LDAP_PASSWORD_FILE
+      # The following allows sign in with EITHER username or email:
+      users_filter: "(&(|({username_attribute}={input})({mail_attribute}={input}))(objectClass=person))"
+
+access_control:
+  default_policy: deny
+  rules:
+    ## bypass rule
+    - domain: 
+        - {{ expandenv "authelia.$CF_DOMAIN_NAME" }}
+      policy: bypass
+    ## catch-all
+    - domain:
+        - {{ expandenv "\"*.$CF_DOMAIN_NAME\"" }}
+      subject: 
+        - "group:server_admin"
+      policy: one_factor
+
+session:
+  name: authelia_session
+  same_site: lax
+  # secret: ==> Use $AUTHELIA_SESSION_SECRET
+  expiration: 8h
+  inactivity: 5m
+  remember_me: 2M
+  cookies:
+    - domain: {{ env "CF_DOMAIN_NAME" }}
+      authelia_url: {{ expandenv "https://authelia.$CF_DOMAIN_NAME" }}
+
+regulation:
+  max_retries: 3
+  find_time: 10m
+  ban_time: 1h
+
+storage:
+  # encryption_key: ==> Use $AUTHELIA_STORAGE_ENCRYPTION_KEY
+  local:
+    path: /config/db.sqlite3
+  
+notifier:
+  disable_startup_check: false
+  smtp:
+    # username: Use: $AUTHELIA_NOTIFIER_SMTP_USERNAME
+    # password: Use: $AUTHELIA_NOTIFIER_SMTP_PASSWORD_FILE
+    # address: Use: $AUTHELIA_NOTIFIER_SMTP_ADDRESS
+    # sender: Use: $AUTHELIA_NOTIFIER_SMTP_SENDER
+    identifier: localhost
+    subject: "[Authelia] {title}"
+    startup_check_address: test@authelia.com
+    disable_require_tls: false
+    disable_html_emails: false
+    tls:
+      skip_verify: false
+      minimum_version: TLS1.2
+
+identity_providers:
+  oidc:
+    # hmac_secret: Use $AUTHELIA_IDENTITY_PROVIDERS_OIDC_HMAC_SECRET_FILE
+    jwks:
+      - key: {{ secret "/run/secrets/oidc_jwks_key" | mindent 10 "|" | msquote }}
+    authorization_policies:
+      immich_user:
+        default_policy: deny
+        rules:
+          - policy: 'one_factor'
+            subject: 'group:immich_user'
+      nc_user:
+        default_policy: deny
+        rules:
+          - policy: 'one_factor'
+            subject: 'group:nc_user'
+    clients:
+      - client_id: {{ env "OIDC_IMMICH_CLIENT_ID" }}
+        client_name: 'immich'
+        client_secret: {{ secret "/run/secrets/oidc_immich_digest" }}
+        public: false
+        authorization_policy: 'immich_user' # immich does not have its own RBAC
+        redirect_uris:
+          - {{ expandenv "https://immich.$CF_DOMAIN_NAME/auth/login" }}
+          - {{ expandenv "https://immich.${CF_DOMAIN_NAME}/user-settings" }}
+          - 'app.immich:///oauth-callback'
+        scopes:
+          - 'openid'
+          - 'profile'
+          - 'email'
+      - client_id: {{ env "OIDC_NEXTCLOUD_CLIENT_ID" }}
+        client_name: 'nextcloud'
+        client_secret: {{ secret "/run/secrets/oidc_nextcloud_digest" }}
+        public: false
+        authorization_policy: 'nc_user' # nextcloud does not have its own RBAC
+        require_pkce: true
+        pkce_challenge_method: 'S256'
+        redirect_uris:
+          - {{ expandenv "https://nextcloud.${CF_DOMAIN_NAME}/apps/user_oidc/code" }}
+        scopes:
+          - 'openid'
+          - 'profile'
+          - 'email'
+          - 'groups'
+        userinfo_signed_response_alg: 'none'
+        token_endpoint_auth_method: 'client_secret_post'
+      - client_id: {{ env "OIDC_GRAFANA_CLIENT_ID" }}
+        client_name: 'grafana'
+        client_secret: {{ secret "/run/secrets/oidc_grafana_digest" }}  # The digest of 'insecure_secret'.
+        public: false
+        authorization_policy: 'one_factor' # grafana does its own RBAC
+        require_pkce: true
+        pkce_challenge_method: 'S256'
+        redirect_uris:
+          - {{ expandenv "https://grafana.${CF_DOMAIN_NAME}/login/generic_oauth" }}
+        scopes:
+          - 'openid'
+          - 'profile'
+          - 'email'
+          - 'groups'
+        userinfo_signed_response_alg: 'none'
+        token_endpoint_auth_method: 'client_secret_post'
