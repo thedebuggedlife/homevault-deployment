@@ -1,5 +1,6 @@
+GH_PROJECT_NAME=base-immich-nextcloud
 GH_IO_BASE_URL=https://thedebuggedlife.github.io/selfhost-bootstrap/appdata
-GH_RAW_BASE_URL=https://raw.githubusercontent.com/thedebuggedlife/selfhost-bootstrap/refs/heads/main/projects/base-cftunnel-tailnet
+GH_RAW_PROJECT_URL=https://raw.githubusercontent.com/thedebuggedlife/selfhost-bootstrap/refs/heads/main/projects/$GH_PROJECT_NAME
 
 save_env() {
     local env_variable=$1
@@ -216,7 +217,7 @@ download_appdata() {
     user_input=${user_input:-Y}
     if [[ "$user_input" =~ ^[Yy]$ ]]; then
         echo "Downloading appdata..." >&2
-        wget -qO- $GH_IO_BASE_URL/base-cftunnel-tailnet.zip \
+        wget -qO- $GH_IO_BASE_URL/$GH_PROJECT_NAME.zip \
             | busybox unzip -n - -d "$APPDATA_LOCATION" 2>&1 \
             | grep -E "creating:|inflating:" \
             | awk -F': ' '{print $2}' \
@@ -696,7 +697,7 @@ configure_docker() {
 }
 
 prepare_env_file() {
-    local remote_env="$GH_RAW_BASE_URL/.env"
+    local remote_env="$GH_RAW_PROJECT_URL/.env"
     local user_input merge_with
     if [ -f "$ENV_FILE" ]; then
         echo "File '$ENV_FILE' already exists."
@@ -749,7 +750,7 @@ prepare_docker_compose() {
         user_input=${user_input:-N}
         if [[ ! "$user_input" =~ ^[Yy]$ ]]; then return 0; fi
     fi
-    wget -qO "$compose_file" "$GH_RAW_BASE_URL/docker-compose.yml"
+    wget -qO "$compose_file" "$GH_RAW_PROJECT_URL/docker-compose.yml"
     if [ $? -ne 0 ]; then
         return 1
     fi
