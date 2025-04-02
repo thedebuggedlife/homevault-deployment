@@ -1,19 +1,24 @@
 # Project: Base + Immich + NextCloud
 
-This project provides the foundational setup for your self-hosted infrastructure, offering a robust yet flexible solution to securely manage both public and internal services. Leveraging industry-standard tools, this setup addresses common infrastructure needs, including secure access, authentication, and DNS management.
+This project will help you bootstrap a simple but powerful home-lab server that can replace services like Google Docs and Google Photos—giving you more control, privacy, and ownership over your data.
 
-## What's Included?
+- 📂 **Self-host your documents and collaborate** – We’ll use [Nextcloud](https://nextcloud.com/), a versatile platform that replaces Google Docs and Drive. It offers file storage, document editing, calendar sync, and other collaborative tools.
+- 📸 **Store, organize, and share your photos securely** – For photos, we’ll set up [Immich](https://immich.app/), a powerful self-hosted alternative to Google Photos that automatically backs up and categorizes your pictures while giving you full control.
+- 👥 **Manage users with access to your self-hosted applications**- Easily add new members to your server and grant them access to Immich or Nextcloud.
+- 🌐 **Access your server securely from anywhere** – We’ll guide you through the process of setting up your own custom domain with [Cloudflare](https://www.cloudflare.com/products/registrar/) and configuring secure remote access, so you can get to your data wherever you are.
+- 🔄 **Set up encrypted backups to AWS for peace of mind** – We’ll configure automated, encrypted off-site backups to [AWS S3 Glacier](https://aws.amazon.com/s3/storage-classes/glacier/) storage to ensure your data is protected in case of hardware failure.
 
-- 🌐 **Cloudflare Tunnels:** Securely expose your services to the public internet.
-- 🛡️ **Tailscale:** Easily manage and secure internal service networking.
-- 🔄 **Traefik:** Powerful reverse proxy and load balancing.
-- 🔑 **Authelia:** Advanced authentication, authorization, and Single Sign-On (SSO).
-- 📡 **TrafegoDNS:** Automatic DNS record management.
-- 👥 **LLDAP:** Lightweight user and group identity management.
-- 📸 **Immich:** Self-hosted photo and video management solution.
-- 📂 **Nextcloud:** Solution for self-hosted file sharing services. Nextcloud provides functionality similar to Dropbox, Office 365, or Google Drive.
+![](./services.drawio.png)
 
 ## Pre-requisites
+
+In order to setup your self-hosted solution, you will need to take some preparation steps:
+
+1. **[Hardware](docs/hardware.md)**- Buy and/or build a server to host your applications. Review this document for some recommendations.
+2. **Linux**- A recent distribution of Linux. I recommend installing [Ubuntu Server](https://ubuntu.com/download/server) version 24.04 (or latest LTS)
+3. **SSH Client**- A computer with an SSH client that we can use to connect to your server for administration. I recommend [Termius](https://termius.com/)
+4. **[Cloudflare](docs/cloudflare.md)**- An account and domain registered with Cloudflare. We will also use their DNS and Zero Trust Tunnel services which are included in their FREE tier. Follow the steps in this document to get your account properly setup.
+5. **[Tailscale](docs/tailscale.md)**- An account registered with Tailscale. We will create a VPN mesh network (Tailnet) to remotely access our server for administration. Follow the steps in this document to get your account properly setup.
 
 ## Configuration and Deployment
 
