@@ -161,11 +161,6 @@ ask_for_variables() {
 }
 
 save_secrets() {
-    local 
-    if [ ! -d "$SECRETS_PATH" ]; then
-        sudo mkdir -p "$SECRETS_PATH"
-        sudo chown $USER:docker "$SECRETS_PATH"
-    fi
     save_env_id OIDC_IMMICH_CLIENT_ID
     save_env_id OIDC_GRAFANA_CLIENT_ID
     save_env_id OIDC_NEXTCLOUD_CLIENT_ID
@@ -195,11 +190,20 @@ create_appdata_location() {
         sudo chown $USER:docker "$APPDATA_LOCATION"
     fi
     SECRETS_PATH="${APPDATA_LOCATION%/}/secrets/"
+    if [ ! -d "$SECRETS_PATH" ]; then
+        sudo mkdir -p "$SECRETS_PATH"
+        sudo chown $USER:docker "$SECRETS_PATH"
+    fi
 }
 
 download_appdata() {
     local appdata_files=(
         "${APPDATA_LOCATION%/}/authelia/configuration.yml"
+        "${APPDATA_LOCATION%/}/lldap/bootstrap/group-configs/immich_user.json"
+        "${APPDATA_LOCATION%/}/lldap/bootstrap/group-configs/nextcloud_user.json"
+        "${APPDATA_LOCATION%/}/lldap/bootstrap/group-configs/server_admin.json"
+        "${APPDATA_LOCATION%/}/lldap/bootstrap/user-configs/authelia.json"
+        "${APPDATA_LOCATION%/}/traefik/dynamic-config.yml"
         "${APPDATA_LOCATION%/}/traefik/traefik.yml"
     )
     local missing_files=false
