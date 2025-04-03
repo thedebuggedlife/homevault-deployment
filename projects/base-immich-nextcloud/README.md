@@ -14,11 +14,12 @@ This project will help you bootstrap a simple but powerful home-lab server that 
 
 In order to setup your self-hosted solution, you will need to take some preparation steps:
 
-1. **[Hardware](docs/hardware.md)**- Buy and/or build a server to host your applications. Review this document for some recommendations.
+1. **[Hardware](docs/hardware.md)**- Buy and/or build a server to host your applications. Review this [document]((docs/hardware.md)) for some recommendations.
 2. **Linux**- A recent distribution of Linux. I recommend installing [Ubuntu Server](https://ubuntu.com/download/server) version 24.04 (or latest LTS)
-3. **SSH Client**- A computer with an SSH client that we can use to connect to your server for administration. I recommend [Termius](https://termius.com/)
-4. **[Cloudflare](docs/cloudflare.md)**- An account and domain registered with Cloudflare. We will also use their DNS and Zero Trust Tunnel services which are included in their FREE tier. Follow the steps in this document to get your account properly setup.
-5. **[Tailscale](docs/tailscale.md)**- An account registered with Tailscale. We will create a VPN mesh network (Tailnet) to remotely access our server for administration. Follow the steps in this document to get your account properly setup.
+3. **SSH Client**- A computer with an SSH client that we can use to connect to your server for administration. I recommend installing [Termius](https://termius.com/) on your laptop - there is a free version for Windows and Mac available.
+4. **[Cloudflare](docs/cloudflare.md)**- An account and domain registered with Cloudflare. We will also use their DNS and Zero Trust Tunnel services which are included in their FREE tier. Follow the steps in [this document]((docs/cloudflare.md)) to get your account properly setup.
+5. **[Tailscale](docs/tailscale.md)**- An account registered with Tailscale. We will create a VPN mesh network (Tailnet) to remotely access our server for administration. Follow the steps in [this document]((docs/tailscale.md)) to get your account properly setup.
+6. **[SMTP](docs/smtp.md)**- Some of the apps in this project use SMTP to send automated emails (e.g. for password recovery). Follow the steps in [this document]((docs/tailscale.md)) to get a free account setup with SMTP2GO, or add the flag `--custom-smtp` when running the setup script.
 
 ## Configuration and Deployment
 
