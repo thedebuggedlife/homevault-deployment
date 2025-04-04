@@ -163,7 +163,7 @@ services:
       traefik.http.services.authelia.loadbalancer.server.port: 9091
   trafego:
     container_name: trafego
-    image: avargaskun/trafegodns:latest
+    image: eafxx/trafegodns:1.9.1
     restart: unless-stopped
     networks:
       - proxy
@@ -180,7 +180,6 @@ services:
       CLOUDFLARE_TOKEN_FILE: /run/secrets/cloudflare_dns_api_token
       CLOUDFLARE_ZONE: ${CF_DOMAIN_NAME}
       TRAEFIK_API_URL: http://traefik:8080/api
-      S6_CMD_WAIT_FOR_SERVICES_MAXTIME: 0
   portainer:
     container_name: portainer
     image: portainer/portainer-ce:latest
