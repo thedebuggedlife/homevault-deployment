@@ -1037,7 +1037,7 @@ bootstrap_lldap() {
         return 1
     fi
     # Restart Authelia so it can connect to LLDAP with the updated user information
-    echo "Restarting Authelia container..."
+    echo -e "\nRestarting Authelia container..."
     sg docker -c "docker restart authelia"
     if [ $? -ne 0 ]; then
         log_error "Failed to restart Authelia container"
@@ -1100,11 +1100,13 @@ configure_admin_account() {
     # If already configured and the --resume flag was specified, skip the rest
     if [[ -n "$username" && -n "$email" && -n "$password" && "$RESUME" = "true" ]]; then return 0; fi
 
+    echo -e "Configuring the user account for the server administrator...\n" 
+
     username=$(ask_value "Username" "$username" true)
     email=$(ask_value "Email address" "$email" true)
     password=$(ask_value "Password" "$password" true "$password" true)
 
-    echo -e "Generating user configuration file ${Purple}$config_file${COff}"
+    echo -e "\nGenerating user configuration file ${Purple}$config_file${COff}\n"
 
     local json=$( [ -s "$config_file" ] && cat "$config_file" || echo "{}" )
     echo "$(echo $json | jq --arg id "$username" --arg email "$email" --arg password "$password" '.id = $id | .email = $email | .password = $password')" > "$config_file"
