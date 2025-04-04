@@ -106,28 +106,22 @@ save_env_id() {
 # Params:   $1 Variable name
 #           $2 Text prompt
 #           $3 If `true`, offer existing variable value as default [default=true]
+#           $4 If `true`, do not allow empty values [default=true]
 ask_for_env() {
     local env_variable=$1
-    local prompt_text=$2
+    local prompt=$2
     local use_default=${3:-true}
-    local env_value
-    while true; do
-        if [ "$use_default" != "true" ] || [ -z "${!env_variable}" ]; then
-            read -p "Enter value for $prompt_text: " env_value </dev/tty
-        else
-            if [ "$RESUME" = "true" ]; then
-                env_value=${!env_variable}
-            else
-                read -p "Enter value for $prompt_text [${!env_variable}]: " env_value </dev/tty
-                env_value=${env_value:-${!env_variable}}
-            fi
-        fi
-        if [ -n "$env_value" ]; then
-            break
-        fi
-        log_warn "Empty value is not allowed. Please try again."
-    done
-    save_env $env_variable $env_value
+    local required=${4:-true}
+    local masked=${5:-false}
+    if [[ "$RESUME" = "true" && -n "${!env_variable}" && "$use_default" = "true" ]]; then 
+        return 0
+    fi
+    local default_value
+    if [[ "$use_default" = "true" ]]; then
+        default_value="${!env_variable}"
+    fi
+    local user_input=$(ask_value "$prompt" "$default_value" "$required" "" "$masked")
+    save_env "$env_variable" "$user_input"
 }
 
 ################################################################################
@@ -174,7 +168,7 @@ create_password_digest_pair() {
         echo -e "The password and digest files for ${Cyan}$pair_name${COff} already exist."
         return 0
     fi
-    local output=$(docker run --rm authelia/authelia:latest authelia crypto hash generate argon2 --random --random.length $password_length --random.charset alphanumeric)
+    local output=$(sg docker -c "docker run --rm authelia/authelia:latest authelia crypto hash generate argon2 --random --random.length ${password_length} --random.charset alphanumeric")
     local password_value=$(echo "$output" | awk '/Random Password:/ {print $3}')
     local digest_value=$(echo "$output" | awk '/Digest:/ {print $2}')
     if [ -z "$password_value" ] || [ -z "$digest_value" ]; then
@@ -355,7 +349,7 @@ smtp2go_add_user() {
 ################################################################################
 #                            CLOUDFLARE API CLIENT
 
-# Makes a request to SMTP2GO API
+# Makes a request to Cloudflare API
 # Params:   $1 HTTP Method
 #           $2 API Path
 #           $3 Request body [Optional]
@@ -480,7 +474,7 @@ cloudflare_get_tunnel() {
 cloudflare_create_tunnel() {
     local account_id=$1
     local tunnel_name=$2
-    local body=$(jq -n --arg name "$tunnel_name" '{"name": $name}')
+    local body=$(jq -n --arg name "$tunnel_name" '{"name": $name, "config_src": "cloudflare"}')
     local response
     if ! response=$(cloudflare_rest_call POST "accounts/$account_id/cfd_tunnel" "$body"); then
         return 1
@@ -505,7 +499,55 @@ cloudflare_get_tunnel_token() {
         log_error "Failed to retrieve cloudflare tunnel token"
         return 1
     fi
-    jq -n --arg AccountTag "$account_id" --arg TunnelId "$tunnel_id" --arg TunnelSecret "$secret" --arg Endpoint "" '$ARGS.named'
+    echo "$secret"
+}
+
+################################################################################
+#                            TAILSCALE API CLIENT
+
+# Makes a request to Tailscale API
+# Params:   $1 HTTP Method
+#           $2 API Path
+#           $3 Request body [Optional]
+# Returns:  Body of the response
+tailscale_rest_call() {
+    local response
+    if ! response=$(rest_call $1 "https://api.tailscale.com/api/v2/$2" "Authorization: Bearer ${TAILSCALE_API_KEY}" "$3"); then
+        return 1
+    fi
+    echo "$response"
+}
+
+tailscale_create_auth_key() {
+    local response
+    body='{"capabilities":{"devices":{"create":{"reusable":false,"ephemeral":false,"preauthorized":true}}},"expirySeconds":120}'
+    if ! response=$(tailscale_rest_call "POST" "tailnet/-/keys" "$body"); then
+        return 1
+    fi
+    local key
+    if ! key=$(echo "$response" | jq -r '.key') || [ -z "$key" ]; then
+        log_error "Failed to retrieve key from server response"
+        return 1
+    fi
+    echo "$key"
+}
+
+tailscale_find_device() {
+    local ip=$1
+    local response
+    if ! response=$(tailscale_rest_call "GET" tailnet/-/devices); then
+        return 1
+    fi
+    echo "$response" | jq --arg ip "$ip" '.devices[] | select(.addresses[] == $ip)'
+}
+
+tailscale_disable_key_expiration() {
+    local device_id=$1
+    local body='{"keyExpiryDisabled":true}'
+    tailscale_rest_call POST "device/${device_id}/key" "$body"
+    if [ $? -ne 0 ]; then
+        return 1
+    fi
 }
 
 ################################################################################
@@ -558,7 +600,7 @@ download_appdata() {
             | awk -F': ' '{print $2}' \
             | while read -r path; do
                 echo -e "Changing owner of: ${Purple}${APPDATA_LOCATION%/}/$path${COff}"
-                chown $USER:docker "${APPDATA_LOCATION%/}/$path"
+                sudo chown $USER:docker "${APPDATA_LOCATION%/}/$path"
               done
         if [ $? -ne 0 ]; then
             return 1
@@ -577,9 +619,10 @@ ask_for_variables() {
         ask_for_env APPDATA_LOCATION "Application Data folder"
     fi
     ask_for_env TZ "Server Timezone"
-    ask_for_env CF_ADMIN_EMAIL "Cloudflare Administrator Email"
+    ask_for_env CERT_ACME_EMAIL "Email For Certificate Registration"
+    ask_for_env TAILSCALE_API_KEY "Tailscale API Key (optional)" true false
     ask_for_env CF_DNS_API_TOKEN "Cloudflare DNS API Token"
-    ask_for_env CF_DOMAIN_NAME "Domain Name For Server"
+    ask_for_env CF_DOMAIN_NAME "Domain Name (e.g. example.com)"
     save_env CF_DOMAIN_CN "\"$(echo "$CF_DOMAIN_NAME" | sed 's/^/dc=/' | sed 's/\./,dc=/g')\""
     ask_for_env CF_TUNNEL_NAME "Cloudflare Tunnel Name"
     ask_for_env SMTP2GO_API_KEY "SMTP2GO API Key"
@@ -598,9 +641,9 @@ ask_for_variables() {
         fi
         ask_for_env SMTP_USERNAME "SMTP Server Username"
     fi
-    ask_for_env AUTHELIA_THEME "dark"
-    ask_for_env LLDAP_ADMIN_PASSWORD "LLDAP Administrator Password"
-    ask_for_env PORTAINER_ADMIN_PASSWORD "Portainer Administrator Password"
+    ask_for_env AUTHELIA_THEME "Authelia admin website theme (dark | light)"
+    ask_for_env LLDAP_ADMIN_PASSWORD "LLDAP Administrator Password" true true true
+    ask_for_env PORTAINER_ADMIN_PASSWORD "Portainer Administrator Password" true true true
 }
 
 # Create any missing secret files
@@ -690,9 +733,9 @@ configure_smtp_domain() {
     local return_path=$(echo "$domain" | jq -r '.domain.rpath_verified')
     local link=$(echo "$domain" | jq -r '.trackers[0].cname_verified')
     if [ "$dkim" = "true" ] && [ "$return_path" = "true" ]; then
-        echo "Domain ${UPurple}$CF_DOMAIN_NAME${COff} is fully verified"
+        echo -e "Domain ${UPurple}$CF_DOMAIN_NAME${COff} is fully verified"
     else
-        echo "Domain ${UPurple}$CF_DOMAIN_NAME${COff} is not fully verified"
+        echo -e "Domain ${UPurple}$CF_DOMAIN_NAME${COff} is not fully verified"
         configure_smtp_domain_records "$domain"
         if [ $? -ne 0 ]; then
             return 1
@@ -734,45 +777,6 @@ configure_smtp_user() {
     save_env SMTP_PASSWORD "${password}"
 }
 
-# Check that cloudflared CLI is installed or install otherwise
-check_cloudflared() {
-    if ! command -v cloudflared &>/dev/null; then
-        echo -e "\n${Yellow}Cloudflared CLI is not installed.${COff}"
-        read -p "Do you want to install the Cloudflared CLI? [Y/n] " user_input </dev/tty
-        user_input=${user_input:-Y}
-        if [[ "$user_input" =~ ^[Yy]$ ]]; then
-            echo "Installing cloudflared..."
-            sudo mkdir -p --mode=0755 /usr/share/keyrings
-            curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg | sudo tee /usr/share/keyrings/cloudflare-main.gpg >/dev/null
-            echo "deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared any main" | sudo tee /etc/apt/sources.list.d/cloudflared.list
-            sudo apt-get update && sudo apt-get install cloudflared
-        else
-            abort_install
-        fi
-    fi
-    if [ ! -f ~/.cloudflared/cert.pem ]; then
-        echo -e "\n${Yellow}Cloudflared is not authenticated.${COff}"
-        read -s -N 1 -p "Press a key to proceed, then open the URL that gets generated below..." </dev/tty
-        echo
-        cloudflared tunnel login
-        if [ $? -ne 0 ]; then
-            return 1
-        fi
-    fi
-}
-
-# Remove the certificate installed by the cloudflare CLI during login
-cloudflared_logout() {
-    if [ -f ~/.cloudflared/cert.pem ]; then
-        echo
-        read -p "Do you want to logout from cloudflared (recommended)? [Y/n] " user_input </dev/tty
-        user_input=${user_input:-Y}
-        if [[ "$user_input" =~ ^[Yy]$ ]]; then
-            rm ~/.cloudflared/cert.pem
-        fi
-    fi
-}
-
 # Use the cloudflare CLI to create a tunnel
 # TBD: Switch to using the API instead
 configure_cloudflare_tunnel() {
@@ -802,39 +806,14 @@ configure_cloudflare_tunnel() {
     else
         echo -e "Cloudflare tunnel ${Purple}$CF_TUNNEL_NAME${COff} already exists."
     fi
-    echo "Tunnel: $tunnel"
     local tunnel_id=$(echo "$tunnel" | jq -r '.id')
-    echo "Tunnel ID: $tunnel_id"
     local token
     if ! token=$(cloudflare_get_tunnel_token "$account_id" "$tunnel_id"); then
         exit 1
     fi
+    save_env "CF_TUNNEL_ID" "$tunnel_id"
     echo -e "Saving tunnel credentials to ${Cyan}$token_file${COff}..."
     printf "%s" "$token" >"$token_file"
-    # check_cloudflared
-    # if [ $? -ne 0 ]; then
-    #     return 1
-    # fi
-    # local tunnel_id=$(cloudflared tunnel list --output json | jq -r --arg name "$CF_TUNNEL_NAME" '.[] | select(.name == $name) | .id')
-    # if [ $? -ne 0 ]; then
-    #     return 1
-    # fi
-    # local tunnel_token
-    # if [ -z "$tunnel_id" ]; then
-    #     echo -e "Tunnel ${Cyan}$CF_TUNNEL_NAME${COff} doesn't exist. Creating new tunnel..."
-    #     local tunnel=$(cloudflared tunnel create --output json "$CF_TUNNEL_NAME" | jq .)
-    #     if [ $? -ne 0 ]; then
-    #         return 1
-    #     fi
-    #     tunnel_id=$(echo "$tunnel" | jq -r '.id')
-    # fi
-    # save_env CF_TUNNEL_ID "$tunnel_id"
-    # echo -e "Saving tunnel credentials to ${Cyan}$token_file${COff}..."
-    # cloudflared tunnel token --cred-file "$token_file" "$CF_TUNNEL_NAME"
-    # if [ $? -ne 0 ]; then
-    #     return 1
-    # fi
-    # cloudflared_logout
 }
 
 # Check that Tailscale is installed and started
@@ -850,11 +829,6 @@ check_tailscale() {
                 log_error "Failed to install tailscale"
                 exit 1
             fi
-            sudo systemctl enable --now tailscaled
-            if [ $? -ne 0 ]; then
-                log_error "Failed to enable tailscale auto-start"
-                exit 1
-            fi
         else
             abort_install
         fi
@@ -863,9 +837,22 @@ check_tailscale() {
 
 # Connect to tailscale
 connect_tailscale() {
+    if tailscale status >/dev/null 2>&1; then return 0; fi
     local connected=false
     echo "Connecting to Tailscale..."
-    sudo tailscale up
+    local up_params=""
+    if [ -n "$TAILSCALE_API_KEY" ]; then
+        local auth_key
+        if ! auth_key=$(tailscale_create_auth_key); then
+            exit 1
+        fi
+        up_params="$up_params --auth-key=$auth_key"
+    fi
+    sudo tailscale up $up_params
+    if [ $? -ne 0 ]; then
+        log_error "Failed to initiate tailscale connection."
+        exit 1
+    fi
     for i in {1..15}; do
         if tailscale status >/dev/null 2>&1; then
             connected=true
@@ -889,12 +876,34 @@ configure_tailscale() {
     if [ $? -ne 0 ]; then
         return 1
     fi
+    sudo systemctl enable --now tailscaled
+    if [ $? -ne 0 ]; then
+        log_error "Failed to enable tailscale auto-start"
+        exit 1
+    fi
     local tailscale_ip=$(tailscale ip -4)
     if [ -z "$tailscale_ip" ]; then
         log_error "Failed to detect the Tailnet IP"
         exit 1
     fi
     echo "Tailscale is connected."
+    if [[ -z "$TAILSCALE_IP" && -n "$TAILSCALE_API_KEY" ]]; then
+        local device
+        if ! device=$(tailscale_find_device $tailscale_ip) || [ -z "$device" ]; then
+            log_error "Failed to find tailscale device with address: $tailscale_ip"
+            exit 1
+        fi
+        local device_id
+        if ! device_id=$(echo $device | jq -r '.id'); then
+            log_error "Could not extract id for tailscale device $device"
+            exit 1
+        fi
+        tailscale_disable_key_expiration "$device_id" >/dev/null
+        if [ $? -ne 0 ]; then
+            exit 1
+        fi
+        echo -e "Key expiration disabled for ${Cyan}$tailscale_ip${COff}"
+    fi
     save_env TAILSCALE_IP "$tailscale_ip"
 }
 
@@ -909,9 +918,10 @@ check_docker() {
             curl -fsSL https://get.docker.com -o get-docker.sh
             sudo sh ./get-docker.sh
             sudo systemctl enable --now docker
-            sudo groupadd docker
+            if ! getent group docker > /dev/null 2>&1; then
+                sudo groupadd docker
+            fi
             sudo usermod -aG docker $USER
-            newgrp docker
         else
             abort_install
             return 1
@@ -926,9 +936,9 @@ configure_docker() {
         return 1
     fi
     ask_for_env DOCKER_NETWORK "Docker network"
-    if ! docker network inspect "$DOCKER_NETWORK" >/dev/null 2>&1; then
+    if ! sg docker -c "docker network inspect '${DOCKER_NETWORK}'" >/dev/null 2>&1; then
         echo -e "Docker network ${Cyan}$DOCKER_NETWORK${COff} does not exist. Creating it with default settings..."
-        docker network create "$DOCKER_NETWORK"
+        sg docker -c "docker network create '$DOCKER_NETWORK'"
     else
         echo -e "Docker network ${Cyan}$DOCKER_NETWORK${COff} already exists."
     fi
@@ -939,7 +949,7 @@ prepare_env_file() {
     local remote_env="$GH_RAW_PROJECT_URL/.env"
     local user_input merge_with
     if [ -f "$ENV_FILE" ]; then
-        echo -e "File ${Cyan}$ENV_FILE${Cyan} already exists."
+        echo -e "File ${Cyan}$ENV_FILE${COff} already exists."
         local missing_keys=false
         while IFS='=' read -r key value; do
             if [ -n "$key" ]; then
@@ -994,7 +1004,7 @@ prepare_docker_compose() {
     if [ $? -ne 0 ]; then
         return 1
     fi
-    echo "File ${Cyan}$compose_file${COff} created."
+    echo -e "File ${Cyan}$compose_file${COff} created."
 }
 
 # Deploy services via docker compose
@@ -1006,12 +1016,7 @@ deploy_project() {
     if [[ ! "$user_input" =~ ^[Yy]$ ]]; then
         abort_install
     fi
-    if [ "$COMPOSE_UPDATE" != true ] && docker compose ls | awk 'NR > 1 {print $1}' | grep -qx "$COMPOSE_PROJECT"; then
-        echo -e "\n${Red}Compose project '$PROJECT' already exists.${COff}\n"
-        echo -e "Run again with the ${Purple}--update${COff} flag if you want to update the existing project."
-        exit 1
-    fi
-    docker compose -p "$COMPOSE_PROJECT" --env-file "$ENV_FILE" up -d -y --remove-orphans $COMPOSE_OPTIONS
+    sg docker -c "docker compose -p '$COMPOSE_PROJECT' --env-file '$ENV_FILE' up -d -y --remove-orphans --quiet-pull $COMPOSE_OPTIONS"
     if [ $? -ne 0 ]; then
         return 1
     fi
@@ -1026,18 +1031,16 @@ bootstrap_lldap() {
     echo "$authelia_json" > "$authelia_file"
     # Run LLDAP's built-in bootstrap script to create/update users and groups
     echo "Bootstrapping LLDAP with pre-configured users and groups..."
-    docker exec \
-        -e LLDAP_ADMIN_PASSWORD_FILE=/run/secrets/ldap_admin_password \
-        -e USER_CONFIGS_DIR=/data/bootstrap/user-configs \
-        -e GROUP_CONFIGS_DIR=/data/bootstrap/group-configs \
-        -it lldap ./bootstrap.sh
+    sg docker -c "docker exec -e LLDAP_ADMIN_PASSWORD_FILE=/run/secrets/ldap_admin_password -e USER_CONFIGS_DIR=/data/bootstrap/user-configs -e GROUP_CONFIGS_DIR=/data/bootstrap/group-configs -it lldap ./bootstrap.sh"
     if [ $? -ne 0 ]; then
+        log_error "Failed to bootstrap LLDAP users and groups"
         return 1
     fi
     # Restart Authelia so it can connect to LLDAP with the updated user information
     echo "Restarting Authelia container..."
-    docker restart authelia
+    sg docker -c "docker restart authelia"
     if [ $? -ne 0 ]; then
+        log_error "Failed to restart Authelia container"
         return 1
     fi
 }
@@ -1059,19 +1062,18 @@ mask_password() {
 ask_value() {
     local prompt="$1"
     local default="$2"
-    local required=$3
-    local display="$4"
-    local masked=$5
+    local required=${3:-false}
+    local display="${4:-${default}}"
+    local masked=${5:-false}
     local user_input
     while true; do
-        display=${display:-${default}}
         if [ "$masked" = "true" ]; then 
             display=$(mask_password "$display")
         fi
-        if [[ -n "$options" ]]; then
-            read $( [ "$masked" = true ] && echo "-s" ) -p "> $prompt [${options:-${default}}]: " user_input </dev/tty
+        if [[ -n "$display" ]]; then
+            read $( [ "$masked" = true ] && echo "-s" ) -p "$prompt [${display}]: " user_input </dev/tty
         else
-            read $( [ "$masked" = true ] && echo "-s" ) -p "> $prompt: " user_input </dev/tty
+            read $( [ "$masked" = true ] && echo "-s" ) -p "$prompt: " user_input </dev/tty
         fi
         if [ "$masked" = true ]; then echo >&2; fi
         user_input=${user_input:-${default}}
@@ -1111,14 +1113,17 @@ configure_admin_account() {
     fi
 }
 
-# Terminate program and print instructions on how to invoke again to resume
-abort_install() {
-    log_warn "Setup aborted by user."
-    echo -ne "To resume, run: ${BGreen}bash $0 --resume"
+get_resume_command() {
+    echo -n "bash $0 --resume"
     if [ -n "$APPDATA_OVERRIDE" ]; then echo -n " --appdata \"$APPDATA_OVERRIDE\""; fi
     if [ "$ENV_FILE" != ".env" ]; then echo -n " --env \"$ENV_FILE\""; fi
     if [ "$USE_SMTP2GO" = "false" ]; then echo -n " --custom-smtp"; fi
-    echo -e "${COff}\n"
+}
+
+# Terminate program and print instructions on how to invoke again to resume
+abort_install() {
+    log_warn "Setup aborted by user."
+    echo -e "To resume, run: ${BIGreen}$(get_resume_command)${COff}\n"
     exit 1
 }
 
@@ -1134,7 +1139,6 @@ print_usage() {
     echo "  --project <name>    Name to use for the Docker Compose project. [Default: 'self-host']"
     echo "  --custom-smtp       Do not use SMTP2GO for sending email, provide custom SMTP configuration."
     echo "  --resume            Skip any steps that have been previously completed."
-    echo "  --update            Update a previously deployed Docker Compose project."
     echo "  --dry-run           Execute Docker Compose in dry run mode."
     echo "  -h, --help          Display this help message."
     exit 1
@@ -1146,7 +1150,6 @@ USE_SMTP2GO=true
 RESUME=false
 ENV_FILE=.env
 COMPOSE_PROJECT=self-host
-COMPOSE_UPDATE=false
 COMPOSE_OPTIONS=
 
 ################################################################################
@@ -1166,11 +1169,6 @@ while [ "$#" -gt 0 ]; do
         ;;
     --custom-smtp)
         USE_SMTP2GO=false
-        shift 1
-        continue
-        ;;
-    --update)
-        COMPOSE_UPDATE=true
         shift 1
         continue
         ;;
@@ -1221,7 +1219,7 @@ log_header "Preparing deployment files"
 
 prepare_env_file
 if [ $? -ne 0 ]; then
-    echo "Failed to prepare '$ENV_FILE'."
+    log_error "Failed to prepare '$ENV_FILE'."
     exit 1
 fi
 
@@ -1229,27 +1227,13 @@ source "$ENV_FILE"
 
 prepare_docker_compose
 if [ $? -ne 0 ]; then
-    echo "Failed to prepare 'docker-compose.yml'."
+    log_error "Failed to prepare 'docker-compose.yml'."
     exit 1
 fi
 
 ask_for_variables
 if [ $? -ne 0 ]; then
-    echo "Failed to configure '$ENV_FILE' with configuration values."
-    exit 1
-fi
-
-log_header "Preparing application data folder"
-
-create_appdata_location
-if [ $? -ne 0 ]; then
-    echo "Could not create data folders."
-    exit 1
-fi
-
-download_appdata
-if [ $? -ne 0 ]; then
-    echo "Could not download application data."
+    log_error "Failed to configure '$ENV_FILE' with configuration values."
     exit 1
 fi
 
@@ -1257,7 +1241,21 @@ log_header "Checking Docker installation"
 
 configure_docker
 if [ $? -ne 0 ]; then
-    echo "Docker configuration failed."
+    log_error "Docker configuration failed."
+    exit 1
+fi
+
+log_header "Preparing application data folder"
+
+create_appdata_location
+if [ $? -ne 0 ]; then
+    log_error "Could not create data folders."
+    exit 1
+fi
+
+download_appdata
+if [ $? -ne 0 ]; then
+    log_error "Could not download application data."
     exit 1
 fi
 
@@ -1265,7 +1263,7 @@ log_header "Checking Tailscale installation"
 
 configure_tailscale
 if [ $? -ne 0 ]; then
-    echo "Tailscale configuration failed."
+    log_error "Tailscale configuration failed."
     exit 1
 fi
 
@@ -1273,7 +1271,7 @@ log_header "Configuring CloudFlare Tunnel"
 
 configure_cloudflare_tunnel
 if [ $? -ne 0 ]; then
-    echo "Cloudflare tunnel configuration failed."
+    log_error "Cloudflare tunnel configuration failed."
     exit 1
 fi
 
@@ -1283,13 +1281,13 @@ if [ "$USE_SMTP2GO" = "true" ]; then
 
     configure_smtp_domain
     if [ $? -ne 0 ]; then
-        echo "SMTP domain configuration failed."
+        log_error "SMTP domain configuration failed."
         exit 1
     fi
 
     configure_smtp_user
     if [ $? -ne 0 ]; then
-        echo "SMTP user configuration failed."
+        log_error "SMTP user configuration failed."
         exit 1
     fi
 
@@ -1301,7 +1299,7 @@ log_header "Preparing secret files"
 
 save_secrets
 if [ $? -ne 0 ]; then
-    echo "Failed to save secret files."
+    log_error "Failed to save secret files."
     exit 1
 fi
 
@@ -1309,7 +1307,7 @@ log_header "Deploying services"
 
 deploy_project
 if [ $? -ne 0 ]; then
-    echo "Failed to deploy project with docker compose."
+    log_error "Failed to deploy project with docker compose."
     exit 1
 fi
 
@@ -1317,12 +1315,12 @@ log_header "Bootstrapping user and group identities"
 
 configure_admin_account
 if [ $? -ne 0 ]; then
-    echo "Failed to configure the server administrator account."
+    log_error "Failed to configure the server administrator account."
     exit 1
 fi
 
 bootstrap_lldap
 if [ $? -ne 0 ]; then
-    echo "Failed to bootstrap LLDAP."
+    log_error "Failed to bootstrap LLDAP."
     exit 1
 fi

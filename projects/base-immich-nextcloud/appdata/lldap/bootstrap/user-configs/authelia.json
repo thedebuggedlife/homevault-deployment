@@ -1,5 +1,8 @@
 {
     "id": "authelia",
     "email": "authelia@authelia",
-    "password": ""
+    "password": "",
+    "groups": [
+        "lldap_password_manager"
+    ]
 }

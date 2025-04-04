@@ -53,8 +53,8 @@ services:
       - cloudflare_tunnel_token
     environment:
       NO_AUTOUPDATE: true
-      TUNNEL_CRED_FILE: /run/secrets/cloudflare_tunnel_token
       TUNNEL_URL: http://traefik:80
+      TUNNEL_TOKEN_FILE: /run/secrets/cloudflare_tunnel_token
   traefik:
     container_name: traefik
     image: traefik:v3.3
@@ -80,7 +80,7 @@ services:
       TRAEFIK_HOSTNAME: traefik
       TRAEFIK_ENTRYPOINTS_tailnet_HTTP_TLS_DOMAINS_0_MAIN: "*.${CF_DOMAIN_NAME}"
       TRAEFIK_ENTRYPOINTS_tailnet_HTTP_TLS_DOMAINS_0_SANS: ${CF_DOMAIN_NAME}
-      TRAEFIK_CERTIFICATERESOLVERS_tailnetResolver_ACME_EMAIL: ${CF_ADMIN_EMAIL}
+      TRAEFIK_CERTIFICATERESOLVERS_tailnetResolver_ACME_EMAIL: ${CERT_ACME_EMAIL}
       TRAEFIK_SERVERSTRANSPORT_INSECURESKIPVERIFY: true
       TRAEFIK_HTTP_MIDDLEWARES_AUTH_FORWARDAUTH_ADDRESS: http://authelia:9091/api/verify?rd=https://authelia.${CF_DOMAIN_NAME}/
     labels:
