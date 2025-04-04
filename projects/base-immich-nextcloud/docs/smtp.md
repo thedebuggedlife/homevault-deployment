@@ -8,6 +8,8 @@ Some of the services we will be setting up as part of this project have the abil
 
 It is possible to configure our server to use the SMTP service offered by GMail, Outlook.com. However, perhaps a more polished solution is to configure our server to send email from our own domain (e.g. `administrator@example.com`). This is possible, easy to configure, and free, using a service called [SMTP2GO](https://www.smtp2go.com/)
 
+With an account for SMTP2GO, you can also use it to send and receive emails from your personal GMail inbox using a custom email address, like `my.name@example.com`. If you are interested, you can find more details here: https://thedebugged.life/custom-email-domain-with-gmail/
+
 ## Step by Step Guide
 
  After that, you will create an API token to provide during the setup phase. The configuration script will take care of the rest.

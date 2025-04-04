@@ -43,11 +43,16 @@ We will use this token later during the configuration and deployment phase of th
 - Click on **Create Token**
 - Look for template called **Edit zone DNS** and click on **Use template**
 - Edit token name and add your domain at the end (e.g. `example.com`)
-- Make sure that **Permissions** include:
-    - **Zone.DNS** = **Edit**
-    - **Zone.Zone** = **Edit**
-    - **Zone.Zone Settings** = **Edit**
-- Choose your domain under **Zone Resources**
+- Make sure that **Permissions** include the following (see picture below):
+    - **Account** - **Cloudflare Tunnel** - **Edit**
+    - **Zone** - **Zone Settings** - **Edit**
+    - **Zone** - **Zone** - **Edit**
+    - **Zone** - **DNS** - **Edit**
+    - Choose your domain under **Zone Resources**
+
+Example:
+![](./cloudflare-settings.png)
+
 - Click on **Continue to summary**
 - Click on **Create Token**
 

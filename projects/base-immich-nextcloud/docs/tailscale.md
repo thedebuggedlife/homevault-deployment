@@ -28,3 +28,11 @@ To install Tailscale:
 - Select the right version based on your OS
 - Authenticate with your Google/Microsoft account
 - Connect your device
+
+### 3. Create an API Token
+
+- Log into your Tailscale dashboard and go to the [Keys section](https://login.tailscale.com/admin/settings/keys) under Settings
+- Click on the button **Generate access token**
+- Add a description for your key (e.g. "Self host setup") and give it an expiration time (we only need this key during project setup)
+
+> #### !! Copy the access token and save it somewhere you can access it later !! (e.g. _Notepad_)
