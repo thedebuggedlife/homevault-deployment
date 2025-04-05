@@ -596,20 +596,25 @@ tailscale_disable_key_expiration() {
     fi
 }
 
+# Makes sure a given path exist, if not, it is created with $USER:docker ownership
+ensure_path_exists() {
+    if [ ! -d "$1" ]; then
+        if ! sudo mkdir -p "$1" && sudo chown $USER:docker "$1"; then
+            log_error "Failed to create path $1"
+            exit 1
+        fi
+    fi
+}
+
 ################################################################################
 #                            CONFIGURATION STEPS
 
 # Create the application data folder (which is mounted into Docker)
-create_appdata_location() {
-    if [ ! -d "$APPDATA_LOCATION" ]; then
-        sudo mkdir -p "$APPDATA_LOCATION"
-        sudo chown $USER:docker "$APPDATA_LOCATION"
-    fi
+create_data_locations() {
+    ensure_path_exists "$APPDATA_LOCATION"
     SECRETS_PATH="${APPDATA_LOCATION%/}/secrets/"
-    if [ ! -d "$SECRETS_PATH" ]; then
-        sudo mkdir -p "$SECRETS_PATH"
-        sudo chown $USER:docker "$SECRETS_PATH"
-    fi
+    ensure_path_exists "$SECRETS_PATH"
+    ensure_path_exists "$IMMICH_UPLOAD_LOCATION"
 }
 
 # Download the default application data files
@@ -1428,7 +1433,7 @@ fi
 
 log_header "Preparing application data folder"
 
-create_appdata_location
+create_data_locations
 if [ $? -ne 0 ]; then
     log_error "Could not create data folders."
     exit 1
