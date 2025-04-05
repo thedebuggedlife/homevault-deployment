@@ -117,8 +117,9 @@ ask_for_env() {
         return 0
     fi
     local default_value
+    local env_variable_default="${env_variable}_DEFAULT"
     if [[ "$use_default" = "true" ]]; then
-        default_value="${!env_variable}"
+        default_value="${!env_variable:-${!env_variable_default}}"
     fi
     local user_input=$(ask_value "$prompt" "$default_value" "$required" "" "$masked")
     save_env "$env_variable" "$user_input"
@@ -644,6 +645,12 @@ ask_for_variables() {
     ask_for_env AUTHELIA_THEME "Authelia admin website theme (dark | light)"
     ask_for_env LLDAP_ADMIN_PASSWORD "LLDAP Administrator Password" true true true
     ask_for_env PORTAINER_ADMIN_PASSWORD "Portainer Administrator Password" true true true
+    ask_for_env IMMICH_SUBDOMAIN "Immich subdomain (<value>.${CF_DOMAIN_NAME})"
+    if [ -z "$IMMICH_UPLOAD_LOCATION" ]; then
+        IMMICH_UPLOAD_LOCATION_DEFAULT="${APPDATA_LOCATION%/}/immich/upload"
+    fi
+    ask_for_env IMMICH_UPLOAD_LOCATION "Immich photo upload location"
+    ask_for_env IMMICH_DEFAULT_QUOTA "Immich default user storage quota (in GB)"
 }
 
 # Create any missing secret files
@@ -661,6 +668,7 @@ save_secrets() {
     create_secret "${SECRETS_PATH}ldap_key_seed"
     create_secret "${SECRETS_PATH}ldap_authelia_password"
     create_secret "${SECRETS_PATH}oidc_hmac_secret"
+    create_secret "${SECRETS_PATH}immich_db_password"
     create_password_digest_pair "${SECRETS_PATH}oidc_immich"
     create_password_digest_pair "${SECRETS_PATH}oidc_nextcloud"
     create_password_digest_pair "${SECRETS_PATH}oidc_grafana"
@@ -991,8 +999,9 @@ prepare_env_file() {
 
 # Check that the docker compose project file is present
 prepare_docker_compose() {
+    local suffix=$1
     local user_input
-    local compose_file="docker-compose.yml"
+    local compose_file="docker-compose${suffix}.yml"
     if [ -f "$compose_file" ]; then
         echo -e "File ${Cyan}$compose_file${COff} already exists."
         if [ "$RESUME" = "true" ]; then return 0; fi
@@ -1000,7 +1009,7 @@ prepare_docker_compose() {
         user_input=${user_input:-N}
         if [[ ! "$user_input" =~ ^[Yy]$ ]]; then return 0; fi
     fi
-    curl -fsSL -o "$compose_file" "$GH_RAW_PROJECT_URL/docker-compose.yml"
+    curl -fsSL -o "$compose_file" "$GH_RAW_PROJECT_URL/${compose_file}"
     if [ $? -ne 0 ]; then
         return 1
     fi
@@ -1016,7 +1025,9 @@ deploy_project() {
     if [[ ! "$user_input" =~ ^[Yy]$ ]]; then
         abort_install
     fi
-    sg docker -c "docker compose -p '$COMPOSE_PROJECT' --env-file '$ENV_FILE' up -d -y --remove-orphans --quiet-pull $COMPOSE_OPTIONS"
+    local compose_options="-p '$COMPOSE_PROJECT' --env-file '$ENV_FILE' $COMPOSE_OPTIONS"
+    local compose_up_options="-d -y --remove-orphans --quiet-pull $COMPOSE_UP_OPTIONS"
+    sg docker -c "docker compose $compose_options up $compose_up_options"
     if [ $? -ne 0 ]; then
         return 1
     fi
@@ -1152,7 +1163,8 @@ USE_SMTP2GO=true
 RESUME=false
 ENV_FILE=.env
 COMPOSE_PROJECT=self-host
-COMPOSE_OPTIONS=
+COMPOSE_OPTIONS="-f docker-compose.yml -f docker-compose-immich.yml"
+COMPOSE_UP_OPTIONS=
 
 ################################################################################
 #                           PARSE COMMAND LINE
@@ -1175,7 +1187,7 @@ while [ "$#" -gt 0 ]; do
         continue
         ;;
     --dry-run)
-        COMPOSE_OPTIONS="$COMPOSE_OPTIONS --dry-run"
+        COMPOSE_UP_OPTIONS="$COMPOSE_UP_OPTIONS --dry-run"
         shift 1
         continue
         ;;
@@ -1230,6 +1242,12 @@ source "$ENV_FILE"
 prepare_docker_compose
 if [ $? -ne 0 ]; then
     log_error "Failed to prepare 'docker-compose.yml'."
+    exit 1
+fi
+
+prepare_docker_compose "-immich"
+if [ $? -ne 0 ]; then
+    log_error "Failed to prepare 'docker-compose-immich.yml'."
     exit 1
 fi
 
