@@ -1,3 +1,6 @@
+#!/bin/bash
+set -e
+
 GH_PROJECT_NAME=base-immich-nextcloud
 GH_BASE_URL=https://github.com/thedebuggedlife/selfhost-bootstrap/tree/main
 GH_PROJECT_URL=$GH_BASE_URL/projects/base-immich-nextcloud
@@ -599,7 +602,10 @@ tailscale_disable_key_expiration() {
 # Makes sure a given path exist, if not, it is created with $USER:docker ownership
 ensure_path_exists() {
     if [ ! -d "$1" ]; then
-        if ! sudo mkdir -p "$1" && sudo chown $USER:docker "$1"; then
+        if ! { 
+            sudo mkdir -p "$1" && 
+            sudo chown $USER:docker "$1" 
+        }; then
             log_error "Failed to create path $1"
             exit 1
         fi
@@ -644,9 +650,9 @@ download_appdata() {
     echo
     user_input=${user_input:-Y}
     if [[ "$user_input" =~ ^[Yy]$ ]]; then
-        echo -e "Downloading appdata...\n"
+        echo -e "Downloading appdata from ${Cyan}$GH_IO_APPDATA_URL${COff} ...\n"
         curl -fsSL $GH_IO_APPDATA_URL \
-            | busybox unzip -n - -d "$APPDATA_LOCATION" 2>&1 \
+            | sudo busybox unzip -n - -d "$APPDATA_LOCATION" 2>&1 \
             | grep -E "creating:|inflating:" \
             | awk -F': ' '{print $2}' \
             | while read -r path; do
@@ -695,7 +701,7 @@ ask_for_variables() {
     ask_for_env AUTHELIA_THEME "Authelia admin website theme (dark | light)"
     ask_for_env LLDAP_ADMIN_PASSWORD "LLDAP Administrator Password" true true true
     ask_for_env PORTAINER_ADMIN_PASSWORD "Portainer Administrator Password" true true true
-    ask_for_env IMMICH_SUBDOMAIN "Immich subdomain (<value>.${CF_DOMAIN_NAME})"
+    ask_for_env IMMICH_SUBDOMAIN "Immich subdomain"
     if [ -z "$IMMICH_UPLOAD_LOCATION" ]; then
         IMMICH_UPLOAD_LOCATION_DEFAULT="${APPDATA_LOCATION%/}/immich/upload"
     fi
@@ -882,10 +888,11 @@ check_tailscale() {
         user_input=${user_input:-Y}
         if [[ "$user_input" =~ ^[Yy]$ ]]; then
             echo "Installing tailscale..."
-            curl -fsSL https://tailscale.com/install.sh | sh >/dev/null
-            if [ $? -ne 0 ]; then
+            if ! curl -fsSL https://tailscale.com/install.sh | sh >/dev/null; then
                 log_error "Failed to install tailscale"
                 exit 1
+            else
+                echo -e "\n✅ Tailscale installation completed successfully\n"
             fi
         else
             abort_install
@@ -972,16 +979,21 @@ check_docker() {
         read -p "Do you want to install Docker? [Y/n] " user_input </dev/tty
         user_input=${user_input:-Y}
         if [[ "$user_input" =~ ^[Yy]$ ]]; then
-            echo "Installing Docker..." >&2
-            curl -fsSL https://get.docker.com | sudo sh
-            sudo systemctl enable --now docker
-            if ! getent group docker > /dev/null 2>&1; then
-                sudo groupadd docker
+            echo "Installing Docker..."
+            if ! curl -fsSL https://get.docker.com | sudo sh; then
+                log_error "Docker installation failed"
+                exit 1
+            else
+                echo -e "\n✅ Docker installation completed successfully\n"
             fi
-            sudo usermod -aG docker $USER
+            sudo systemctl enable --now docker > /dev/null
+            if ! getent group docker > /dev/null 2>&1; then
+                sudo groupadd docker > /dev/null
+            fi
+            sudo usermod -aG docker $USER > /dev/null
         else
             abort_install
-            return 1
+            exit 1
         fi
     fi
 }
@@ -995,7 +1007,7 @@ configure_docker() {
     ask_for_env DOCKER_NETWORK "Docker network"
     if ! sg docker -c "docker network inspect '${DOCKER_NETWORK}'" >/dev/null 2>&1; then
         echo -e "Docker network ${Cyan}$DOCKER_NETWORK${COff} does not exist. Creating it with default settings..."
-        sg docker -c "docker network create '$DOCKER_NETWORK'"
+        sg docker -c "docker network create '$DOCKER_NETWORK'" > /dev/null
     else
         echo -e "Docker network ${Cyan}$DOCKER_NETWORK${COff} already exists."
     fi
@@ -1423,7 +1435,7 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-log_header "Checking Docker installation"
+log_header "Configuring Docker"
 
 configure_docker
 if [ $? -ne 0 ]; then
@@ -1445,7 +1457,7 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-log_header "Checking Tailscale installation"
+log_header "Configuring Tailscale"
 
 configure_tailscale
 if [ $? -ne 0 ]; then
