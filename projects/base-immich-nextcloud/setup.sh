@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+# set -e
 
 GH_PROJECT_NAME=base-immich-nextcloud
 GH_BASE_URL=https://github.com/thedebuggedlife/selfhost-bootstrap/tree/main
@@ -121,6 +121,7 @@ save_env_id() {
 #           $2 Text prompt
 #           $3 If `true`, offer existing variable value as default [default=true]
 #           $4 If `true`, do not allow empty values [default=true]
+#           $5 If `true`, mask the input (password) [default=false]
 ask_for_env() {
     local env_variable=$1
     local prompt=$2
@@ -670,6 +671,8 @@ download_appdata() {
 
 # Ask for any variables that aren't yet defined in the .env file
 ask_for_variables() {
+    # Global Settings
+
     if [ -n "$APPDATA_OVERRIDE" ]; then
         save_env APPDATA_LOCATION "${APPDATA_OVERRIDE%/}"
     else
@@ -677,11 +680,20 @@ ask_for_variables() {
     fi
     ask_for_env TZ "Server Timezone"
     ask_for_env CERT_ACME_EMAIL "Email For Certificate Registration"
-    ask_for_env TAILSCALE_API_KEY "Tailscale API Key (optional)" true false
+
+    # Tailscale Settings
+
+    ask_for_env TAILSCALE_API_KEY "Tailscale API Key"
+
+    # Cloudflare Settings
+
     ask_for_env CF_DNS_API_TOKEN "Cloudflare DNS API Token"
     ask_for_env CF_DOMAIN_NAME "Domain Name (e.g. example.com)"
     save_env CF_DOMAIN_CN "\"$(echo "$CF_DOMAIN_NAME" | sed 's/^/dc=/' | sed 's/\./,dc=/g')\""
     ask_for_env CF_TUNNEL_NAME "Cloudflare Tunnel Name"
+
+    # SMTP Server Settings
+
     ask_for_env SMTP2GO_API_KEY "SMTP2GO API Key"
     if [ -z "$SMTP_SENDER" ]; then
         save_env SMTP_SENDER "noreply@${CF_DOMAIN_NAME}"
@@ -692,21 +704,38 @@ ask_for_variables() {
         ask_for_env SMTP_PASSWORD "SMTP Server Password"
         ask_for_env SMTP_SERVER "SMTP Server Address"
         ask_for_env SMTP_PORT "SMTP Server Port"
+        ask_for_env SMTP_SECURE "SMTP Security Protocol (optional) ('tls' or 'ssl')" true false
     else
         if [ -z "$SMTP_USERNAME" ]; then
             save_env SMTP_USERNAME "selfhost@${CF_DOMAIN_NAME}"
         fi
         ask_for_env SMTP_USERNAME "SMTP Server Username"
     fi
+
+    # Authelia Settings
+
     ask_for_env AUTHELIA_THEME "Authelia admin website theme (dark | light)"
+
+    # LLDAP Settings
+
     ask_for_env LLDAP_ADMIN_PASSWORD "LLDAP Administrator Password" true true true
+
+    # Portainer Settings
+
     ask_for_env PORTAINER_ADMIN_PASSWORD "Portainer Administrator Password" true true true
-    ask_for_env IMMICH_SUBDOMAIN "Immich subdomain"
-    if [ -z "$IMMICH_UPLOAD_LOCATION" ]; then
-        IMMICH_UPLOAD_LOCATION_DEFAULT="${APPDATA_LOCATION%/}/immich/upload"
-    fi
+
+    # Immich Settings
+
+    ask_for_env IMMICH_VERSION "Version of Immich to install"
+    ask_for_env IMMICH_SUBDOMAIN "Subdomain under ${CF_DOMAIN_NAME} to use for Immich"
     ask_for_env IMMICH_UPLOAD_LOCATION "Immich photo upload location"
     ask_for_env IMMICH_DEFAULT_QUOTA "Immich default user storage quota (in GB)"
+
+    # Nextcloud Settings
+
+    ask_for_env NEXTCLOUD_VERSION "Version of Nextcloud to install"
+    ask_for_env NEXTCLOUD_SUBDOMAIN "Subdomain under ${CF_DOMAIN_NAME} to use for Nextcloud"
+    ask_for_env NEXTCLOUD_DATA_LOCATION "Nextcloud document storage location"
 }
 
 # Create any missing secret files
@@ -725,6 +754,8 @@ save_secrets() {
     create_secret "${SECRETS_PATH}ldap_authelia_password"
     create_secret "${SECRETS_PATH}oidc_hmac_secret"
     create_secret "${SECRETS_PATH}immich_db_password"
+    create_secret "${SECRETS_PATH}nextcloud_db_root_password"
+    create_secret "${SECRETS_PATH}nextcloud_db_password"
     create_password_digest_pair "${SECRETS_PATH}oidc_immich"
     create_password_digest_pair "${SECRETS_PATH}oidc_nextcloud"
     create_password_digest_pair "${SECRETS_PATH}oidc_grafana"
@@ -1058,7 +1089,12 @@ prepare_env_file() {
     fi
 }
 
-# Check that the docker compose project file is present
+###
+# prepare_docker_compose - Checks if a docker-compose file exists, if not, downloads it from the GH repository
+#
+# @param {string} suffix - (optional) A file suffix for secondary files
+# @return void
+###
 prepare_docker_compose() {
     local suffix=$1
     local user_input
@@ -1070,8 +1106,7 @@ prepare_docker_compose() {
         user_input=${user_input:-N}
         if [[ ! "$user_input" =~ ^[Yy]$ ]]; then return 0; fi
     fi
-    curl -fsSL -o "$compose_file" "$GH_RAW_PROJECT_URL/${compose_file}"
-    if [ $? -ne 0 ]; then
+    if ! curl -fsSL -o "$compose_file" "$GH_RAW_PROJECT_URL/${compose_file}"; then
         return 1
     fi
     echo -e "File ${Cyan}$compose_file${COff} created."
@@ -1107,7 +1142,7 @@ bootstrap_lldap() {
     echo "$authelia_json" > "$authelia_file"
     # Run LLDAP's built-in bootstrap script to create/update users and groups
     echo "Bootstrapping LLDAP with pre-configured users and groups..."
-    sg docker -c "docker exec -e LLDAP_ADMIN_PASSWORD_FILE=/run/secrets/ldap_admin_password -e USER_CONFIGS_DIR=/data/bootstrap/user-configs -e GROUP_CONFIGS_DIR=/data/bootstrap/group-configs -it lldap ./bootstrap.sh"
+    sg docker -c "docker exec -e LLDAP_ADMIN_PASSWORD_FILE=/run/secrets/ldap_admin_password -e USER_CONFIGS_DIR=/data/bootstrap/user-configs -e GROUP_CONFIGS_DIR=/data/bootstrap/group-configs -it lldap ./bootstrap.sh" >/dev/null
     if [ $? -ne 0 ]; then
         log_error "Failed to bootstrap LLDAP users and groups"
         return 1
@@ -1174,20 +1209,33 @@ configure_admin_account() {
     fi
 
     # If already configured and the --resume flag was specified, skip the rest
-    if [[ -n "$username" && -n "$email" && -n "$password" && "$RESUME" = "true" ]]; then return 0; fi
+    if [[ -z "$username" || -z "$email" || -z "$password" || "$RESUME" != "true" ]]; then
+        echo -e "Configuring the user account for the server administrator...\n" 
 
-    echo -e "Configuring the user account for the server administrator...\n" 
+        username=$(ask_value "Username" "$username" true)
+        email=$(ask_value "Email address" "$email" true)
+        password=$(ask_value "Password" "$password" true "$password" true)
 
-    username=$(ask_value "Username" "$username" true)
-    email=$(ask_value "Email address" "$email" true)
-    password=$(ask_value "Password" "$password" true "$password" true)
+        echo -e "\nGenerating user configuration file ${Purple}$config_file${COff}\n"
 
-    echo -e "\nGenerating user configuration file ${Purple}$config_file${COff}\n"
+        local json=$( [ -s "$config_file" ] && cat "$config_file" || echo "{}" )
+        if ! json=$(echo $json | jq --arg id "$username" --arg email "$email" --arg password "$password" '.id = $id | .email = $email | .password = $password'); then
+            return 1
+        fi
+        if ! echo "$json" > "$config_file"; then
+            return 1
+        fi
+    fi
 
-    local json=$( [ -s "$config_file" ] && cat "$config_file" || echo "{}" )
-    echo "$(echo $json | jq --arg id "$username" --arg email "$email" --arg password "$password" '.id = $id | .email = $email | .password = $password')" > "$config_file"
-    if [ $? -ne 0 ]; then
-        return 1
+    username_file="${SECRETS_PATH}server_admin_username"
+    if [ ! -s "$username_file" ]; then
+        echo -e "Creating secret file ${Cyan}$username_file${COff}"
+        printf "%s" "$username" >"$username_file"
+    fi
+    password_file="${SECRETS_PATH}server_admin_password"
+    if [ ! -s "$password_file" ]; then
+        echo -e "Creating secret file ${Cyan}$password_file${COff}"
+        printf "%s" "$password" >"$password_file"
     fi
 }
 
@@ -1267,7 +1315,7 @@ bootstrap_immich() {
 
 get_resume_command() {
     echo -n "bash $0 --resume"
-    if [ -n "$RUN_BOOTSTRAP" = "true" ]; then echo -n " --bootstrap"; fi
+    if [ "$RUN_BOOTSTRAP" = "true" ]; then echo -n " --bootstrap"; fi
     if [ -n "$APPDATA_OVERRIDE" ]; then echo -n " --appdata \"$APPDATA_OVERRIDE\""; fi
     if [ "$ENV_FILE" != ".env" ]; then echo -n " --env \"$ENV_FILE\""; fi
     if [ "$USE_SMTP2GO" = "false" ]; then echo -n " --custom-smtp"; fi
@@ -1305,7 +1353,7 @@ RUN_BOOTSTRAP=
 RESUME=false
 ENV_FILE=.env
 COMPOSE_PROJECT=self-host
-COMPOSE_OPTIONS="-f docker-compose.yml -f docker-compose-immich.yml"
+COMPOSE_OPTIONS="-f docker-compose.yml -f docker-compose-immich.yml -f docker-compose-nextcloud.yml"
 COMPOSE_UP_OPTIONS=
 
 ################################################################################
@@ -1381,20 +1429,6 @@ if [ "$RUN_BOOTSTRAP" = "true" ]; then
 
     SECRETS_PATH="${APPDATA_LOCATION}/secrets/"
 
-    log_header "Bootstrapping LLDP user and group identities"
-
-    configure_admin_account
-    if [ $? -ne 0 ]; then
-        log_error "Failed to configure the server administrator account."
-        exit 1
-    fi
-
-    bootstrap_lldap
-    if [ $? -ne 0 ]; then
-        log_error "Failed to bootstrap LLDAP."
-        exit 1
-    fi
-
     log_header "Bootstrapping Immich configuration"
 
     bootstrap_immich
@@ -1426,6 +1460,12 @@ fi
 prepare_docker_compose "-immich"
 if [ $? -ne 0 ]; then
     log_error "Failed to prepare 'docker-compose-immich.yml'."
+    exit 1
+fi
+
+prepare_docker_compose "-nextcloud"
+if [ $? -ne 0 ]; then
+    log_error "Failed to prepare 'docker-compose-nextcloud.yml'."
     exit 1
 fi
 
@@ -1491,6 +1531,15 @@ if [ "$USE_SMTP2GO" = "true" ]; then
 
     save_env SMTP_SERVER mail.smtp2go.com
     save_env SMTP_PORT "587"
+    save_env SMTP_SECURE "tls"
+fi
+
+log_header "Configuring server administrator account"
+
+configure_admin_account
+if [ $? -ne 0 ]; then
+    log_error "Failed to configure the server administrator account."
+    exit 1
 fi
 
 log_header "Preparing secret files"
@@ -1506,5 +1555,13 @@ log_header "Deploying services"
 deploy_project
 if [ $? -ne 0 ]; then
     log_error "Failed to deploy project with docker compose."
+    exit 1
+fi
+
+log_header "Loading LLDP user and group identities"
+
+bootstrap_lldap
+if [ $? -ne 0 ]; then
+    log_error "Failed to bootstrap LLDAP."
     exit 1
 fi
