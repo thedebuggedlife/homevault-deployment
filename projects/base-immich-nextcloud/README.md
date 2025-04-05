@@ -23,20 +23,58 @@ In order to setup your self-hosted solution, you will need to take some preparat
 
 ## Configuration and Deployment
 
-Run the provided script to effortlessly bootstrap the entire environment:
+Prior to running the script, make sure you have the following available:
+
+- Your Tailscale API key ([see how to get it](docs/tailscale.md))
+- Your Cloudflare API key ([see how to get it](docs/cloudflare.md))
+- Your SMTP2Go API Key ([see how to get it](docs/smtp.md)) -OR- your desired SMTP server login information.
+
+To being deployment:
+
+1. SSH into your server
+2. Prepare your workspace and run the setup script as follows:
 
 ```bash
-mkdir -p ~/self-host/base
-cd ~/self-host/base
+mkdir -p ~/self-host/workspace
+cd ~/self-host/workspace
 wget -qO setup.sh https://raw.githubusercontent.com/thedebuggedlife/selfhost-bootstrap/refs/heads/main/projects/base-immich-nextcloud/setup.sh
 chmod +x setup.sh
 ./setup.sh
 ```
 
-This will deploy and configure all necessary components, providing you a fully operational setup within minutes.
+3. During setup, you will be asked to enter the API keys obtained earlier, as well as some additional configuration options. 
 
-## Customization
+> Many options are pre-configured with default values, shown in between squared braces `[]` which you can accept by pressing `ENTER`.
 
-This setup is designed to be opinionated yet easily customizable. Feel free to adjust the configuration files according to your particular infrastructure requirements.
+4. After, the script will install some dependencies and deploy the services.
+
+If the script gets interrupted and you need to restart it, you can add the flag `--resume` to skip all prompts that had been completed in a previous run:
+
+```
+./setup.sh --resume
+```
+
+:warning: After deploying all services, it will take ~5 minutes for all of them to be accessible behind your domain (e.g. https://immich.example.com)
+
+## Post-Install Steps
+
+After a successful run of the setup script as shown above, you will need to take a few steps to finish setting everything up:
+
+1. Get an Immich API Key ([see how to get it](./docs/immich.md#getting-an-api-token)).
+2. Run the bootstrap script:
+
+```
+cd ~/self-host/workspace
+./setup.sh --bootstrap
+```
+
+3. You will be asked to enter the username, email and password for the primary user of the server, who will also be given server administrator privileges. 
+4. You will also be asked for the Immich API key. Follow these steps to log into Immich and get the API Key.
+
+:warning: When creating an account on Immich during first login, use the same username and email you provided for the primary user. **This is very important for things to work properly afterwards!**
+
+🎉 Once the bootstrap script completes, your server is ready to be used!
+
+## User Management
 
 ==TBD==

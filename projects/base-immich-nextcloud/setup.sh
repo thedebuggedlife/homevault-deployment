@@ -1,8 +1,15 @@
 GH_PROJECT_NAME=base-immich-nextcloud
+GH_BASE_URL=https://github.com/thedebuggedlife/selfhost-bootstrap/tree/main
+GH_PROJECT_URL=$GH_BASE_URL/projects/base-immich-nextcloud
 GH_IO_BASE_URL=https://thedebuggedlife.github.io/selfhost-bootstrap
 GH_IO_APPDATA_URL=$GH_IO_BASE_URL/appdata/$GH_PROJECT_NAME.zip
 GH_RAW_BASE_URL=https://raw.githubusercontent.com/thedebuggedlife/selfhost-bootstrap/refs/heads/main
 GH_RAW_PROJECT_URL=$GH_RAW_BASE_URL/projects/$GH_PROJECT_NAME
+
+SMTP2GO_API_BASE_URL=https://api.smtp2go.com/v3
+CLOUDFLARE_API_BASE_URL=https://api.cloudflare.com/client/v4
+TAILSCALE_API_BASE_URL=https://api.tailscale.com/api/v2
+IMMICH_BASE_URL=
 
 ################################################################################
 #                               COLOR DEFINITIONS
@@ -68,11 +75,15 @@ log_header() {
 }
 
 log_warn() {
-    echo -en "\n${BIYellow}WARN:${IYellow} $1${COff}\n\n" >&2
+    echo -en "\n🟡 ${BIYellow}WARN:${IYellow} $1${COff}\n\n" >&2
 }
 
 log_error() {
-    echo -en "\n${BIRed}ERROR:${IRed} $1${COff}\n\n" >&2
+    echo -en "\n🔴 ${BIRed}ERROR:${IRed} $1${COff}\n\n" >&2
+}
+
+log_done() {
+    echo -en "\n🎉 ${BWhite}All operations completed successfully${COff}\n\n"
 }
 
 ################################################################################
@@ -263,6 +274,40 @@ rest_call() {
 }
 
 ################################################################################
+#                              IMMICH API CLIENT
+
+immich_rest_call() {
+    if [[ -z "$IMMICH_BASE_URL" || -z "$IMMICH_API_KEY" ]]; then
+        log_error "Base settings to call Immich have not been set."
+        return 1
+    fi
+    local response
+    if ! response=$(rest_call $1 "$IMMICH_BASE_URL/api/$2" "x-api-key: $IMMICH_API_KEY" "$3"); then
+        return 1
+    fi
+    echo "$response"
+}
+
+immich_get_config() {
+    local response
+    if ! response=$(immich_rest_call GET system-config); then
+        return 1
+    fi
+    if ! echo "$response" | jq empty > /dev/null 2>&1; then
+        log_error "Immich API did not return valid JSON"
+        log_error "$resposne"
+    fi
+    echo "$response"
+}
+
+immich_update_config() {
+    immich_rest_call PUT system-config "$1"
+    if [ $? -ne 0 ]; then
+        return 1
+    fi
+}
+
+################################################################################
 #                              SMTP2GO API CLIENT
 
 # Makes a request to SMTP2GO API
@@ -272,7 +317,7 @@ rest_call() {
 # Returns:  Body of the response
 smtp2go_rest_call() {
     local response
-    if ! response=$(rest_call $1 "https://api.smtp2go.com/v3/$2" "X-Smtp2go-Api-Key: $SMTP2GO_API_KEY" "$3"); then
+    if ! response=$(rest_call $1 "$SMTP2GO_API_BASE_URL/$2" "X-Smtp2go-Api-Key: $SMTP2GO_API_KEY" "$3"); then
         return 1
     fi
     echo "$response"
@@ -357,7 +402,7 @@ smtp2go_add_user() {
 # Returns:  Body of the response
 cloudflare_rest_call() {
     local response
-    if ! response=$(rest_call $1 "https://api.cloudflare.com/client/v4/$2" "Authorization: Bearer ${CF_DNS_API_TOKEN}" "$3"); then
+    if ! response=$(rest_call $1 "$CLOUDFLARE_API_BASE_URL/$2" "Authorization: Bearer ${CF_DNS_API_TOKEN}" "$3"); then
         return 1
     fi
     echo "$response"
@@ -513,7 +558,7 @@ cloudflare_get_tunnel_token() {
 # Returns:  Body of the response
 tailscale_rest_call() {
     local response
-    if ! response=$(rest_call $1 "https://api.tailscale.com/api/v2/$2" "Authorization: Bearer ${TAILSCALE_API_KEY}" "$3"); then
+    if ! response=$(rest_call $1 "$TAILSCALE_API_BASE_URL/$2" "Authorization: Bearer ${TAILSCALE_API_KEY}" "$3"); then
         return 1
     fi
     echo "$response"
@@ -923,8 +968,7 @@ check_docker() {
         user_input=${user_input:-Y}
         if [[ "$user_input" =~ ^[Yy]$ ]]; then
             echo "Installing Docker..." >&2
-            curl -fsSL https://get.docker.com -o get-docker.sh
-            sudo sh ./get-docker.sh
+            curl -fsSL https://get.docker.com | sudo sh
             sudo systemctl enable --now docker
             if ! getent group docker > /dev/null 2>&1; then
                 sudo groupadd docker
@@ -1035,6 +1079,10 @@ deploy_project() {
 
 # Create the users and groups needed to run the applications
 bootstrap_lldap() {
+    if [[ ! -s "${SECRETS_PATH}ldap_authelia_password" ]]; then
+        log_error "Missing secret files. Make sure to deploy project before running bootstrap."
+        exit 1
+    fi
     # Paste the generated secret for Authelia's LLDAP password into the bootstrap user file
     local authelia_password=$(<"${SECRETS_PATH}ldap_authelia_password")
     local authelia_file="${APPDATA_LOCATION%/}/lldap/bootstrap/user-configs/authelia.json"
@@ -1126,8 +1174,83 @@ configure_admin_account() {
     fi
 }
 
+bootstrap_immich() {
+    if [[ -z "$CF_DOMAIN_NAME" || \
+          -z "$OIDC_IMMICH_CLIENT_ID" || \
+          -z "$SMTP_SENDER" || \
+          -z "$SMTP_SERVER" || \
+          -z "$SMTP_PORT" || \
+          -z "$SMTP_USERNAME" || \
+          -z "$SMTP_PASSWORD" || \
+          -z "$SMTP_PASSWORD" || \
+          ! -s "${SECRETS_PATH}oidc_immich_password" ]]; then
+        log_error "Missing values in .env file. Make sure to deploy project before running bootstrap."
+        exit 1
+    fi
+
+    IMMICH_BASE_URL="https://${IMMICH_SUBDOMAIN}.${CF_DOMAIN_NAME}"
+
+    if [[ -z "$IMMICH_API_KEY" || "$RESUME" != "true" ]]; then
+
+        echo -e "\nYour Immich server address is: ${UCyan}${IMMICH_BASE_URL}${COff}"
+        echo -e "\nTo get an API Key, sign in and go to ${Purple}Account Settings${COff} and look for ${Purple}API Keys${COff}."
+        echo -e "\n${UYellow}You MUST use the same username and password provided for the server administrator.${COff}\n"
+
+        ask_for_env IMMICH_API_KEY "API Key for Immich"
+    fi
+
+    echo "Fetching current Immich server configuration..."
+    
+    local immich_config
+    if ! immich_config=$(immich_get_config); then
+        exit 1
+    fi
+
+    local client_secret=$(<"${SECRETS_PATH}oidc_immich_password")
+
+    if ! immich_config=$(echo "$immich_config" | jq \
+        --arg clientId "$OIDC_IMMICH_CLIENT_ID" \
+        --arg clientSecret "$client_secret" \
+        --argjson storageQuota "$IMMICH_DEFAULT_QUOTA" \
+        --arg externalDomain "https://${IMMICH_SUBDOMAIN}.${CF_DOMAIN_NAME}" \
+        --arg smtpFrom "$SMTP_SENDER" \
+        --arg smtpServer "$SMTP_SERVER" \
+        --argjson smtpPort "$SMTP_PORT" \
+        --arg smtpUsername "$SMTP_USERNAME" \
+        --arg smtpPassword "$SMTP_PASSWORD" \
+        --arg issuerUrl "https://authelia.${CF_DOMAIN_NAME}/.well-known/openid-configuration" '
+        .oauth.enabled = true |
+        .oauth.autoLaunch = true |
+        .oauth.autoRegister = true |
+        .oauth.buttonText = "Login" |
+        .oauth.clientId = $clientId |
+        .oauth.clientSecret = $clientSecret |
+        .oauth.defaultStorageQuota = $storageQuota |
+        .oauth.issuerUrl = $issuerUrl |
+        .passwordLogin.enabled = false |
+        .server.externalDomain = $externalDomain |
+        .notifications.smtp.enabled = true |
+        .notifications.smtp.from = $smtpFrom |
+        .notifications.smtp.transport.host = $smtpServer |
+        .notifications.smtp.transport.port = $smtpPort |
+        .notifications.smtp.transport.username = $smtpUsername |
+        .notifications.smtp.transport.password = $smtpPassword
+    '); then
+        log_error "Failed to generate Immich config json"
+        exit 1
+    fi
+
+    echo "Saving updated Immich server configuration..."
+
+    immich_update_config "$immich_config" >/dev/null
+    if [ $? -ne 0 ]; then
+        return 1
+    fi
+}
+
 get_resume_command() {
     echo -n "bash $0 --resume"
+    if [ -n "$RUN_BOOTSTRAP" = "true" ]; then echo -n " --bootstrap"; fi
     if [ -n "$APPDATA_OVERRIDE" ]; then echo -n " --appdata \"$APPDATA_OVERRIDE\""; fi
     if [ "$ENV_FILE" != ".env" ]; then echo -n " --env \"$ENV_FILE\""; fi
     if [ "$USE_SMTP2GO" = "false" ]; then echo -n " --custom-smtp"; fi
@@ -1148,6 +1271,7 @@ print_usage() {
     echo ""
     echo "Options:"
     echo "  --appdata <path>    Application data for deployment. [Default: '/srv/appdata']"
+    echo "  --bootstrap         Run initial configuration of self-hosted apps."
     echo "  --env <path>        Environment file to read variables from. [Default: './env']"
     echo "  --project <name>    Name to use for the Docker Compose project. [Default: 'self-host']"
     echo "  --custom-smtp       Do not use SMTP2GO for sending email, provide custom SMTP configuration."
@@ -1160,6 +1284,7 @@ print_usage() {
 APPDATA_OVERRIDE=
 SECRETS_PATH=
 USE_SMTP2GO=true
+RUN_BOOTSTRAP=
 RESUME=false
 ENV_FILE=.env
 COMPOSE_PROJECT=self-host
@@ -1183,6 +1308,11 @@ while [ "$#" -gt 0 ]; do
         ;;
     --custom-smtp)
         USE_SMTP2GO=false
+        shift 1
+        continue
+        ;;
+    --bootstrap)
+        RUN_BOOTSTRAP=true
         shift 1
         continue
         ;;
@@ -1228,6 +1358,37 @@ done
 
 ################################################################################
 #                           MAIN PROGRAM LOGIC
+
+if [ "$RUN_BOOTSTRAP" = "true" ]; then
+    source "$ENV_FILE"
+
+    SECRETS_PATH="${APPDATA_LOCATION}/secrets/"
+
+    log_header "Bootstrapping LLDP user and group identities"
+
+    configure_admin_account
+    if [ $? -ne 0 ]; then
+        log_error "Failed to configure the server administrator account."
+        exit 1
+    fi
+
+    bootstrap_lldap
+    if [ $? -ne 0 ]; then
+        log_error "Failed to bootstrap LLDAP."
+        exit 1
+    fi
+
+    log_header "Bootstrapping Immich configuration"
+
+    bootstrap_immich
+    if [ $? -ne 0 ]; then
+        log_error "Failed to bootstrap Immich."
+        exit 1
+    fi
+
+    log_done
+    exit 0
+fi
 
 log_header "Preparing deployment files"
 
@@ -1328,19 +1489,5 @@ log_header "Deploying services"
 deploy_project
 if [ $? -ne 0 ]; then
     log_error "Failed to deploy project with docker compose."
-    exit 1
-fi
-
-log_header "Bootstrapping user and group identities"
-
-configure_admin_account
-if [ $? -ne 0 ]; then
-    log_error "Failed to configure the server administrator account."
-    exit 1
-fi
-
-bootstrap_lldap
-if [ $? -ne 0 ]; then
-    log_error "Failed to bootstrap LLDAP."
     exit 1
 fi
