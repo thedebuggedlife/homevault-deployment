@@ -456,12 +456,16 @@ cloudflare_get_record() {
     echo "$response"
 }
 
-# Adds or updates a DNS record
-# Params:   $1 Zone ID
-#           $2 Type of DNS record (e.g. A | AAAA | CNAME)
-#           $3 Name of the record
-#           $4 Content to save on the record (e.g. 10.10.10.10)
-#           $5 Whether the record should get CloudFlare proxy logic [Default=true]
+###
+# Adds or updates a DNS record in the cloudflare account
+#
+# @param {string} zone_id   - The ID of the Zone (domain) where the record will be created
+# @param {string} type      - The type of record to create (e.g. A, AAA, CNAME)
+# @param {string} name      - The name of the DNS record (e.g. 'www')
+# @param {string} content   - The content for the DNS record (e.g. 10.10.10.10)
+# @param {boolean} proxied  - (optional) Whether the record should get CloudFlare proxy logic [Default=true]
+# @return void
+###
 cloudflare_add_or_update_record() {
     local zone_id=$1
     local type=$2
@@ -506,6 +510,13 @@ cloudflare_add_or_update_record() {
     fi
 }
 
+###
+# Retrieves a cloudflare tunnel by name
+#
+# @param {string} account_id    - The cloudflare account id where the tunnel exists
+# @param {string} tunnel_name   - The name of the tunnel being searched for
+# @return {json}                - The tunnel, if found, otherwise empty
+###
 cloudflare_get_tunnel() {
     local account_id=$1
     local tunnel_name=$2
@@ -521,6 +532,13 @@ cloudflare_get_tunnel() {
     fi
 }
 
+###
+# Creates a new cloudflare tunnel
+#
+# @param {string} account_id    - The cloudflare account id where the tunnel will be created
+# @param {string} tunnel_name   - The name for the tunnel
+# @return {json}                - The tunnel that was created
+###
 cloudflare_create_tunnel() {
     local account_id=$1
     local tunnel_name=$2
@@ -537,6 +555,13 @@ cloudflare_create_tunnel() {
     echo "$tunnel"
 }
 
+###
+# Gets a token that can be used to connect to a given cloudflare tunnel
+#
+# @param {string} account_id    - The cloudflare account id where the tunnel exists
+# @param {string} tunnel_id     - The cloudflare tunnel id the token is for
+# @return {string}              - The token for the token
+###
 cloudflare_get_tunnel_token() {
     local account_id=$1
     local tunnel_id=$2
@@ -555,11 +580,14 @@ cloudflare_get_tunnel_token() {
 ################################################################################
 #                            TAILSCALE API CLIENT
 
-# Makes a request to Tailscale API
-# Params:   $1 HTTP Method
-#           $2 API Path
-#           $3 Request body [Optional]
-# Returns:  Body of the response
+###
+# Makes a request to the Tailscale API
+#
+# @param {string} http_method   - The HTTP Method
+# @param {string} url_path      - The relative path of the API
+# @param {json} request_body    - (optional) The JSON object to send with the request
+# @return void
+###
 tailscale_rest_call() {
     local response
     if ! response=$(rest_call $1 "$TAILSCALE_API_BASE_URL/$2" "Authorization: Bearer ${TAILSCALE_API_KEY}" "$3"); then
@@ -568,6 +596,11 @@ tailscale_rest_call() {
     echo "$response"
 }
 
+###
+# Creates an authentication key that can be used to connect a new device to the tailnet
+#
+# @return {string} - The authentication key
+###
 tailscale_create_auth_key() {
     local response
     body='{"capabilities":{"devices":{"create":{"reusable":false,"ephemeral":false,"preauthorized":true}}},"expirySeconds":120}'
@@ -582,6 +615,12 @@ tailscale_create_auth_key() {
     echo "$key"
 }
 
+###
+# Finds a device in the tailnet by IP address
+#
+# @param {string} ip    - The IP of the device to look for
+# @return {json}        - The device if found, or empty
+###
 tailscale_find_device() {
     local ip=$1
     local response
@@ -591,6 +630,12 @@ tailscale_find_device() {
     echo "$response" | jq --arg ip "$ip" '.devices[] | select(.addresses[] == $ip)'
 }
 
+###
+# Disables key expiration for a given tailscale device
+#
+# @param {string} device_id - The device to disable key expiration for
+# @return void
+###
 tailscale_disable_key_expiration() {
     local device_id=$1
     local body='{"keyExpiryDisabled":true}'
@@ -600,7 +645,15 @@ tailscale_disable_key_expiration() {
     fi
 }
 
-# Makes sure a given path exist, if not, it is created with $USER:docker ownership
+################################################################################
+#                           HELPER FUNCTIONS
+
+###
+# Makes sure a given path exists, if not, it is created with $USER:docker ownership
+#
+# @param {string} suffix - (optional) A file suffix for secondary files
+# @return void
+###
 ensure_path_exists() {
     if [ ! -d "$1" ]; then
         if ! { 
@@ -616,7 +669,11 @@ ensure_path_exists() {
 ################################################################################
 #                            CONFIGURATION STEPS
 
+###
 # Create the application data folder (which is mounted into Docker)
+#
+# @return void
+###
 create_data_locations() {
     ensure_path_exists "$APPDATA_LOCATION"
     SECRETS_PATH="${APPDATA_LOCATION%/}/secrets/"
@@ -624,7 +681,11 @@ create_data_locations() {
     ensure_path_exists "$IMMICH_UPLOAD_LOCATION"
 }
 
+###
 # Download the default application data files
+#
+# @return void
+###
 download_appdata() {
     local appdata_files=(
         "${APPDATA_LOCATION%/}/authelia/configuration.yml"
@@ -669,7 +730,11 @@ download_appdata() {
     fi
 }
 
+###
 # Ask for any variables that aren't yet defined in the .env file
+#
+# @return void
+###
 ask_for_variables() {
     # Global Settings
 
@@ -738,7 +803,11 @@ ask_for_variables() {
     ask_for_env NEXTCLOUD_DATA_LOCATION "Nextcloud document storage location"
 }
 
+###
 # Create any missing secret files
+#
+# @return void
+###
 save_secrets() {
     save_env_id OIDC_IMMICH_CLIENT_ID
     save_env_id OIDC_GRAFANA_CLIENT_ID
@@ -769,8 +838,12 @@ save_secrets() {
     fi
 }
 
+###
 # Create the necessary DNS records as specified by SMTP2GO
-# Params:   $1 Domain object as returned by SMTP2GO API
+#
+# @param {json} domain_obj - Domain object as returned by the SMTP2GO API
+# @return void
+###
 configure_smtp_domain_records() {
     local domain_obj=$1
     local zone_id
@@ -800,7 +873,11 @@ configure_smtp_domain_records() {
     cloudflare_add_or_update_record $zone_id "CNAME" $name.$CF_DOMAIN_NAME $content
 }
 
+###
 # Configure the domain and validate it has been verified by SMTP2GO to send emails
+#
+# @return void
+###
 configure_smtp_domain() {
     local user_input
     if [ "$SMTP2GO_DOMAIN_VALIDATED" = "true" ]; then
@@ -843,7 +920,11 @@ configure_smtp_domain() {
     save_env SMTP2GO_DOMAIN_VALIDATED "true"
 }
 
-# Create a user that can send mail through SMTP2GO and save the credentials
+###
+# Create a user that can send mail through SMTP2GO. Save the credentials to .env
+#
+# @return void
+###
 configure_smtp_user() {
     if [ -n "$SMTP_PASSWORD" ]; then
         echo "SMTP2GO user appears to already be configured."
@@ -872,8 +953,11 @@ configure_smtp_user() {
     save_env SMTP_PASSWORD "${password}"
 }
 
-# Use the cloudflare CLI to create a tunnel
-# TBD: Switch to using the API instead
+###
+# Prepares a Cloudflare tunnel to be used by the cloudflared service
+#
+# @return void
+###
 configure_cloudflare_tunnel() {
     if [ -z "$CF_TUNNEL_NAME" ]; then
         log_error "Please specify a value for 'CF_TUNNEL_NAME' in the '$ENV_FILE' file."
@@ -911,7 +995,11 @@ configure_cloudflare_tunnel() {
     printf "%s" "$token" >"$token_file"
 }
 
-# Check that Tailscale is installed and started
+###
+# Checks that tailscale is installed
+#
+# @return void
+###
 check_tailscale() {
     if ! command -v tailscale >/dev/null 2>&1; then
         echo -e "\n${Yellow}Tailscale is not installed.${COff}"
@@ -931,7 +1019,13 @@ check_tailscale() {
     fi
 }
 
-# Connect to tailscale
+configure_cloudflare_tunnel
+
+###
+# Check that the ENV file is current with the remote version
+#
+# @return void
+###
 connect_tailscale() {
     if tailscale status >/dev/null 2>&1; then return 0; fi
     local connected=false
@@ -962,7 +1056,11 @@ connect_tailscale() {
     fi
 }
 
-# Extract the tailscale IP
+###
+# Prepare Tailscale connection for deployment and save Tailnet IP
+#
+# @return void
+###
 configure_tailscale() {
     check_tailscale
     if [ $? -ne 0 ]; then
@@ -1003,7 +1101,11 @@ configure_tailscale() {
     save_env TAILSCALE_IP "$tailscale_ip"
 }
 
+###
 # Check that Docker is installed
+#
+# @return void
+###
 check_docker() {
     if ! command -v docker >/dev/null 2>&1; then
         echo -e "\n${Yellow}Docker is not installed.${COff}"
@@ -1029,6 +1131,11 @@ check_docker() {
     fi
 }
 
+###
+# Create resources needed to run docker compose
+#
+# @return void
+###
 # Create docker resources needed for deployment
 configure_docker() {
     check_docker
@@ -1044,7 +1151,11 @@ configure_docker() {
     fi
 }
 
+###
 # Check that the ENV file is current with the remote version
+#
+# @return void
+###
 prepare_env_file() {
     local remote_env="$GH_RAW_PROJECT_URL/.env"
     local user_input merge_with
@@ -1090,7 +1201,7 @@ prepare_env_file() {
 }
 
 ###
-# prepare_docker_compose - Checks if a docker-compose file exists, if not, downloads it from the GH repository
+# Checks if a docker-compose file exists, if not, downloads it from the GH repository
 #
 # @param {string} suffix - (optional) A file suffix for secondary files
 # @return void
@@ -1112,7 +1223,11 @@ prepare_docker_compose() {
     echo -e "File ${Cyan}$compose_file${COff} created."
 }
 
+###
 # Deploy services via docker compose
+#
+# @return void
+###
 deploy_project() {
     local user_input
     echo -en "Project ${Purple}$COMPOSE_PROJECT${COff} is ready for deployment. "
@@ -1129,7 +1244,11 @@ deploy_project() {
     fi
 }
 
+###
 # Create the users and groups needed to run the applications
+#
+# @return void
+###
 bootstrap_lldap() {
     if [[ ! -s "${SECRETS_PATH}ldap_authelia_password" ]]; then
         log_error "Missing secret files. Make sure to deploy project before running bootstrap."
@@ -1156,20 +1275,28 @@ bootstrap_lldap() {
     fi
 }
 
+###
 # Create a string of '*' characters with the same length as the input
+#
+# @param {string} suffix - (optional) A file suffix for secondary files
+# @return void
+###
 mask_password() {
     local input="$1"
     local len=${#input}
     printf "%${len}s" "" | tr ' ' '*'
 }
 
+###
 # Asks user for input
-# Params:   $1 The prompt to display
-#           $2 The default value if user does not enter a value
-#           $3 If `true`, keep asking user for value until not empty
-#           $4 The options to show in between square braces []
-#           $5 If `true` value will be treated as a secret (***)
-# Returns:  The value entered by the user
+#
+# @param {string} prompt    - The prompt to display
+# @param {string} default   - The default value if user does not enter a value
+# @param {boolean} required - If `true`, keep asking user for value until not empty
+# @param {string} display   - The options to show in between square braces []
+# @param {boolean} masked   - If `true` value will be treated as a secret (***)
+# @return {string} The value entered by the user
+###
 ask_value() {
     local prompt="$1"
     local default="$2"
@@ -1196,7 +1323,11 @@ ask_value() {
     echo "$user_input"
 }
 
-# Create the file needed by LLDAP to bootstrap an account. Account will be given server-admin permissions
+###
+# Create the file used by LLDAP to bootstrap the administrator account
+#
+# @return void
+###
 configure_admin_account() {
     local config_file="${APPDATA_LOCATION%/}/lldap/bootstrap/user-configs/admin.json"
     local username email password
