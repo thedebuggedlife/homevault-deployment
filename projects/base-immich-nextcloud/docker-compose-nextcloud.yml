@@ -24,6 +24,12 @@ services:
     image: mariadb:10.6
     restart: always
     command: --transaction-isolation=READ-COMMITTED --log-bin=binlog --binlog-format=ROW
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--su-mysql", "--connect", "--innodb_initialized"]
+      start_period: 1m
+      interval: 10s
+      timeout: 5s
+      retries: 3
     networks:
       - nextcloud
     secrets:
@@ -36,6 +42,7 @@ services:
       - MYSQL_PASSWORD_FILE=/run/secrets/nextcloud_db_password
       - MYSQL_DATABASE=nextcloud
       - MYSQL_USER=nextcloud
+      - MARIADB_MYSQL_LOCALHOST_USER=1
 
   nextcloud-app:
     container_name: nextcloud_app
@@ -44,7 +51,8 @@ services:
     ports:
       - 8080:80
     depends_on:
-      - nextcloud-db
+      nextcloud-db:
+        condition: service_healthy
     networks:
       - nextcloud
       - nextcloud-proxy

@@ -1019,8 +1019,6 @@ check_tailscale() {
     fi
 }
 
-configure_cloudflare_tunnel
-
 ###
 # Check that the ENV file is current with the remote version
 #
