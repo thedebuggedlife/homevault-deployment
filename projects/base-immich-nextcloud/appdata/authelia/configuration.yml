@@ -32,16 +32,22 @@ totp:
 
 authentication_backend:
   password_reset:
-      disable: false
+    disable: false
   refresh_interval: 1m
   ldap:
-      implementation: lldap
-      address: ldap://lldap:3890
-      base_dn: {{ env "CF_DOMAIN_CN" }}
-      user: {{ expandenv "uid=authelia,ou=people,$CF_DOMAIN_CN" }}
-      # password: Use ==> $AUTHELIA_AUTHENTICATION_BACKEND_LDAP_PASSWORD_FILE
-      # The following allows sign in with EITHER username or email:
-      users_filter: "(&(|({username_attribute}={input})({mail_attribute}={input}))(objectClass=person))"
+    implementation: lldap
+    address: ldap://lldap:3890
+    base_dn: {{ env "CF_DOMAIN_CN" }}
+    user: {{ expandenv "uid=authelia,ou=people,$CF_DOMAIN_CN" }}
+    # password: Use ==> $AUTHELIA_AUTHENTICATION_BACKEND_LDAP_PASSWORD_FILE
+    # The following allows sign in with EITHER username or email:
+    users_filter: "(&(|({username_attribute}={input})({mail_attribute}={input}))(objectClass=person))"
+    attributes:
+      extra:
+        immich_quota:
+          value_type: 'integer'
+        nextcloud_quota:
+          value_type: 'integer'
 
 access_control:
   default_policy: deny

@@ -1445,6 +1445,8 @@ bootstrap_immich() {
         .oauth.autoLaunch = true |
         .oauth.autoRegister = true |
         .oauth.buttonText = "Login" |
+        .oauth.storageLabelClaim = "preferred_username" |
+        .oauth.storageQuotaClaim = "immich_quota" |
         .oauth.clientId = $clientId |
         .oauth.clientSecret = $clientSecret |
         .oauth.defaultStorageQuota = $storageQuota |
