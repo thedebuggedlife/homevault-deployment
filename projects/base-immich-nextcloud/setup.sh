@@ -21,6 +21,7 @@ USE_SMTP2GO=true
 POST_INSTALL=
 RESUME=false
 ENV_FILE=.env
+AS_USER="$USER"
 COMPOSE_PROJECT=self-host
 COMPOSE_OPTIONS="-f docker-compose.yml -f docker-compose-immich.yml -f docker-compose-nextcloud.yml"
 COMPOSE_UP_OPTIONS=
@@ -673,7 +674,7 @@ tailscale_disable_key_expiration() {
 #                           HELPER FUNCTIONS
 
 ###
-# Makes sure a given path exists, if not, it is created with $USER:docker ownership
+# Makes sure a given path exists, if not, it is created with $AS_USER:docker ownership
 #
 # @param {string} suffix - (optional) A file suffix for secondary files
 # @return void
@@ -682,7 +683,7 @@ ensure_path_exists() {
     if [ ! -d "$1" ]; then
         if ! { 
             sudo mkdir -p "$1" && 
-            sudo chown $USER:docker "$1" 
+            sudo chown $AS_USER:docker "$1" 
         }; then
             log_error "Failed to create path $1"
             exit 1
@@ -746,7 +747,7 @@ download_appdata() {
             | while read -r path; do
                 full_path="${APPDATA_LOCATION%/}/$path"
                 echo -e "Changing owner of: ${Purple}${full_path}${COff}"
-                sudo chown $USER:docker "$full_path"
+                sudo chown $AS_USER:docker "$full_path"
                 if [[ "$path" == *.sh ]]; then
                     echo -e "Setting execute flag on: ${Purple}${full_path}${COff}"
                     sudo chmod +x "$full_path"
@@ -1158,7 +1159,7 @@ check_docker() {
             if ! getent group docker > /dev/null 2>&1; then
                 sudo groupadd docker > /dev/null
             fi
-            sudo usermod -aG docker $USER > /dev/null
+            sudo usermod -aG docker $AS_USER > /dev/null
         else
             abort_install
             exit 1
@@ -1279,7 +1280,7 @@ deploy_project() {
     if [[ ! "$user_input" =~ ^[Yy]$ ]]; then
         abort_install
     fi
-    echo "Deploying project ${Purple}$COMPOSE_PROJECT${COff}..."
+    echo -e "Deploying project ${Purple}$COMPOSE_PROJECT${COff}..."
     local compose_options="-p '$COMPOSE_PROJECT' --env-file '$ENV_FILE' $COMPOSE_OPTIONS"
     local compose_up_options="-d -y --remove-orphans --quiet-pull $COMPOSE_UP_OPTIONS"
     if [ -z "$NEXTCLOUD_TRUSTED_PROXIES" ]; then
@@ -1529,12 +1530,32 @@ bootstrap_immich() {
     fi
 }
 
-RESUME_COMMAND="bash $0 --resume"
+build_resume_command() {
+    # Build an array of the original command
+    cmd=( "$0" "$@" )
+
+    # Check if --resume is already present in the arguments
+    found_resume=false
+    for arg in "${cmd[@]}"; do
+        if [[ "$arg" == "--resume" ]]; then
+            found_resume=true
+            break
+        fi
+    done
+
+    # Append --resume if it was not provided
+    if ! $found_resume; then
+        cmd+=( "--resume" )
+    fi
+
+    # Reconstruct the command as a string with proper quoting
+    echo "$(printf "%q " "${cmd[@]}")"
+}
 
 # Terminate program and print instructions on how to invoke again to resume
 abort_install() {
     log_warn "Setup aborted by user."
-    echo -e "To resume, run: ${BIGreen}${RESUME_COMMAND}${COff}\n"
+    echo -e "To resume, run: ${BIGreen}$(build_resume_command)${COff}\n"
     exit 1
 }
 
@@ -1548,7 +1569,8 @@ print_usage() {
     echo "  -p, --project <name>            Name to use for the Docker Compose project. [Default: 'self-host']"
     echo "  -e, --env <path>                Environment file to read variables from. [Default: './env']"
     echo "  -o, --override <var>=<value>    Application data for deployment. [Default: '/srv/appdata']"
-    echo "  --unattended                     Automatically answer prompts with defaults (implies --resume)."
+    echo "  -u, --user <user>               User to apply for file permissions. [Default: '$USER']"
+    echo "  --unattended                    Automatically answer prompts with defaults (implies --resume)."
     echo "  --custom-smtp                   Do not use SMTP2GO for sending email (custom SMTP configuration required)."
     echo "  --resume                        Skip any steps that have been previously completed."
     echo "  --post-install                  Run post-install configuration of self-hosted apps."
@@ -1564,7 +1586,6 @@ while [ "$#" -gt 0 ]; do
     case "$(echo "$1" | tr '[:upper:]' '[:lower:]')" in
     --project | -p)
         if [ -n "$2" ]; then
-            RESUME_COMMAND="${RESUME_COMMAND} $1 \"$2\""
             COMPOSE_PROJECT="$2"
             shift 2
             continue
@@ -1575,7 +1596,6 @@ while [ "$#" -gt 0 ]; do
         ;;
     --env | -e)
         if [ -n "$2" ]; then
-            RESUME_COMMAND="${RESUME_COMMAND} $1 \"$2\""
             ENV_FILE="$2"
             shift 2
             continue
@@ -1586,7 +1606,6 @@ while [ "$#" -gt 0 ]; do
         ;;
     --override | -o)
         if [ -n "$2" ]; then
-            RESUME_COMMAND="${RESUME_COMMAND} $1 \"$2\""
             # Parse override in form of: VARIABLE_NAME=VALUE
             if echo "$2" | grep -q '='; then
                 eval "$(echo "$2" | cut -d '=' -f 1)_OVERRIDE=\"$(echo "$2" | cut -d '=' -f 2-)\""
@@ -1601,33 +1620,38 @@ while [ "$#" -gt 0 ]; do
             exit 1
         fi
         ;;
+    --user | -u)
+        if [ -n "$2" ]; then
+            AS_USER="$2"
+            shift 2
+            continue
+        else
+            echo "Error: $1 requires a value."
+            exit 1
+        fi
+        ;;
     --unattended)
-        RESUME_COMMAND="${RESUME_COMMAND} $1"
         UNATTENDED=true
         RESUME=true
         shift 1
         continue
         ;;
     --custom-smtp)
-        RESUME_COMMAND="${RESUME_COMMAND} $1"
         USE_SMTP2GO=false
         shift 1
         continue
         ;;
     --resume)
-        RESUME_COMMAND="${RESUME_COMMAND} $1"
         RESUME=true
         shift 1
         continue
         ;;
     --post-install)
-        RESUME_COMMAND="${RESUME_COMMAND} $1"
         POST_INSTALL=true
         shift 1
         continue
         ;;
     --dry-run)
-        RESUME_COMMAND="${RESUME_COMMAND} $1"
         COMPOSE_UP_OPTIONS="$COMPOSE_UP_OPTIONS --dry-run"
         shift 1
         continue
