@@ -1388,13 +1388,24 @@ ask_value() {
 configure_admin_account() {
     local config_file="${APPDATA_LOCATION%/}/lldap/bootstrap/user-configs/admin.json"
     local username email password display_name
-    
+
+    # Apply any overrides passed via -o flag
+    username="${ADMIN_USERNAME_OVERRIDE}"
+    email="${ADMIN_EMAIL_OVERRIDE}"
+    password="${ADMIN_PASSWORD_OVERRIDE}"
+    display_name="${ADMIN_DISPLAY_NAME_OVERRIDE}"
+
+    local save_file=false
+    if [[ -n "$username" || -n "$email" || -n "$password" || -n "$display_name" ]]; then
+        save_file=true
+    fi
+
     # Read the values from file (if it exists)
     if [[ -f "$config_file" ]]; then
-        username=$(jq -r '.id' "$config_file")
-        email=$(jq -r '.email' "$config_file")
-        password=$(jq -r '.password' "$config_file")
-        display_name=$(jq -r '.displayName' "$config_file")
+        username=${username:-"$(jq -r '.id' "$config_file")"}
+        email=${email:-"$(jq -r '.email' "$config_file")"}
+        password=${password:-"$(jq -r '.password' "$config_file")"}
+        display_name=${display_name:-"$(jq -r '.displayName' "$config_file")"}
     fi
 
     # If already configured and the --resume flag was specified, skip the rest
@@ -1406,8 +1417,11 @@ configure_admin_account() {
         password=$(ask_value "Password" "$password" true "$password" true)
         display_name=$(ask_value "Display name (e.g. <First> <Last>)" "$display_name" true)
 
-        echo -e "\nGenerating user configuration file ${Purple}$config_file${COff}\n"
+        save_file=true
+    fi
 
+    if [ "$save_file" = "true" ]; then
+        echo -e "\nGenerating user configuration file ${Purple}$config_file${COff}\n"
         local json=$( [ -s "$config_file" ] && cat "$config_file" || echo "{}" )
         if ! json=$(echo "$json" | jq \
             --arg id "$username" \
