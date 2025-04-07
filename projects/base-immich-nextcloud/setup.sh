@@ -129,14 +129,27 @@ ask_for_env() {
     local use_default=${3:-true}
     local required=${4:-true}
     local masked=${5:-false}
+
+    # If an override is specified in command line, that takes priority
+    local name_override="${env_variable}_OVERRIDE"
+    local value_override="${!name_override}"
+    if [ -n "$value_override" ]; then
+        save_env "$env_variable" "$value_override"
+    fi
+
+    # If resuming a previous install and there is a value already set, dismiss
     if [[ "$RESUME" = "true" && -n "${!env_variable}" && "$use_default" = "true" ]]; then 
         return 0
     fi
+
+    # Choose the right default value to include in the prompt
     local default_value
-    local env_variable_default="${env_variable}_DEFAULT"
     if [[ "$use_default" = "true" ]]; then
+        local env_variable_default="${env_variable}_DEFAULT"
         default_value="${!env_variable:-${!env_variable_default}}"
     fi
+
+    # Show the prompt to the use and save the result
     local user_input=$(ask_value "$prompt" "$default_value" "$required" "" "$masked")
     save_env "$env_variable" "$user_input"
 }
@@ -741,11 +754,7 @@ download_appdata() {
 ask_for_variables() {
     # Global Settings
 
-    if [ -n "$APPDATA_OVERRIDE" ]; then
-        save_env APPDATA_LOCATION "${APPDATA_OVERRIDE%/}"
-    else
-        ask_for_env APPDATA_LOCATION "Application Data folder"
-    fi
+    ask_for_env APPDATA_LOCATION "Application Data folder"
     ask_for_env TZ "Server Timezone"
     ask_for_env CERT_ACME_EMAIL "Email For Certificate Registration"
 
@@ -1494,21 +1503,20 @@ print_usage() {
     echo "Usage: $0 [--appdata <path>] [--env <file>]"
     echo ""
     echo "Options:"
-    echo "  --appdata <path>    Application data for deployment. [Default: '/srv/appdata']"
-    echo "  --bootstrap         Run initial configuration of self-hosted apps."
-    echo "  --env <path>        Environment file to read variables from. [Default: './env']"
-    echo "  --project <name>    Name to use for the Docker Compose project. [Default: 'self-host']"
-    echo "  --custom-smtp       Do not use SMTP2GO for sending email, provide custom SMTP configuration."
-    echo "  --resume            Skip any steps that have been previously completed."
-    echo "  --dry-run           Execute Docker Compose in dry run mode."
-    echo "  -h, --help          Display this help message."
+    echo "  -p, --project <name>            Name to use for the Docker Compose project. [Default: 'self-host']"
+    echo "  -e, --env <path>                Environment file to read variables from. [Default: './env']"
+    echo "  -o, --override <var>=<value>    Application data for deployment. [Default: '/srv/appdata']"
+    echo "  --custom-smtp                   Do not use SMTP2GO for sending email (custom SMTP configuration required)."
+    echo "  --resume                        Skip any steps that have been previously completed."
+    echo "  --post-install                  Run post-install configuration of self-hosted apps."
+    echo "  --dry-run                       Execute Docker Compose in dry run mode."
+    echo "  -h, --help                      Display this help message."
     exit 1
 }
 
-APPDATA_OVERRIDE=
 SECRETS_PATH=
 USE_SMTP2GO=true
-RUN_BOOTSTRAP=
+POST_INSTALL=
 RESUME=false
 ENV_FILE=.env
 COMPOSE_PROJECT=self-host
@@ -1520,13 +1528,42 @@ COMPOSE_UP_OPTIONS=
 
 while [ "$#" -gt 0 ]; do
     case "$(echo "$1" | tr '[:upper:]' '[:lower:]')" in
-    --appdata)
+    --project | -p)
         if [ -n "$2" ]; then
-            APPDATA_OVERRIDE="$2"
+            COMPOSE_PROJECT="$2"
             shift 2
             continue
         else
-            echo "Error: --appdata requires a directory path."
+            echo "Error: $1 requires a name."
+            exit 1
+        fi
+        ;;
+    --env | -e)
+        if [ -n "$2" ]; then
+            ENV_FILE="$2"
+            shift 2
+            continue
+        else
+            echo "Error: $1 requires a file path."
+            exit 1
+        fi
+        ;;
+    --override | -o)
+        if [ -n "$2" ]; then
+            # Parse override in form of: VARIABLE_NAME=VALUE
+            if echo "$2" | grep -q '='; then
+                local var_name=$(echo "$2" | cut -d '=' -f 1)
+                local var_value=$(echo "$2" | cut -d '=' -f 2-)
+                # Save "VALUE" in variable "VARIABLE_NAME_OVERRIDE"
+                eval "${var_name}_OVERRIDE=\"${var_value}\""
+            else
+                echo "Error: $1 requires an assignment in the form VARIABLE_NAME=VALUE."
+                exit 1
+            fi
+            shift 2
+            continue
+        else
+            echo "Error: $1 requires an assignment in the form VARIABLE_NAME=VALUE."
             exit 1
         fi
         ;;
@@ -1535,8 +1572,13 @@ while [ "$#" -gt 0 ]; do
         shift 1
         continue
         ;;
-    --bootstrap)
-        RUN_BOOTSTRAP=true
+    --resume)
+        RESUME=true
+        shift 1
+        continue
+        ;;
+    --post-install)
+        POST_INSTALL=true
         shift 1
         continue
         ;;
@@ -1544,31 +1586,6 @@ while [ "$#" -gt 0 ]; do
         COMPOSE_UP_OPTIONS="$COMPOSE_UP_OPTIONS --dry-run"
         shift 1
         continue
-        ;;
-    --resume)
-        RESUME=true
-        shift 1
-        continue
-        ;;
-    --env)
-        if [ -n "$2" ]; then
-            ENV_FILE="$2"
-            shift 2
-            continue
-        else
-            echo "Error: --env requires a file path."
-            exit 1
-        fi
-        ;;
-    --project)
-        if [ -n "$2" ]; then
-            COMPOSE_PROJECT="$2"
-            shift 2
-            continue
-        else
-            echo "Error: --project requires a name."
-            exit 1
-        fi
         ;;
     -h | --help)
         print_usage
@@ -1583,7 +1600,7 @@ done
 ################################################################################
 #                           MAIN PROGRAM LOGIC
 
-if [ "$RUN_BOOTSTRAP" = "true" ]; then
+if [ "$POST_INSTALL" = "true" ]; then
     source "$ENV_FILE"
 
     SECRETS_PATH="${APPDATA_LOCATION}/secrets/"
