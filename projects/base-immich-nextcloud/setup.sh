@@ -785,10 +785,7 @@ ask_for_variables() {
     # SMTP Server Settings
 
     ask_for_env SMTP2GO_API_KEY "SMTP2GO API Key"
-    if [ -z "$SMTP_SENDER" ]; then
-        save_env SMTP_SENDER "noreply@${CF_DOMAIN_NAME}"
-    fi
-    ask_for_env SMTP_SENDER "SMTP Email From"
+    ask_for_env SMTP_SENDER "SMTP Email From (username only)"
     if [ "$USE_SMTP2GO" != "true" ]; then
         ask_for_env SMTP_USERNAME "SMTP Server Username"
         ask_for_env SMTP_PASSWORD "SMTP Server Password"
@@ -1319,7 +1316,12 @@ bootstrap_lldap() {
     echo "$authelia_json" > "$authelia_file"
     # Run LLDAP's built-in bootstrap script to create/update users and groups
     echo "Bootstrapping LLDAP with pre-configured users and groups..."
-    sg docker -c "docker exec -e LLDAP_ADMIN_PASSWORD_FILE=/run/secrets/ldap_admin_password -e USER_CONFIGS_DIR=/data/bootstrap/user-configs -e GROUP_CONFIGS_DIR=/data/bootstrap/group-configs -it lldap ./bootstrap.sh" >/dev/null
+    sg docker -c "docker exec \
+        -e LLDAP_ADMIN_PASSWORD_FILE=/run/secrets/ldap_admin_password \
+        -e USER_CONFIGS_DIR=/data/bootstrap/user-configs \
+        -e GROUP_CONFIGS_DIR=/data/bootstrap/group-configs \
+        -e USER_SCHEMAS_DIR=/data/bootstrap/user-schemas \
+        -it lldap ./bootstrap.sh" >/dev/null
     if [ $? -ne 0 ]; then
         log_error "Failed to bootstrap LLDAP users and groups"
         return 1
@@ -1493,7 +1495,7 @@ bootstrap_immich() {
         --arg clientSecret "$client_secret" \
         --argjson storageQuota "$IMMICH_DEFAULT_QUOTA" \
         --arg externalDomain "https://${IMMICH_SUBDOMAIN}.${CF_DOMAIN_NAME}" \
-        --arg smtpFrom "$SMTP_SENDER" \
+        --arg smtpFrom "${SMTP_SENDER}@${CF_DOMAIN_NAME}" \
         --arg smtpServer "$SMTP_SERVER" \
         --argjson smtpPort "$SMTP_PORT" \
         --arg smtpUsername "$SMTP_USERNAME" \
