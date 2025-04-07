@@ -1239,8 +1239,21 @@ deploy_project() {
     fi
     local compose_options="-p '$COMPOSE_PROJECT' --env-file '$ENV_FILE' $COMPOSE_OPTIONS"
     local compose_up_options="-d -y --remove-orphans --quiet-pull $COMPOSE_UP_OPTIONS"
-    sg docker -c "docker compose $compose_options up $compose_up_options"
-    if [ $? -ne 0 ]; then
+    if [ -z "$NEXTCLOUD_TRUSTED_PROXIES" ]; then
+        # For NextCloud to respect X-Forwarded-* headers the CIDR that includes traefik and nextcloud should be
+        # added to the trusted proxies. Otherwise, NextCloud will not receive original IP and protocol of the request.
+        if ! sg docker -c "docker compose $compose_options create -y --quiet-pull nextcloud-app"; then
+            log_error "Failed to create container resources for NextCloud"
+            exit 1
+        fi
+        local trusted_proxies
+        if ! trusted_proxies=$(docker network inspect "nextcloud-proxy" -f '{{(index .IPAM.Config 0).Subnet}}'); then
+            log_error "Could not extract network IP CIDR for 'nextcloud-proxy'"
+            exit 1
+        fi
+        save_env NEXTCLOUD_TRUSTED_PROXIES "$trusted_proxies"
+    fi
+    if ! sg docker -c "docker compose $compose_options up $compose_up_options"; then
         return 1
     fi
 }

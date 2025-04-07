@@ -68,7 +68,6 @@ services:
       - MYSQL_DATABASE=nextcloud
       - MYSQL_USER=nextcloud
       - MYSQL_HOST=nextcloud-db
-      - OVERWRITEPROTOCOL=https
       - NEXTCLOUD_ADMIN_USER_FILE=/run/secrets/server_admin_username
       - NEXTCLOUD_ADMIN_PASSWORD_FILE=/run/secrets/server_admin_password
       - NEXTCLOUD_TRUSTED_DOMAINS=${NEXTCLOUD_SUBDOMAIN:-nextcloud}.${CF_DOMAIN_NAME}
@@ -80,7 +79,7 @@ services:
       - MAIL_FROM_ADDRESS=${SMTP_SENDER}
       - MAIL_DOMAIN=${CF_DOMAIN_NAME}
       - APACHE_DISABLE_REWRITE_IP=1
-      - TRUSTED_PROXIES=traefik
+      - TRUSTED_PROXIES=${NEXTCLOUD_TRUSTED_PROXIES}
       - CF_DOMAIN_NAME=${CF_DOMAIN_NAME}
       - OIDC_NEXTCLOUD_CLIENT_ID=${OIDC_NEXTCLOUD_CLIENT_ID}
     labels:
