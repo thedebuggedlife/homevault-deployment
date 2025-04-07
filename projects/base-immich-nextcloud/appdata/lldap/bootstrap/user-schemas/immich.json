@@ -1,9 +1,0 @@
-[
-    {
-        "name": "immich_quota",
-        "attributeType": "INTEGER",
-        "isList": false,
-        "isEditable": true,
-        "isVisible": true
-    }
-]

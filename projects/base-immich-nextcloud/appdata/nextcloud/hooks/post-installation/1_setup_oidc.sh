@@ -13,7 +13,6 @@ client_secret=$(<"/run/secrets/oidc_nextcloud_password")
     --discoveryuri="https://authelia.${CF_DOMAIN_NAME}/.well-known/openid-configuration" \
     --endsessionendpointuri="https://authelia.${CF_DOMAIN_NAME}/logout" \
     --mapping-uid="preferred_username" \
-    --mapping-display-name="name" \
-    --mapping-quota="nextcloud_quota"
+    --mapping-display-name="name"
 # Disable other forms of login to the server
 ./occ config:app:set --value=0 user_oidc allow_multiple_user_backends

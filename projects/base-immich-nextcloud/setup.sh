@@ -1320,7 +1320,6 @@ bootstrap_lldap() {
         -e LLDAP_ADMIN_PASSWORD_FILE=/run/secrets/ldap_admin_password \
         -e USER_CONFIGS_DIR=/data/bootstrap/user-configs \
         -e GROUP_CONFIGS_DIR=/data/bootstrap/group-configs \
-        -e USER_SCHEMAS_DIR=/data/bootstrap/user-schemas \
         -it lldap ./bootstrap.sh" >/dev/null
     if [ $? -ne 0 ]; then
         log_error "Failed to bootstrap LLDAP users and groups"

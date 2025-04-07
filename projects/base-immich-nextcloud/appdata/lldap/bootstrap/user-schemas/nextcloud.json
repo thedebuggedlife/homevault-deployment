@@ -1,9 +1,0 @@
-[
-    {
-        "name": "nextcloud_quota",
-        "attributeType": "INTEGER",
-        "isList": false,
-        "isEditable": true,
-        "isVisible": true
-    }
-]
