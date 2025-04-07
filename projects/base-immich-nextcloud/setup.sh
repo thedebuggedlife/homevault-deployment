@@ -1,5 +1,6 @@
 #!/bin/bash
 # set -e
+set -o pipefail
 
 GH_PROJECT_NAME=base-immich-nextcloud
 GH_BASE_URL=https://github.com/thedebuggedlife/selfhost-bootstrap/tree/main
@@ -713,17 +714,19 @@ download_appdata() {
     user_input=${user_input:-Y}
     if [[ "$user_input" =~ ^[Yy]$ ]]; then
         echo -e "Downloading appdata from ${Cyan}$GH_IO_APPDATA_URL${COff} ...\n"
-        curl -fsSL $GH_IO_APPDATA_URL \
+        curl -fsSL "$GH_IO_APPDATA_URL" \
             | sudo busybox unzip -n - -d "$APPDATA_LOCATION" 2>&1 \
             | grep -E "creating:|inflating:" \
             | awk -F': ' '{print $2}' \
             | while read -r path; do
-                echo -e "Changing owner of: ${Purple}${APPDATA_LOCATION%/}/$path${COff}"
-                sudo chown $USER:docker "${APPDATA_LOCATION%/}/$path"
-              done
-        if [ $? -ne 0 ]; then
-            return 1
-        fi
+                full_path="${APPDATA_LOCATION%/}/$path"
+                echo -e "Changing owner of: ${Purple}${full_path}${COff}"
+                sudo chown $USER:docker "$full_path"
+                if [[ "$path" == *.sh ]]; then
+                    echo -e "Setting execute flag on: ${Purple}${full_path}${COff}"
+                    sudo chmod +x "$full_path"
+                fi
+            done || return 1
     else
         abort_install
         return 1
@@ -1328,28 +1331,40 @@ ask_value() {
 ###
 configure_admin_account() {
     local config_file="${APPDATA_LOCATION%/}/lldap/bootstrap/user-configs/admin.json"
-    local username email password
+    local username email password display_name
     
     # Read the values from file (if it exists)
     if [[ -f "$config_file" ]]; then
         username=$(jq -r '.id' "$config_file")
         email=$(jq -r '.email' "$config_file")
         password=$(jq -r '.password' "$config_file")
+        display_name=$(jq -r '.displayName' "$config_file")
     fi
 
     # If already configured and the --resume flag was specified, skip the rest
-    if [[ -z "$username" || -z "$email" || -z "$password" || "$RESUME" != "true" ]]; then
+    if [[ -z "$username" || -z "$email" || -z "$password" || -z "$display_name" || "$RESUME" != "true" ]]; then
         echo -e "Configuring the user account for the server administrator...\n" 
 
         username=$(ask_value "Username" "$username" true)
         email=$(ask_value "Email address" "$email" true)
         password=$(ask_value "Password" "$password" true "$password" true)
+        display_name=$(ask_value "Display name (e.g. <First> <Last>)" "$display_name" true)
 
         echo -e "\nGenerating user configuration file ${Purple}$config_file${COff}\n"
 
         local json=$( [ -s "$config_file" ] && cat "$config_file" || echo "{}" )
-        if ! json=$(echo $json | jq --arg id "$username" --arg email "$email" --arg password "$password" '.id = $id | .email = $email | .password = $password'); then
-            return 1
+        if ! json=$(echo "$json" | jq \
+            --arg id "$username" \
+            --arg email "$email" \
+            --arg password "$password" \
+            --arg displayName "$display_name" '
+            .id = $id |
+            .email = $email |
+            .password = $password |
+            .displayName = $displayName
+        '); then
+            log_error "Failed to update JSON for server administrator"
+            exit 1
         fi
         if ! echo "$json" > "$config_file"; then
             return 1
@@ -1694,3 +1709,5 @@ if [ $? -ne 0 ]; then
     log_error "Failed to bootstrap LLDAP."
     exit 1
 fi
+
+log_done

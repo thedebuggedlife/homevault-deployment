@@ -105,11 +105,11 @@ identity_providers:
         rules:
           - policy: 'one_factor'
             subject: 'group:immich_user'
-      nc_user:
+      nextcloud_user:
         default_policy: deny
         rules:
           - policy: 'one_factor'
-            subject: 'group:nc_user'
+            subject: 'group:nextcloud_user'
     clients:
       - client_id: {{ env "OIDC_IMMICH_CLIENT_ID" }}
         client_name: 'immich'
@@ -128,7 +128,7 @@ identity_providers:
         client_name: 'nextcloud'
         client_secret: {{ secret "/run/secrets/oidc_nextcloud_digest" }}
         public: false
-        authorization_policy: 'nc_user' # nextcloud does not have its own RBAC
+        authorization_policy: 'nextcloud_user' # nextcloud does not have its own RBAC
         require_pkce: true
         pkce_challenge_method: 'S256'
         redirect_uris:

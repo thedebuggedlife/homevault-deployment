@@ -2,6 +2,7 @@
     "id": "",
     "email": "",
     "password": "",
+    "displayName": "",
     "groups": [
         "lldap_admin",
         "server_admin",

@@ -48,8 +48,6 @@ services:
     container_name: nextcloud_app
     image: nextcloud:${NEXTCLOUD_VERSION:-production}
     restart: always
-    ports:
-      - 8080:80
     depends_on:
       nextcloud-db:
         condition: service_healthy
@@ -60,15 +58,18 @@ services:
       - nextcloud_db_password
       - server_admin_username
       - server_admin_password
+      - oidc_nextcloud_password
     volumes:
-      - ${APPDATA_LOCATION:-/srv/appdata}/nextcloud:/var/www/html
+      - ${APPDATA_LOCATION:-/srv/appdata}/nextcloud/app:/var/www/html
+      - ${APPDATA_LOCATION:-/srv/appdata}/nextcloud/hooks/post-installation:/docker-entrypoint-hooks.d/post-installation
       - ${NEXTCLOUD_DATA_LOCATION:-/usr/local/nextcloud}:/var/www/html/data
     environment:
       - MYSQL_PASSWORD_FILE=/run/secrets/nextcloud_db_password
       - MYSQL_DATABASE=nextcloud
       - MYSQL_USER=nextcloud
       - MYSQL_HOST=nextcloud-db
-      - NEXTCLOUD_ADMIN_USER_FILE=/run/secrets/server_admin_password
+      - OVERWRITEPROTOCOL=https
+      - NEXTCLOUD_ADMIN_USER_FILE=/run/secrets/server_admin_username
       - NEXTCLOUD_ADMIN_PASSWORD_FILE=/run/secrets/server_admin_password
       - NEXTCLOUD_TRUSTED_DOMAINS=${NEXTCLOUD_SUBDOMAIN:-nextcloud}.${CF_DOMAIN_NAME}
       - SMTP_HOST=${SMTP_SERVER}
@@ -80,11 +81,13 @@ services:
       - MAIL_DOMAIN=${CF_DOMAIN_NAME}
       - APACHE_DISABLE_REWRITE_IP=1
       - TRUSTED_PROXIES=traefik
+      - CF_DOMAIN_NAME=${CF_DOMAIN_NAME}
+      - OIDC_NEXTCLOUD_CLIENT_ID=${OIDC_NEXTCLOUD_CLIENT_ID}
     labels:
       dns.manage: true
       dns.cloudflare.proxied: true
       traefik.enable: true
       traefik.docker.network: nextcloud-proxy
-      traefik.http.routers.immich-server.entryPoints: cloudflare
-      traefik.http.routers.immich-server.rule: Host(`${NEXTCLOUD_SUBDOMAIN:-immich}.${CF_DOMAIN_NAME}`)
-      traefik.http.services.immich-server.loadbalancer.server.port: 80
+      traefik.http.routers.nextcloud-server.entryPoints: cloudflare
+      traefik.http.routers.nextcloud-server.rule: Host(`${NEXTCLOUD_SUBDOMAIN:-nextcloud}.${CF_DOMAIN_NAME}`)
+      traefik.http.services.nextcloud-server.loadbalancer.server.port: 80
