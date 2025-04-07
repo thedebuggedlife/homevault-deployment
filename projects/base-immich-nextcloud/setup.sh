@@ -15,6 +15,16 @@ CLOUDFLARE_API_BASE_URL=https://api.cloudflare.com/client/v4
 TAILSCALE_API_BASE_URL=https://api.tailscale.com/api/v2
 IMMICH_BASE_URL=
 
+SECRETS_PATH=
+UNATTENDED=
+USE_SMTP2GO=true
+POST_INSTALL=
+RESUME=false
+ENV_FILE=.env
+COMPOSE_PROJECT=self-host
+COMPOSE_OPTIONS="-f docker-compose.yml -f docker-compose-immich.yml -f docker-compose-nextcloud.yml"
+COMPOSE_UP_OPTIONS=
+
 ################################################################################
 #                               COLOR DEFINITIONS
 
@@ -720,11 +730,13 @@ download_appdata() {
     if [ "$missing_files" != true ]; then
         return 0
     fi
-    local user_input
     echo
-    read -p "Do you want to download the missing configuration files? [Y/n] " user_input </dev/tty
-    echo
-    user_input=${user_input:-Y}
+    local user_input=Y
+    if [ "$UNATTENDED" != "true" ]; then
+        read -p "Do you want to download the missing configuration files? [Y/n] " user_input </dev/tty
+        user_input=${user_input:-Y}
+        echo
+    fi
     if [[ "$user_input" =~ ^[Yy]$ ]]; then
         echo -e "Downloading appdata from ${Cyan}$GH_IO_APPDATA_URL${COff} ...\n"
         curl -fsSL "$GH_IO_APPDATA_URL" \
@@ -891,12 +903,14 @@ configure_smtp_domain_records() {
 # @return void
 ###
 configure_smtp_domain() {
-    local user_input
     if [ "$SMTP2GO_DOMAIN_VALIDATED" = "true" ]; then
         echo "Domain has been previously verified."
         if [ "$RESUME" = "true" ]; then return 0; fi
-        read -p "Do you want to revalidate the domain configuration? [y/N]" user_input </dev/tty
-        user_input=${user_input:-N}
+        local user_input=N
+        if [ "$UNATTENDED" != "true" ]; then
+            read -p "Do you want to revalidate the domain configuration? [y/N]" user_input </dev/tty
+            user_input=${user_input:-N}
+        fi
         if [[ ! "$user_input" =~ ^[Yy]$ ]]; then return 0; fi
     fi
     if [ -z "$CF_DOMAIN_NAME" ] || [ -z "$CF_DNS_API_TOKEN" ] || [ -z "$SMTP2GO_API_KEY" ]; then
@@ -941,8 +955,11 @@ configure_smtp_user() {
     if [ -n "$SMTP_PASSWORD" ]; then
         echo "SMTP2GO user appears to already be configured."
         if [ "$RESUME" = "true" ]; then return 0; fi
-        read -p "Do you want to validate or re-create the user with SMTP2GO? [y/N] " user_input </dev/tty
-        user_input=${user_input:-N}
+        local user_input=N
+        if [ "$UNATTENDED" != "true" ]; then
+            read -p "Do you want to validate or re-create the user with SMTP2GO? [y/N] " user_input </dev/tty
+            user_input=${user_input:-N}
+        fi
         if [[ ! "$user_input" =~ ^[Yy]$ ]]; then return 0; fi
     fi
     if [ -z "$SMTP_USERNAME" ] || [ -z "$SMTP2GO_API_KEY" ]; then
@@ -975,13 +992,15 @@ configure_cloudflare_tunnel() {
         log_error "Please specify a value for 'CF_TUNNEL_NAME' in the '$ENV_FILE' file."
         exit 1
     fi
-    local user_input
     local token_file=${SECRETS_PATH}cloudflare_tunnel_token
     if [ -n "$CF_TUNNEL_ID" ] && [ -f "$token_file" ]; then
         echo "Cloudflare tunnel appears to be already configured." >&2
         if [ "$RESUME" = "true" ]; then return 0; fi
-        read -p "Do you want to reconfigure the Cloudflare tunnel information? [y/N] " user_input </dev/tty
-        user_input=${user_input:-N}
+        local user_input=N
+        if [ "$UNATTENDED" != "true" ]; then
+            read -p "Do you want to reconfigure the Cloudflare tunnel information? [y/N] " user_input </dev/tty
+            user_input=${user_input:-N}
+        fi
         if [[ ! "$user_input" =~ ^[Yy]$ ]]; then return 0; fi
     fi
     local account_id
@@ -1015,8 +1034,11 @@ configure_cloudflare_tunnel() {
 check_tailscale() {
     if ! command -v tailscale >/dev/null 2>&1; then
         echo -e "\n${Yellow}Tailscale is not installed.${COff}"
-        read -p "Do you want to install tailscale? [Y/n] " user_input </dev/tty
-        user_input=${user_input:-Y}
+        local user_input=Y
+        if [ "$UNATTENDED" != "true" ]; then
+            read -p "Do you want to install tailscale? [Y/n] " user_input </dev/tty
+            user_input=${user_input:-Y}
+        fi
         if [[ "$user_input" =~ ^[Yy]$ ]]; then
             echo "Installing tailscale..."
             if ! curl -fsSL https://tailscale.com/install.sh | sh >/dev/null; then
@@ -1119,8 +1141,11 @@ configure_tailscale() {
 check_docker() {
     if ! command -v docker >/dev/null 2>&1; then
         echo -e "\n${Yellow}Docker is not installed.${COff}"
-        read -p "Do you want to install Docker? [Y/n] " user_input </dev/tty
-        user_input=${user_input:-Y}
+        local user_input=Y
+        if [ "$UNATTENDED" != "true" ]; then
+            read -p "Do you want to install Docker? [Y/n] " user_input </dev/tty
+            user_input=${user_input:-Y}
+        fi
         if [[ "$user_input" =~ ^[Yy]$ ]]; then
             echo "Installing Docker..."
             if ! curl -fsSL https://get.docker.com | sudo sh; then
@@ -1168,7 +1193,7 @@ configure_docker() {
 ###
 prepare_env_file() {
     local remote_env="$GH_RAW_PROJECT_URL/.env"
-    local user_input merge_with
+    local merge_with
     if [ -f "$ENV_FILE" ]; then
         echo -e "File ${Cyan}$ENV_FILE${COff} already exists."
         local missing_keys=false
@@ -1183,8 +1208,11 @@ prepare_env_file() {
         if [ "$missing_keys" != true ]; then return 0; fi
         local key value 
         echo -e "\nOne or more keys are missing from ${Cyan}$ENV_FILE${Coff}."
-        read -p "Do you want to merge '$ENV_FILE' with the version that is available online? [Y/n] " user_input </dev/tty
-        user_input=${user_input:-Y}
+        local user_input=Y
+        if [ "$UNATTENDED" != true ]; then
+            read -p "Do you want to merge '$ENV_FILE' with the version that is available online? [Y/n] " user_input </dev/tty
+            user_input=${user_input:-Y}
+        fi
         if [[ ! "$user_input" =~ ^[Yy]$ ]]; then 
             abort_install
         fi
@@ -1194,6 +1222,7 @@ prepare_env_file() {
             return 1
         fi
     fi
+    echo -e "Downloading environment file from ${Cyan}$remote_env${COff}"
     curl -fsSL -o "$ENV_FILE" "$remote_env"
     if [ $? -ne 0 ]; then
         return 1
@@ -1218,13 +1247,15 @@ prepare_env_file() {
 ###
 prepare_docker_compose() {
     local suffix=$1
-    local user_input
     local compose_file="docker-compose${suffix}.yml"
     if [ -f "$compose_file" ]; then
         echo -e "File ${Cyan}$compose_file${COff} already exists."
         if [ "$RESUME" = "true" ]; then return 0; fi
-        read -p "Do you want to replace '$compose_file' with the version that is available online? [y/N] " user_input </dev/tty
-        user_input=${user_input:-N}
+        local user_input=N
+        if [ "$UNATTENDED" != true ]; then
+            read -p "Do you want to replace '$compose_file' with the version that is available online? [y/N] " user_input </dev/tty
+            user_input=${user_input:-N}
+        fi
         if [[ ! "$user_input" =~ ^[Yy]$ ]]; then return 0; fi
     fi
     if ! curl -fsSL -o "$compose_file" "$GH_RAW_PROJECT_URL/${compose_file}"; then
@@ -1239,13 +1270,16 @@ prepare_docker_compose() {
 # @return void
 ###
 deploy_project() {
-    local user_input
-    echo -en "Project ${Purple}$COMPOSE_PROJECT${COff} is ready for deployment. "
-    read -p "Do you want to proceed? [Y/n] " user_input </dev/tty
-    user_input=${user_input:-Y}
+    local user_input=Y
+    if [ "$UNATTENDED" != true ]; then
+        echo -en "Project ${Purple}$COMPOSE_PROJECT${COff} is ready for deployment. "
+        read -p "Do you want to proceed? [Y/n] " user_input </dev/tty
+        user_input=${user_input:-Y}
+    fi
     if [[ ! "$user_input" =~ ^[Yy]$ ]]; then
         abort_install
     fi
+    echo "Deploying project ${Purple}$COMPOSE_PROJECT${COff}..."
     local compose_options="-p '$COMPOSE_PROJECT' --env-file '$ENV_FILE' $COMPOSE_OPTIONS"
     local compose_up_options="-d -y --remove-orphans --quiet-pull $COMPOSE_UP_OPTIONS"
     if [ -z "$NEXTCLOUD_TRUSTED_PROXIES" ]; then
@@ -1481,18 +1515,12 @@ bootstrap_immich() {
     fi
 }
 
-get_resume_command() {
-    echo -n "bash $0 --resume"
-    if [ "$RUN_BOOTSTRAP" = "true" ]; then echo -n " --bootstrap"; fi
-    if [ -n "$APPDATA_OVERRIDE" ]; then echo -n " --appdata \"$APPDATA_OVERRIDE\""; fi
-    if [ "$ENV_FILE" != ".env" ]; then echo -n " --env \"$ENV_FILE\""; fi
-    if [ "$USE_SMTP2GO" = "false" ]; then echo -n " --custom-smtp"; fi
-}
+RESUME_COMMAND="bash $0 --resume"
 
 # Terminate program and print instructions on how to invoke again to resume
 abort_install() {
     log_warn "Setup aborted by user."
-    echo -e "To resume, run: ${BIGreen}$(get_resume_command)${COff}\n"
+    echo -e "To resume, run: ${BIGreen}${RESUME_COMMAND}${COff}\n"
     exit 1
 }
 
@@ -1506,6 +1534,7 @@ print_usage() {
     echo "  -p, --project <name>            Name to use for the Docker Compose project. [Default: 'self-host']"
     echo "  -e, --env <path>                Environment file to read variables from. [Default: './env']"
     echo "  -o, --override <var>=<value>    Application data for deployment. [Default: '/srv/appdata']"
+    echo "  --unattended                     Automatically answer prompts with defaults (implies --resume)."
     echo "  --custom-smtp                   Do not use SMTP2GO for sending email (custom SMTP configuration required)."
     echo "  --resume                        Skip any steps that have been previously completed."
     echo "  --post-install                  Run post-install configuration of self-hosted apps."
@@ -1514,15 +1543,6 @@ print_usage() {
     exit 1
 }
 
-SECRETS_PATH=
-USE_SMTP2GO=true
-POST_INSTALL=
-RESUME=false
-ENV_FILE=.env
-COMPOSE_PROJECT=self-host
-COMPOSE_OPTIONS="-f docker-compose.yml -f docker-compose-immich.yml -f docker-compose-nextcloud.yml"
-COMPOSE_UP_OPTIONS=
-
 ################################################################################
 #                           PARSE COMMAND LINE
 
@@ -1530,6 +1550,7 @@ while [ "$#" -gt 0 ]; do
     case "$(echo "$1" | tr '[:upper:]' '[:lower:]')" in
     --project | -p)
         if [ -n "$2" ]; then
+            RESUME_COMMAND="${RESUME_COMMAND} $1 \"$2\""
             COMPOSE_PROJECT="$2"
             shift 2
             continue
@@ -1540,6 +1561,7 @@ while [ "$#" -gt 0 ]; do
         ;;
     --env | -e)
         if [ -n "$2" ]; then
+            RESUME_COMMAND="${RESUME_COMMAND} $1 \"$2\""
             ENV_FILE="$2"
             shift 2
             continue
@@ -1550,12 +1572,10 @@ while [ "$#" -gt 0 ]; do
         ;;
     --override | -o)
         if [ -n "$2" ]; then
+            RESUME_COMMAND="${RESUME_COMMAND} $1 \"$2\""
             # Parse override in form of: VARIABLE_NAME=VALUE
             if echo "$2" | grep -q '='; then
-                local var_name=$(echo "$2" | cut -d '=' -f 1)
-                local var_value=$(echo "$2" | cut -d '=' -f 2-)
-                # Save "VALUE" in variable "VARIABLE_NAME_OVERRIDE"
-                eval "${var_name}_OVERRIDE=\"${var_value}\""
+                eval "$(echo "$2" | cut -d '=' -f 1)_OVERRIDE=\"$(echo "$2" | cut -d '=' -f 2-)\""
             else
                 echo "Error: $1 requires an assignment in the form VARIABLE_NAME=VALUE."
                 exit 1
@@ -1567,22 +1587,33 @@ while [ "$#" -gt 0 ]; do
             exit 1
         fi
         ;;
+    --unattended)
+        RESUME_COMMAND="${RESUME_COMMAND} $1"
+        UNATTENDED=true
+        RESUME=true
+        shift 1
+        continue
+        ;;
     --custom-smtp)
+        RESUME_COMMAND="${RESUME_COMMAND} $1"
         USE_SMTP2GO=false
         shift 1
         continue
         ;;
     --resume)
+        RESUME_COMMAND="${RESUME_COMMAND} $1"
         RESUME=true
         shift 1
         continue
         ;;
     --post-install)
+        RESUME_COMMAND="${RESUME_COMMAND} $1"
         POST_INSTALL=true
         shift 1
         continue
         ;;
     --dry-run)
+        RESUME_COMMAND="${RESUME_COMMAND} $1"
         COMPOSE_UP_OPTIONS="$COMPOSE_UP_OPTIONS --dry-run"
         shift 1
         continue
