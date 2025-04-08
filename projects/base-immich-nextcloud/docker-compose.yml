@@ -119,7 +119,7 @@ services:
       # traefik.http.routers.api.middlewares: authelia@file
   authelia:
     container_name: authelia
-    image: authelia/authelia:latest
+    image: authelia/authelia:4
     restart: unless-stopped
     networks:
       - proxy
@@ -182,7 +182,7 @@ services:
       TRAEFIK_API_URL: http://traefik:8080/api
   portainer:
     container_name: portainer
-    image: portainer/portainer-ce:latest
+    image: portainer/portainer-ce:lts
     restart: unless-stopped
     command: ['--admin-password-file', '/run/secrets/portainer_admin_password']
     networks:

@@ -82,6 +82,7 @@ services:
       - APACHE_DISABLE_REWRITE_IP=1
       - TRUSTED_PROXIES=${NEXTCLOUD_TRUSTED_PROXIES}
       - CF_DOMAIN_NAME=${CF_DOMAIN_NAME}
+      - COLLABORA_SERVER_NAME=${COLLABORA_SUBDOMAIN:-nextcloud}.${CF_DOMAIN_NAME}
       - OIDC_NEXTCLOUD_CLIENT_ID=${OIDC_NEXTCLOUD_CLIENT_ID}
     labels:
       dns.manage: true
@@ -91,3 +92,28 @@ services:
       traefik.http.routers.nextcloud-server.entryPoints: cloudflare
       traefik.http.routers.nextcloud-server.rule: Host(`${NEXTCLOUD_SUBDOMAIN:-nextcloud}.${CF_DOMAIN_NAME}`)
       traefik.http.services.nextcloud-server.loadbalancer.server.port: 80
+
+  collabora:
+    container_name: collabora
+    image: collabora/code:latest
+    restart: always
+    networks:
+      - nextcloud-proxy
+    healthcheck:
+      test: ["CMD", "curl", "-fsSL", "http://localhost:9980/"]
+      start_period: 1m
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    environment:
+      TZ: ${TZ}
+      aliasgroup1: https://${NEXTCLOUD_SUBDOMAIN:-nextcloud}.${CF_DOMAIN_NAME}
+      extra_params: "--o:ssl.enable=false --o:ssl.termination=true --o:admin_console.enable=false"
+    labels:
+      dns.manage: true
+      dns.cloudflare.proxied: true
+      traefik.enable: true
+      traefik.docker.network: nextcloud-proxy
+      traefik.http.routers.collabora.entryPoints: cloudflare
+      traefik.http.routers.collabora.rule: Host(`${COLLABORA_SUBDOMAIN:-office}.${CF_DOMAIN_NAME}`)
+      traefik.http.services.collabora.loadbalancer.server.port: 9980

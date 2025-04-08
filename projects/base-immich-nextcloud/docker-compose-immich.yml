@@ -73,7 +73,6 @@ services:
     healthcheck:
       test: redis-cli ping || exit 1
     restart: always
-    # TODO: Add persistence to disk
 
   immich-postgres:
     container_name: immich_postgres

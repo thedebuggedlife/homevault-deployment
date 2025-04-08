@@ -1256,7 +1256,8 @@ prepare_docker_compose() {
         fi
         if [[ ! "$user_input" =~ ^[Yy]$ ]]; then return 0; fi
     fi
-    if ! curl -fsSL -o "$compose_file" "$GH_RAW_PROJECT_URL/${compose_file}"; then
+    if ! curl -fsSL -o "$compose_file" "$GH_RAW_PROJECT_URL/${compose_file}" || \
+       ! chown $AS_USER:$AS_USER "$compose_file"; then
         return 1
     fi
     echo -e "File ${Cyan}$compose_file${COff} created."
