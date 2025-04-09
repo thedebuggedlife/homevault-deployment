@@ -65,7 +65,7 @@ After a successful run of the setup script as shown above, you will need to take
 
 ```
 cd ~/self-host/workspace
-./setup.sh --bootstrap
+./setup.sh --post-install
 ```
 
 3. You will be asked to enter the username, email and password for the primary user of the server, who will also be given server administrator privileges. 
