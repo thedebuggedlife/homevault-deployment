@@ -16,3 +16,5 @@ client_secret=$(<"/run/secrets/oidc_nextcloud_password")
     --mapping-display-name="name"
 # Disable other forms of login to the server
 ./occ config:app:set --value=0 user_oidc allow_multiple_user_backends
+
+echo "FINISHED INITiALIZING OIDC"

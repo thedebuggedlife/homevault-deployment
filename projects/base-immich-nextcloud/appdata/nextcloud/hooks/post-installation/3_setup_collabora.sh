@@ -7,3 +7,5 @@ echo "INITIALIZING NEXTCLOUD OFFICE"
 ./occ config:app:set --value "https://${COLLABORA_SERVER_NAME}" richdocuments wopi_url
 
 ./occ richdocuments:activate-config
+
+echo "FINISHED INITIALIZING NEXTCLOUD OFFICE"

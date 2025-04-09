@@ -4,6 +4,9 @@ networks:
   nextcloud-proxy:
     name: nextcloud-proxy
 
+volumes:
+  search-data:
+
 secrets:
   nextcloud_db_root_password:
     file: ${APPDATA_LOCATION:-/srv/appdata}/secrets/nextcloud_db_root_password
@@ -13,6 +16,10 @@ secrets:
     file: ${APPDATA_LOCATION:-/srv/appdata}/secrets/server_admin_username
   server_admin_password:
     file: ${APPDATA_LOCATION:-/srv/appdata}/secrets/server_admin_password
+  nextcloud_elastic_password:
+    file: ${APPDATA_LOCATION:-/srv/appdata}/secrets/nextcloud_elastic_password
+  elastic_password:
+    file: ${APPDATA_LOCATION:-/srv/appdata}/secrets/elastic_password
 
 services:
   traefik:
@@ -26,7 +33,7 @@ services:
     command: --transaction-isolation=READ-COMMITTED --log-bin=binlog --binlog-format=ROW
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--su-mysql", "--connect", "--innodb_initialized"]
-      start_period: 1m
+      start_period: 5m
       interval: 10s
       timeout: 5s
       retries: 3
@@ -51,6 +58,8 @@ services:
     depends_on:
       nextcloud-db:
         condition: service_healthy
+      nextcloud-elastic:
+        condition: service_healthy
     networks:
       - nextcloud
       - nextcloud-proxy
@@ -59,6 +68,7 @@ services:
       - server_admin_username
       - server_admin_password
       - oidc_nextcloud_password
+      - nextcloud_elastic_password
     volumes:
       - ${APPDATA_LOCATION:-/srv/appdata}/nextcloud/app:/var/www/html
       - ${APPDATA_LOCATION:-/srv/appdata}/nextcloud/hooks/post-installation:/docker-entrypoint-hooks.d/post-installation
@@ -84,6 +94,10 @@ services:
       - CF_DOMAIN_NAME=${CF_DOMAIN_NAME}
       - COLLABORA_SERVER_NAME=${COLLABORA_SUBDOMAIN:-nextcloud}.${CF_DOMAIN_NAME}
       - OIDC_NEXTCLOUD_CLIENT_ID=${OIDC_NEXTCLOUD_CLIENT_ID}
+      - ELASTIC_SEARCH_HOST=nextcloud-elastic
+      - ELASTIC_SEARCH_INDEX=elastic
+      - ELASTIC_SEARCH_USER=elastic
+      - ELASTIC_SEARCH_PASSWORD_FILE=/run/secrets/nextcloud_elastic_password
     labels:
       dns.manage: true
       dns.cloudflare.proxied: true
@@ -117,3 +131,38 @@ services:
       traefik.http.routers.collabora.entryPoints: cloudflare
       traefik.http.routers.collabora.rule: Host(`${COLLABORA_SUBDOMAIN:-office}.${CF_DOMAIN_NAME}`)
       traefik.http.services.collabora.loadbalancer.server.port: 9980
+
+  nextcloud-elastic:
+    container_name: nextcloud_elastic
+    image: elasticsearch:8.16.2
+    restart: always
+    healthcheck:
+      # If properly secured, the ES API should return 401 once fully initialized
+      test: ["CMD-SHELL", "status_code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:9200 -k) && [ \"$$status_code\" = \"401\" ]"]
+      start_period: 5m
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 262144
+        hard: 262144
+    deploy:
+      resources:
+        limits:
+          memory: ${NEXTCLOUD_FTS_MEMORY_LIMIT}
+    secrets:
+      - elastic_password
+    networks:
+      - nextcloud
+    volumes:
+      - search-data:/usr/share/elasticsearch/data
+    environment:
+      - bootstrap.memory_lock=true                  # Disable use of swap
+      - discovery.type=single-node                  # Disable warnings about single-node cluster
+      - xpack.security.enabled=true                 # Enable security
+      - xpack.security.authc.api_key.enabled=true   # Enable API Key authentication
+      - ELASTIC_PASSWORD_FILE=/run/secrets/elastic_password

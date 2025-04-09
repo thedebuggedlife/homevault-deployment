@@ -823,6 +823,7 @@ ask_for_variables() {
     ask_for_env NEXTCLOUD_VERSION "Version of Nextcloud to install"
     ask_for_env NEXTCLOUD_SUBDOMAIN "Subdomain under ${CF_DOMAIN_NAME} to use for Nextcloud"
     ask_for_env NEXTCLOUD_DATA_LOCATION "Nextcloud document storage location"
+    ask_for_env NEXTCLOUD_FTS_MEMORY_LIMIT "Memory limit for ElasticSearch (units: #m or #g)"
 }
 
 ###
@@ -847,6 +848,7 @@ save_secrets() {
     create_secret "${SECRETS_PATH}immich_db_password"
     create_secret "${SECRETS_PATH}nextcloud_db_root_password"
     create_secret "${SECRETS_PATH}nextcloud_db_password"
+    create_secret "${SECRETS_PATH}nextcloud_elastic_password"
     create_password_digest_pair "${SECRETS_PATH}oidc_immich"
     create_password_digest_pair "${SECRETS_PATH}oidc_nextcloud"
     create_password_digest_pair "${SECRETS_PATH}oidc_grafana"
@@ -854,9 +856,13 @@ save_secrets() {
     if [ $? -ne 0 ]; then
         return 1
     fi
-    chmod 644 "${SECRETS_PATH}"*
-    if [ $? -ne 0 ]; then
+    if ! chmod 644 "${SECRETS_PATH}"*; then
         return 1
+    fi
+    # Elastic Search requires special permissions on the file which aren't compatible with NC
+    if [ ! -s "${SECRETS_PATH}elastic_password" ]; then
+        cp "${SECRETS_PATH}nextcloud_elastic_password" "${SECRETS_PATH}elastic_password"
+        chmod 600 "${SECRETS_PATH}elastic_password"
     fi
 }
 
@@ -1281,6 +1287,13 @@ deploy_project() {
     echo -e "Deploying project ${Purple}$COMPOSE_PROJECT${COff}..."
     local compose_options="-p '$COMPOSE_PROJECT' --env-file '$ENV_FILE' $COMPOSE_OPTIONS"
     local compose_up_options="-d -y --remove-orphans --quiet-pull $COMPOSE_UP_OPTIONS"
+    if [ "$(sysctl -n vm.max_map_count)" -lt 262144 ]; then
+        # ElasticSearch requires setting the maximum number of memory map areas to at least 262144
+        echo "vm.max_map_count=262144" | sudo tee /etc/sysctl.d/99-elasticsearch.conf > /dev/null && sudo sysctl --system || {
+            log_error "Failed to configure vm.max_map_count setting"
+            exit 1
+        }
+    fi
     if [ -z "$NEXTCLOUD_TRUSTED_PROXIES" ]; then
         # For NextCloud to respect X-Forwarded-* headers the CIDR that includes traefik and nextcloud should be
         # added to the trusted proxies. Otherwise, NextCloud will not receive original IP and protocol of the request.
