@@ -128,6 +128,13 @@ load_module_help() {
     done
 }
 
+find_modules() {
+    for module_file in "$PROJECT_ROOT"/modules/*/setup.sh; do
+        module_name=$(basename "$(dirname "$module_file")")
+        ENABLED_MODULES+=("$module_name")
+    done
+}
+
 ################################################################################
 #                            CONFIGURATION STEPS
 
@@ -348,7 +355,7 @@ while [ "$#" -gt 0 ]; do
         ;;
     --module | -m)
         if [ -n "$2" ]; then
-            ENABLED_MODULES+=("$2")
+            if [ "$2" = "all" ]; then find_modules; else ENABLED_MODULES+=("$2"); fi
             shift 2
             continue
         else

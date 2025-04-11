@@ -21,6 +21,14 @@ In order to setup your self-hosted solution, you will need to take some preparat
 5. **[Tailscale](docs/tailscale.md)**- An account registered with Tailscale. We will create a VPN mesh network (Tailnet) to remotely access our server for administration. Follow the steps in [this document]((docs/tailscale.md)) to get your account properly setup.
 6. **[SMTP](docs/smtp.md)**- Some of the apps in this project use SMTP to send automated emails (e.g. for password recovery). Follow the steps in [this document]((docs/tailscale.md)) to get a free account setup with SMTP2GO, or add the flag `--custom-smtp` when running the setup script.
 
+## Modules
+
+The project is structured using a modular approach where services are grouped into logical modules that can be installed independently (with some exceptions). This design provides flexibility, allowing you to install only the services you need while maintaining a cohesive environment.
+
+The example below will install all available modules.
+
+For more information see [this document](docs/modules.md).
+
 ## Configuration and Deployment
 
 Prior to running the script, make sure you have the following available:
@@ -32,6 +40,7 @@ Prior to running the script, make sure you have the following available:
 To being deployment:
 
 1. SSH into your server
+
 2. Prepare your workspace and run the setup script as follows:
 
 ```bash
@@ -39,7 +48,7 @@ mkdir -p ~/self-host/workspace
 cd ~/self-host/workspace
 curl -fsSL https://thedebuggedlife.github.io/selfhost-bootstrap/setup.zip | busybox unzip -n -
 chmod +x setup.sh
-./setup.sh
+./setup.sh -m all
 ```
 
 3. During setup, you will be asked to enter the API keys obtained earlier, as well as some additional configuration options. 
@@ -48,13 +57,9 @@ chmod +x setup.sh
 
 4. After, the script will install some dependencies and deploy the services.
 
-If the script gets interrupted and you need to restart it, you can add the flag `--resume` to skip all prompts that had been completed in a previous run:
+#### :warning: Important:
 
-```
-./setup.sh --resume
-```
-
-:warning: After deploying all services, it will take ~5 minutes for all of them to be accessible behind your domain (e.g. https://immich.example.com)
+After deploying all services, it can take several minutes for all of them to be accessible behind your domain (e.g. https://immich.example.com)
 
 ## Post-Install Steps
 
@@ -71,9 +76,11 @@ cd ~/self-host/workspace
 3. You will be asked to enter the username, email and password for the primary user of the server, who will also be given server administrator privileges. 
 4. You will also be asked for the Immich API key. Follow these steps to log into Immich and get the API Key.
 
-:warning: When creating an account on Immich during first login, use the same username and email you provided for the primary user. **This is very important for things to work properly afterwards!**
+Once the bootstrap script completes, your server is ready to be used! 🎉
 
-🎉 Once the bootstrap script completes, your server is ready to be used!
+#### :warning: Important:
+
+When creating an account on Immich during first login, use the same username and email you provided for the primary user. **This is very important for things to work properly afterwards!**<
 
 ## User Management
 
