@@ -1,0 +1,2 @@
+Immich is a free, open-source, self-hosted photo and video management solution. It's designed to be a privacy-focused alternative to cloud-based services like Google Photos, allowing users to store and organize their media on their own servers. Immich offers features like automatic backups, mobile apps, and facial recognition.
+More: https://immich.app

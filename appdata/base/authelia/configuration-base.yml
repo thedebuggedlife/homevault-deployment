@@ -99,47 +99,7 @@ identity_providers:
     # hmac_secret: Use $AUTHELIA_IDENTITY_PROVIDERS_OIDC_HMAC_SECRET_FILE
     jwks:
       - key: {{ secret "/run/secrets/oidc_jwks_key" | mindent 10 "|" | msquote }}
-    authorization_policies:
-      immich_user:
-        default_policy: deny
-        rules:
-          - policy: 'one_factor'
-            subject: 'group:immich_user'
-      nextcloud_user:
-        default_policy: deny
-        rules:
-          - policy: 'one_factor'
-            subject: 'group:nextcloud_user'
     clients:
-      - client_id: {{ env "OIDC_IMMICH_CLIENT_ID" }}
-        client_name: 'immich'
-        client_secret: {{ secret "/run/secrets/oidc_immich_digest" }}
-        public: false
-        authorization_policy: 'immich_user' # immich does not have its own RBAC
-        redirect_uris:
-          - {{ expandenv "https://immich.$CF_DOMAIN_NAME/auth/login" }}
-          - {{ expandenv "https://immich.${CF_DOMAIN_NAME}/user-settings" }}
-          - 'app.immich:///oauth-callback'
-        scopes:
-          - 'openid'
-          - 'profile'
-          - 'email'
-      - client_id: {{ env "OIDC_NEXTCLOUD_CLIENT_ID" }}
-        client_name: 'nextcloud'
-        client_secret: {{ secret "/run/secrets/oidc_nextcloud_digest" }}
-        public: false
-        authorization_policy: 'nextcloud_user' # nextcloud does not have its own RBAC
-        require_pkce: true
-        pkce_challenge_method: 'S256'
-        redirect_uris:
-          - {{ expandenv "https://nextcloud.${CF_DOMAIN_NAME}/apps/user_oidc/code" }}
-        scopes:
-          - 'openid'
-          - 'profile'
-          - 'email'
-          - 'groups'
-        userinfo_signed_response_alg: 'none'
-        token_endpoint_auth_method: 'client_secret_post'
       - client_id: {{ env "OIDC_GRAFANA_CLIENT_ID" }}
         client_name: 'grafana'
         client_secret: {{ secret "/run/secrets/oidc_grafana_digest" }}  # The digest of 'insecure_secret'.

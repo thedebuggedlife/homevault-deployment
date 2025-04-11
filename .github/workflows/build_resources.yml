@@ -19,24 +19,38 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Generate ZIP files for appdata folders
+      - name: Generate ZIP files
         run: |
-          mkdir -p appdata_zips  # Temporary folder to store ZIP files
-          appdata_zips=$(pwd)/appdata_zips
+          # Create output directories
+          mkdir -p output_zips/appdata  # Structure for deployment
+
+          # Create appdata ZIP files
+          if [ -d "./appdata" ]; then
+            # Find all immediate subdirectories of the root appdata folder
+            find ./appdata -mindepth 1 -maxdepth 1 -type d | while read dir; do
+              folder_name=$(basename "$dir")  # Get the name of the subdirectory
+              zip_name="${folder_name}.zip"   # Format: {folder}.zip
+              
+              echo "Creating ZIP: $zip_name for content in $dir"
+              (cd "$dir" && zip -r "../../output_zips/appdata/$zip_name" .)  # Put in appdata subfolder
+            done
+          else
+            echo "Root appdata directory not found"
+          fi
           
-          find . -type d -name "appdata" | while read dir; do
-            parent_dir=$(dirname "$dir")  # Get the parent folder of "appdata"
-            zip_name=$(basename "$parent_dir").zip  # Format: {folder}.zip
-            
-            echo "Creating ZIP: $zip_name"
-            (cd "$dir" && zip -r "$appdata_zips/$zip_name" .)  # Zip contents, not the folder itself
-          done
+          # Create setup.zip from the /setup folder at the root
+          if [ -d "./setup" ]; then
+            echo "Creating setup.zip from /setup folder"
+            (cd "./setup" && zip -r "../output_zips/setup.zip" .)  # Put at root level
+          else
+            echo "Setup directory not found"
+          fi
 
       - name: Upload ZIP files
         uses: actions/upload-artifact@v4
         with:
-          name: appdata_zips
-          path: appdata_zips
+          name: output_zips
+          path: output_zips
 
   deploy:
     runs-on: ubuntu-latest
@@ -48,8 +62,8 @@ jobs:
       - name: Download ZIP files
         uses: actions/download-artifact@v4
         with:
-          name: appdata_zips
-          path: appdata
+          name: output_zips
+          path: deploy_files
 
       - name: Deploy to gh-pages
         run: |
@@ -57,6 +71,11 @@ jobs:
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git checkout --orphan gh-pages
           git rm -rf .
-          git add appdata/
+          
+          # Move files to their correct locations (already in the right structure)
+          cp -r deploy_files/* .
+          rm -rf deploy_files
+          
+          git add .
           git commit -m "Update Resources"
           git push -f origin gh-pages

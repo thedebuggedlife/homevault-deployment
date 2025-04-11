@@ -6,6 +6,7 @@ networks:
 
 volumes:
   search-data:
+  nextcloud-app:
 
 secrets:
   nextcloud_db_root_password:
@@ -20,11 +21,21 @@ secrets:
     file: ${APPDATA_LOCATION:-/srv/appdata}/secrets/nextcloud_elastic_password
   elastic_password:
     file: ${APPDATA_LOCATION:-/srv/appdata}/secrets/elastic_password
+  oidc_nextcloud_digest:
+    file: ${APPDATA_LOCATION:-/srv/appdata}/secrets/oidc_nextcloud_digest
+  oidc_nextcloud_password:
+    file: ${APPDATA_LOCATION:-/srv/appdata}/secrets/oidc_nextcloud_password
 
 services:
   traefik:
     networks:
       - nextcloud-proxy
+
+  authelia:
+    secrets:
+      - oidc_nextcloud_digest
+    environment:
+      OIDC_NEXTCLOUD_CLIENT_ID: ${OIDC_NEXTCLOUD_CLIENT_ID}
 
   nextcloud-db:
     container_name: nextcloud_db
@@ -60,6 +71,13 @@ services:
         condition: service_healthy
       nextcloud-elastic:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "bash", "/health/check.sh"]
+      interval: 1m
+      timeout: 5s
+      retries: 5
+      start_period: 10m
+      start_interval: 5s
     networks:
       - nextcloud
       - nextcloud-proxy
@@ -70,7 +88,8 @@ services:
       - oidc_nextcloud_password
       - nextcloud_elastic_password
     volumes:
-      - ${APPDATA_LOCATION:-/srv/appdata}/nextcloud/app:/var/www/html
+      - nextcloud-app:/var/www/html
+      - ${APPDATA_LOCATION:-/srv/appdata}/nextcloud/health:/health
       - ${APPDATA_LOCATION:-/srv/appdata}/nextcloud/hooks/post-installation:/docker-entrypoint-hooks.d/post-installation
       - ${NEXTCLOUD_DATA_LOCATION:-/usr/local/nextcloud}:/var/www/html/data
     environment:

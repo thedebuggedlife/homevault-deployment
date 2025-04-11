@@ -9,11 +9,21 @@ volumes:
 secrets:
   immich_db_password:
     file: ${APPDATA_LOCATION:-/srv/appdata}/secrets/immich_db_password
-  
+  oidc_immich_digest:
+    file: ${APPDATA_LOCATION:-/srv/appdata}/secrets/oidc_immich_digest
+  oidc_immich_password:
+    file: ${APPDATA_LOCATION:-/srv/appdata}/secrets/oidc_immich_password
+
 services:
   traefik:
     networks:
       - immich-proxy
+
+  authelia:
+    secrets:
+      - oidc_immich_digest
+    environment:
+      OIDC_IMMICH_CLIENT_ID: ${OIDC_IMMICH_CLIENT_ID}
 
   immich-server:
     container_name: immich_server

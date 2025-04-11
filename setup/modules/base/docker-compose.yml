@@ -1,7 +1,6 @@
 networks:
   proxy:
-    name: ${DOCKER_NETWORK:-proxy}
-    external: true
+    name: proxy
 
 secrets:
   authelia_session_secret:
@@ -22,14 +21,6 @@ secrets:
     file: ${APPDATA_LOCATION:-/srv/appdata}/secrets/oidc_hmac_secret
   oidc_jwks_key:
     file: ${APPDATA_LOCATION:-/srv/appdata}/secrets/oidc_jwks_key
-  oidc_immich_digest:
-    file: ${APPDATA_LOCATION:-/srv/appdata}/secrets/oidc_immich_digest
-  oidc_immich_password:
-    file: ${APPDATA_LOCATION:-/srv/appdata}/secrets/oidc_immich_password
-  oidc_nextcloud_digest:
-    file: ${APPDATA_LOCATION:-/srv/appdata}/secrets/oidc_nextcloud_digest
-  oidc_nextcloud_password:
-    file: ${APPDATA_LOCATION:-/srv/appdata}/secrets/oidc_nextcloud_password
   oidc_grafana_digest:
     file: ${APPDATA_LOCATION:-/srv/appdata}/secrets/oidc_grafana_digest
   oidc_grafana_password:
@@ -133,8 +124,6 @@ services:
       - ldap_authelia_password
       - oidc_hmac_secret
       - oidc_jwks_key
-      - oidc_immich_digest
-      - oidc_nextcloud_digest
       - oidc_grafana_digest
     environment:
       CF_DOMAIN_NAME: ${CF_DOMAIN_NAME}
@@ -150,9 +139,8 @@ services:
       AUTHELIA_NOTIFIER_SMTP_ADDRESS: smtp://${SMTP_SERVER}:${SMTP_PORT}
       AUTHELIA_NOTIFIER_SMTP_SENDER: ${SMTP_SENDER}@${CF_DOMAIN_NAME}
       AUTHELIA_IDENTITY_PROVIDERS_OIDC_HMAC_SECRET_FILE: /run/secrets/oidc_hmac_secret
-      OIDC_IMMICH_CLIENT_ID: ${OIDC_IMMICH_CLIENT_ID}
-      OIDC_NEXTCLOUD_CLIENT_ID: ${OIDC_NEXTCLOUD_CLIENT_ID}
       OIDC_GRAFANA_CLIENT_ID: ${OIDC_GRAFANA_CLIENT_ID}
+      X_AUTHELIA_CONFIG: ${AUTHELIA_CONFIG}
       X_AUTHELIA_CONFIG_FILTERS: template
     labels:
       dns.manage: true
