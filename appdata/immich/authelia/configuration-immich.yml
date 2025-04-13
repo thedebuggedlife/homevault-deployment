@@ -7,14 +7,14 @@ identity_providers:
           - policy: 'one_factor'
             subject: 'group:immich_user'
     clients:
-      - client_id: {{ env "OIDC_IMMICH_CLIENT_ID" }}
+      - client_id: '{{ env "OIDC_IMMICH_CLIENT_ID" }}'
         client_name: 'immich'
-        client_secret: {{ secret "/run/secrets/oidc_immich_digest" }}
+        client_secret: '{{ secret "/run/secrets/oidc_immich_digest" }}'
         public: false
         authorization_policy: 'immich_user' # immich does not have its own RBAC
         redirect_uris:
-          - {{ expandenv "https://immich.$CF_DOMAIN_NAME/auth/login" }}
-          - {{ expandenv "https://immich.${CF_DOMAIN_NAME}/user-settings" }}
+          - '{{ expandenv "https://immich.$CF_DOMAIN_NAME/auth/login" }}'
+          - '{{ expandenv "https://immich.${CF_DOMAIN_NAME}/user-settings" }}'
           - 'app.immich:///oauth-callback'
         scopes:
           - 'openid'

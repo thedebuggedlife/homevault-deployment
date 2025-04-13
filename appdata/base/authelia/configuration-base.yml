@@ -37,8 +37,8 @@ authentication_backend:
   ldap:
     implementation: lldap
     address: ldap://lldap:3890
-    base_dn: {{ env "CF_DOMAIN_CN" }}
-    user: {{ expandenv "uid=authelia,ou=people,$CF_DOMAIN_CN" }}
+    base_dn: '{{ env "CF_DOMAIN_CN" }}'
+    user: '{{ expandenv "uid=authelia,ou=people,$CF_DOMAIN_CN" }}'
     # password: Use ==> $AUTHELIA_AUTHENTICATION_BACKEND_LDAP_PASSWORD_FILE
     # The following allows sign in with EITHER username or email:
     users_filter: "(&(|({username_attribute}={input})({mail_attribute}={input}))(objectClass=person))"
@@ -48,11 +48,11 @@ access_control:
   rules:
     ## bypass rule
     - domain: 
-        - {{ expandenv "authelia.$CF_DOMAIN_NAME" }}
+        - '{{ expandenv "authelia.$CF_DOMAIN_NAME" }}'
       policy: bypass
     ## catch-all
     - domain:
-        - {{ expandenv "\"*.$CF_DOMAIN_NAME\"" }}
+        - '{{ expandenv "\"*.$CF_DOMAIN_NAME\"" }}'
       subject: 
         - "group:server_admin"
       policy: one_factor
@@ -65,8 +65,8 @@ session:
   inactivity: 5m
   remember_me: 2M
   cookies:
-    - domain: {{ env "CF_DOMAIN_NAME" }}
-      authelia_url: {{ expandenv "https://authelia.$CF_DOMAIN_NAME" }}
+    - domain: '{{ env "CF_DOMAIN_NAME" }}'
+      authelia_url: '{{ expandenv "https://authelia.$CF_DOMAIN_NAME" }}'
 
 regulation:
   max_retries: 3
@@ -98,17 +98,17 @@ identity_providers:
   oidc:
     # hmac_secret: Use $AUTHELIA_IDENTITY_PROVIDERS_OIDC_HMAC_SECRET_FILE
     jwks:
-      - key: {{ secret "/run/secrets/oidc_jwks_key" | mindent 10 "|" | msquote }}
+      - key: '{{ secret "/run/secrets/oidc_jwks_key" | mindent 10 "|" | msquote }}'
     clients:
-      - client_id: {{ env "OIDC_GRAFANA_CLIENT_ID" }}
+      - client_id: '{{ env "OIDC_GRAFANA_CLIENT_ID" }}'
         client_name: 'grafana'
-        client_secret: {{ secret "/run/secrets/oidc_grafana_digest" }}  # The digest of 'insecure_secret'.
+        client_secret: '{{ secret "/run/secrets/oidc_grafana_digest" }}'  # The digest of 'insecure_secret'.
         public: false
         authorization_policy: 'one_factor' # grafana does its own RBAC
         require_pkce: true
         pkce_challenge_method: 'S256'
         redirect_uris:
-          - {{ expandenv "https://grafana.${CF_DOMAIN_NAME}/login/generic_oauth" }}
+          - '{{ expandenv "https://grafana.${CF_DOMAIN_NAME}/login/generic_oauth" }}'
         scopes:
           - 'openid'
           - 'profile'

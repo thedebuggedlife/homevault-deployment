@@ -50,19 +50,27 @@ configure_docker() {
 # @return {void}
 ###
 configure_authelia() {
-    local file_list=""
-    local separator=""
+    local -a file_list=()
     for module in "${ENABLED_MODULES[@]}"; do
         local config_file="${APPDATA_LOCATION%/}/authelia/configuration-${module}.yml"
-        # Check if file exists
         if [[ -f "$config_file" ]]; then
-            # Add to comma-separated list
-            file_list="${file_list}${separator}/config/configuration-${module}.yml"
-            # Set separator for subsequent items
-            separator=","
+            file_list+=("configuration-${module}.yml")
         fi
     done
-    save_env AUTHELIA_CONFIG "$file_list"
+    local configuration
+    if ! configuration=$(sg docker -c "docker run --rm -it -v '${APPDATA_LOCATION%/}/authelia':/workdir mikefarah/yq:4.45.1 -M ea '
+        (.identity_providers.oidc.clients as \$item ireduce ([]; . + \$item )) as \$clients | 
+        (.identity_providers.oidc.authorization_policies as \$item ireduce ({}; . * \$item )) as \$policies |
+        [select(fileIndex == 0) * {\"identity_providers\":{\"oidc\":{\"authorization_policies\":\$policies,\"clients\":\$clients}}}] |
+        .[0]' ${file_list[*]}"
+    ); then
+        log_error "Failed to merge Authelia configuration"
+        exit 1
+    fi
+    echo "$configuration" | sed 's/'\''{{/{{/g; s/}}'\''/}}/g' | sudo tee "${APPDATA_LOCATION%/}/authelia/configuration.yml" > /dev/null || {
+        log_error "Failed to write Authelia configuration"
+        exit 1
+    }
 }
 
 ###
