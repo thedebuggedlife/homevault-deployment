@@ -1,3 +1,6 @@
 {
-    "bashIde.includeAllWorkspaceSymbols": true
+    "bashIde.includeAllWorkspaceSymbols": true,
+    "cSpell.words": [
+        "argjson"
+    ]
 }

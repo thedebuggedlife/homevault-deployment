@@ -10,46 +10,51 @@ GH_IO_BASE_URL=https://thedebuggedlife.github.io/selfhost-bootstrap
 ################################################################################
 #                                   HTTP HELPERS
 
+###
 # Makes an HTTP request and returns the response body (if any)
-# Params:   $1 HTTP Method (GET|DELETE|PUT|POST)
-#           $2 URL of request
-#           $3 Header for authentication (e.g. "X-API-Key: my-key")
-#           $4 Body of the request [optional]
-# Returns:  The body of the response
+# Params:
+#   $1 {string} HTTP Method (GET|DELETE|PUT|POST)
+#   $2 {string} URL of request
+# Options:
+#   -b [body]       Body of the request [optional]
+#   -h [header]     Additional header (e.g. "X-API-Key: my-key") [optional]
+#   -c [container]  Docker container to run request within [optional]
+#   -e [code]       Expected status code. Accepts regex. [default="^2"]
+# Returns:  
+#   {string} The body of the response
+###
 rest_call() {
-    local method=$1
-    local url=$2
-    local auth=$3
-    local body=$4
-    # Debug
-    # echo "Method: $method" >&2
-    # echo "URL: $url" >&2
-    # echo "Body: $body" >&2
-    # Make the curl request.
+    local method=$1 url=$2 expected="^2" container
+    local -a args=(
+        -s -w "\n%{http_code}"
+        --request "$method"
+        --url "$url"
+        --header "Content-Type: application/json"
+        --header "Accept: application/json")
+    shift 2
+    while getopts ":h:b:c:e:" opt; do
+        case $opt in
+            h) args+=("--header" "$OPTARG") ;;
+            b) args+=("--data" "$OPTARG") ;;
+            c) container="$OPTARG" ;;
+            e) expected="$OPTARG" ;;
+            \?) log_warn "rest_call: Invalid option: -$OPTARG" ;;
+            :) if [ "$OPTARG" != "b" ]; then log_warn "rest_call: Option -$OPTARG requires an argument"; fi ;;
+        esac
+    done
     local response http_status
-    if [ -n "$body" ]; then
-        response=$(curl -s -w "\n%{http_code}" \
-            --request "$method" \
-            --url "$url" \
-            --header "Content-Type: application/json" \
-            --header "$auth" \
-            --header "accept: application/json" \
-            --data "$body")
+    if [ -z "$container" ]; then
+        response=$(curl "${args[@]}")
     else
-        response=$(curl -s -w "\n%{http_code}" \
-            --request "$method" \
-            --url "$url" \
-            --header "$auth" \
-            --header "accept: application/json")
+        # Cannot use 'sg docker' because it breaks the argument expansion for CURL
+        # Instead resort to using sudo to avoid errors due to unauthorized access to docker
+        response=$(sudo docker exec "$container" curl "${args[@]}")
     fi
     # Separate the body and the HTTP status code.
     http_status=$(echo "$response" | tail -n1)
     response=$(echo "$response" | sed '$d')
-    # Debug
-    # echo "HTTP Status: $http_status" >&2
-    # echo -e "Response Body:\n$(echo $response | jq .)" >&2
-    # Check if the status code indicates success (2XX)
-    if [[ "$http_status" =~ ^2 ]]; then
+    # Check if the status code matches expected
+    if [[ "$http_status" =~ $expected ]]; then
         echo "$response"
     else
         log_error "Request to '$method' '$url' failed with $http_status: $response"

@@ -20,7 +20,7 @@ TAILSCALE_API_BASE_URL=https://api.tailscale.com/api/v2
 ###
 tailscale_rest_call() {
     local response
-    if ! response=$(rest_call $1 "$TAILSCALE_API_BASE_URL/$2" "Authorization: Bearer ${TAILSCALE_API_KEY}" "$3"); then
+    if ! response=$(rest_call $1 "$TAILSCALE_API_BASE_URL/$2" -h "Authorization: Bearer ${TAILSCALE_API_KEY}" -b "$3"); then
         return 1
     fi
     echo "$response"

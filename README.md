@@ -61,27 +61,6 @@ chmod +x setup.sh
 
 After deploying all services, it can take several minutes for all of them to be accessible behind your domain (e.g. https://immich.example.com)
 
-## Post-Install Steps
-
-After a successful run of the setup script as shown above, you will need to take a few steps to finish setting everything up:
-
-1. Get an Immich API Key ([see how to get it](./docs/immich.md#getting-an-api-token)).
-2. Run the bootstrap script:
-
-```
-cd ~/self-host/workspace
-./setup.sh --post-install
-```
-
-3. You will be asked to enter the username, email and password for the primary user of the server, who will also be given server administrator privileges. 
-4. You will also be asked for the Immich API key. Follow these steps to log into Immich and get the API Key.
-
-Once the bootstrap script completes, your server is ready to be used! 🎉
-
-#### :warning: Important:
-
-When creating an account on Immich during first login, use the same username and email you provided for the primary user. **This is very important for things to work properly afterwards!**<
-
 ## User Management
 
 ==TBD==

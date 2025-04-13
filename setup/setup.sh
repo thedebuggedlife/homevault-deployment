@@ -19,6 +19,12 @@ COMPOSE_PROJECT=self-host
 COMPOSE_OPTIONS=
 COMPOSE_UP_OPTIONS=
 
+# Administrator account
+ADMIN_USERNAME=
+ADMIN_PASSWORD=
+ADMIN_EMAIL=
+ADMIN_DISPLAY_NAME=
+
 # Base module should always be first in the list
 declare -a ENABLED_MODULES=("base")
 
@@ -131,7 +137,9 @@ load_module_help() {
 find_modules() {
     for module_file in "$PROJECT_ROOT"/modules/*/setup.sh; do
         module_name=$(basename "$(dirname "$module_file")")
-        ENABLED_MODULES+=("$module_name")
+        if [ "$module_name" != "base" ]; then
+            ENABLED_MODULES+=("$module_name")
+        fi
     done
 }
 
@@ -210,44 +218,56 @@ deploy_project() {
 }
 
 ###
-# Create the file used by LLDAP to bootstrap the administrator account
+# Create the variables with values for server administrator account and save
+# them to the file used for LLDAP bootstrap
+#
+# Options:
+#   -l      Load only, do not save to file (for post-install steps only)
 #
 # @return void
 ###
 configure_admin_account() {
     local config_file="${APPDATA_LOCATION%/}/lldap/bootstrap/user-configs/admin.json"
-    local username email password display_name
+
+    local load_only=false
+    while getopts ":l" opt; do
+        case $opt in
+            l) load_only=true ;;
+            \?) log_warn "configure_admin_account: Invalid option: -$OPTARG" ;;
+        esac
+    done
 
     # Apply any overrides passed via -o flag
-    username="${ADMIN_USERNAME_OVERRIDE}"
-    email="${ADMIN_EMAIL_OVERRIDE}"
-    password="${ADMIN_PASSWORD_OVERRIDE}"
-    display_name="${ADMIN_DISPLAY_NAME_OVERRIDE}"
+    ADMIN_USERNAME="${ADMIN_USERNAME_OVERRIDE}"
+    ADMIN_EMAIL="${ADMIN_EMAIL_OVERRIDE}"
+    ADMIN_PASSWORD="${ADMIN_PASSWORD_OVERRIDE}"
+    ADMIN_DISPLAY_NAME="${ADMIN_DISPLAY_NAME_OVERRIDE}"
 
     local save_file=false
-    if [[ -n "$username" || -n "$email" || -n "$password" || -n "$display_name" ]]; then
+    if [[ -n "$ADMIN_USERNAME" || -n "$ADMIN_EMAIL" || -n "$ADMIN_PASSWORD" || -n "$ADMIN_DISPLAY_NAME" ]]; then
         save_file=true
     fi
 
-    # Read the values from file (if it exists)
+    # Read missing values from file (if it exists)
     if [[ -f "$config_file" ]]; then
-        username=${username:-"$(jq -r '.id' "$config_file")"}
-        email=${email:-"$(jq -r '.email' "$config_file")"}
-        password=${password:-"$(jq -r '.password' "$config_file")"}
-        display_name=${display_name:-"$(jq -r '.displayName' "$config_file")"}
+        ADMIN_USERNAME=${ADMIN_USERNAME:-"$(jq -r '.id' "$config_file")"}
+        ADMIN_EMAIL=${ADMIN_EMAIL:-"$(jq -r '.email' "$config_file")"}
+        ADMIN_PASSWORD=${ADMIN_PASSWORD:-"$(jq -r '.password' "$config_file")"}
+        ADMIN_DISPLAY_NAME=${ADMIN_DISPLAY_NAME:-"$(jq -r '.displayName' "$config_file")"}
     fi
 
     # If already configured and the --resume flag was specified, skip the rest
-    if [[ -z "$username" || -z "$email" || -z "$password" || -z "$display_name" || "$RESUME" != "true" ]]; then
-        echo -e "Configuring the user account for the server administrator...\n" 
+    if [[ -z "$ADMIN_USERNAME" || -z "$ADMIN_EMAIL" || -z "$ADMIN_PASSWORD" || -z "$ADMIN_DISPLAY_NAME" || "$RESUME" != "true" ]]; then
 
-        username=$(ask_value "Username" "$username" true)
-        email=$(ask_value "Email address" "$email" true)
-        password=$(ask_value "Password" "$password" true "$password" true)
-        display_name=$(ask_value "Display name (e.g. <First> <Last>)" "$display_name" true)
+        ADMIN_USERNAME=$(ask_value "Username" "$ADMIN_USERNAME" true)
+        ADMIN_EMAIL=$(ask_value "Email address" "$ADMIN_EMAIL" true)
+        ADMIN_PASSWORD=$(ask_value "Password" "$ADMIN_PASSWORD" true "$ADMIN_PASSWORD" true)
+        ADMIN_DISPLAY_NAME=$(ask_value "Display name (e.g. <First> <Last>)" "$ADMIN_DISPLAY_NAME" true)
 
         save_file=true
     fi
+
+    if [ "$load_only" = "true" ]; then return 0; fi
 
     if [ "$save_file" = "true" ]; then
         local json
@@ -256,10 +276,10 @@ configure_admin_account() {
             exit 1
         fi
         if ! json=$(echo "$json" | jq \
-            --arg id "$username" \
-            --arg email "$email" \
-            --arg password "$password" \
-            --arg displayName "$display_name" '
+            --arg id "$ADMIN_USERNAME" \
+            --arg email "$ADMIN_EMAIL" \
+            --arg password "$ADMIN_PASSWORD" \
+            --arg displayName "$ADMIN_DISPLAY_NAME" '
             .id = $id |
             .email = $email |
             .password = $password |
@@ -271,8 +291,8 @@ configure_admin_account() {
         write_file "$json" "$config_file"
     fi
 
-    write_file "$username" "${SECRETS_PATH}server_admin_username"
-    write_file "$password" "${SECRETS_PATH}server_admin_password"
+    write_file "$ADMIN_USERNAME" "${SECRETS_PATH}server_admin_username"
+    write_file "$ADMIN_PASSWORD" "${SECRETS_PATH}server_admin_password"
 }
 
 cmd=( "$0" "$@" )
@@ -435,6 +455,8 @@ if [ "$POST_INSTALL" = "true" ]; then
     source "$ENV_FILE"
 
     SECRETS_PATH="${APPDATA_LOCATION}/secrets/"
+
+    configure_admin_account -l
 
     execute_hooks "${BOOTSTRAP_HOOKS[@]}" "post-install"
 

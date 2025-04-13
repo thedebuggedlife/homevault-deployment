@@ -17,7 +17,7 @@ CLOUDFLARE_API_BASE_URL=https://api.cloudflare.com/client/v4
 # Returns:  Body of the response
 cloudflare_rest_call() {
     local response
-    if ! response=$(rest_call "$1" "$CLOUDFLARE_API_BASE_URL/$2" "Authorization: Bearer ${CF_DNS_API_TOKEN}" "$3"); then
+    if ! response=$(rest_call "$1" "$CLOUDFLARE_API_BASE_URL/$2" -h "Authorization: Bearer ${CF_DNS_API_TOKEN}" -b "$3"); then
         return 1
     fi
     echo "$response"

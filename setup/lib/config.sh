@@ -179,7 +179,9 @@ create_rsa_keypair() {
 ###
 # Makes sure a given path exists, if not, it is created with $AS_USER:docker ownership
 #
-# @param {string} suffix - (optional) A file suffix for secondary files
+# Parameters:
+#   $1 {string} Path to create
+#
 # @return void
 ###
 ensure_path_exists() {

@@ -21,7 +21,7 @@ SMTP2GO_API_BASE_URL=https://api.smtp2go.com/v3
 # Returns:  Body of the response
 smtp2go_rest_call() {
     local response
-    if ! response=$(rest_call $1 "$SMTP2GO_API_BASE_URL/$2" "X-Smtp2go-Api-Key: $SMTP2GO_API_KEY" "$3"); then
+    if ! response=$(rest_call $1 "$SMTP2GO_API_BASE_URL/$2" -h "X-Smtp2go-Api-Key: $SMTP2GO_API_KEY" -b "$3"); then
         return 1
     fi
     echo "$response"
