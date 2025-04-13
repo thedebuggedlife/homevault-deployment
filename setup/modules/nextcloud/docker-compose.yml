@@ -4,10 +4,6 @@ networks:
   nextcloud-proxy:
     name: nextcloud-proxy
 
-volumes:
-  search-data:
-  nextcloud-app:
-
 secrets:
   nextcloud_db_root_password:
     file: ${APPDATA_LOCATION:-/srv/appdata}/secrets/nextcloud_db_root_password
@@ -29,7 +25,10 @@ secrets:
 services:
   traefik:
     networks:
-      - nextcloud-proxy
+      nextcloud-proxy:
+        aliases:
+          - ${NEXTCLOUD_SUBDOMAIN:-nextcloud}.${CF_DOMAIN_NAME}
+          - ${COLLABORA_SUBDOMAIN:-office}.${CF_DOMAIN_NAME}
 
   authelia:
     secrets:
@@ -88,7 +87,7 @@ services:
       - oidc_nextcloud_password
       - nextcloud_elastic_password
     volumes:
-      - nextcloud-app:/var/www/html
+      - ${APPDATA_LOCATION:-/srv/appdata}/nextcloud/app:/var/www/html
       - ${APPDATA_LOCATION:-/srv/appdata}/nextcloud/health:/health
       - ${APPDATA_LOCATION:-/srv/appdata}/nextcloud/hooks/post-installation:/docker-entrypoint-hooks.d/post-installation
       - ${NEXTCLOUD_DATA_LOCATION:-/usr/local/nextcloud}:/var/www/html/data
@@ -111,7 +110,7 @@ services:
       - APACHE_DISABLE_REWRITE_IP=1
       - TRUSTED_PROXIES=${NEXTCLOUD_TRUSTED_PROXIES}
       - CF_DOMAIN_NAME=${CF_DOMAIN_NAME}
-      - COLLABORA_SERVER_NAME=${COLLABORA_SUBDOMAIN:-nextcloud}.${CF_DOMAIN_NAME}
+      - COLLABORA_SERVER_NAME=${COLLABORA_SUBDOMAIN:-office}.${CF_DOMAIN_NAME}
       - OIDC_NEXTCLOUD_CLIENT_ID=${OIDC_NEXTCLOUD_CLIENT_ID}
       - ELASTIC_SEARCH_HOST=nextcloud-elastic
       - ELASTIC_SEARCH_INDEX=elastic
@@ -122,7 +121,7 @@ services:
       dns.cloudflare.proxied: true
       traefik.enable: true
       traefik.docker.network: nextcloud-proxy
-      traefik.http.routers.nextcloud-server.entryPoints: cloudflare
+      traefik.http.routers.nextcloud-server.entryPoints: cloudflare,tailnet
       traefik.http.routers.nextcloud-server.rule: Host(`${NEXTCLOUD_SUBDOMAIN:-nextcloud}.${CF_DOMAIN_NAME}`)
       traefik.http.services.nextcloud-server.loadbalancer.server.port: 80
 
@@ -147,7 +146,7 @@ services:
       dns.cloudflare.proxied: true
       traefik.enable: true
       traefik.docker.network: nextcloud-proxy
-      traefik.http.routers.collabora.entryPoints: cloudflare
+      traefik.http.routers.collabora.entryPoints: cloudflare,tailnet
       traefik.http.routers.collabora.rule: Host(`${COLLABORA_SUBDOMAIN:-office}.${CF_DOMAIN_NAME}`)
       traefik.http.services.collabora.loadbalancer.server.port: 9980
 
@@ -178,7 +177,7 @@ services:
     networks:
       - nextcloud
     volumes:
-      - search-data:/usr/share/elasticsearch/data
+      - ${APPDATA_LOCATION:-/srv/appdata}/nextcloud/search:/usr/share/elasticsearch/data
     environment:
       - bootstrap.memory_lock=true                  # Disable use of swap
       - discovery.type=single-node                  # Disable warnings about single-node cluster

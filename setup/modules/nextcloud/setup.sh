@@ -34,8 +34,8 @@ nextcloud_pre_install() {
     if [ ! -s "${SECRETS_PATH}elastic_password" ]; then
         echo "Generating password for ElasticSearch..."
         cp "${SECRETS_PATH}nextcloud_elastic_password" "${SECRETS_PATH}elastic_password"
-        chmod 600 "${SECRETS_PATH}elastic_password"
     fi
+    sudo chmod 600 "${SECRETS_PATH}elastic_password"
 
     # ElasticSearch requires setting the maximum number of memory map areas to at least 262144
     if [ "$(sysctl -n vm.max_map_count)" -lt 262144 ]; then
@@ -45,6 +45,12 @@ nextcloud_pre_install() {
             exit 1
         }
     fi
+
+    # Provide proper access to ElasticSearch data location
+    local search_path="${APPDATA_LOCATION%/}/nextcloud/search"
+    ensure_path_exists "$search_path"
+    echo -e "Changing ownership of ${Cyan}$search_path${COff} to ${Purple}1000:0${COff}"
+    sudo chown 1000:0 "${APPDATA_LOCATION%/}/nextcloud/search"
 
     # For NextCloud to respect X-Forwarded-* headers the CIDR that includes traefik and nextcloud should be
     # added to the trusted proxies. Otherwise, NextCloud will not receive original IP and protocol of the request.
