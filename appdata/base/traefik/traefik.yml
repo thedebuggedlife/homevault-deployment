@@ -43,7 +43,7 @@ certificatesResolvers:
 providers:
   providersThrottleDuration: 2s
   file:
-    filename: /etc/traefik/dynamic-config.yml
+    directory: /etc/traefik/dynamic
     watch: true
   docker:
     endpoint: "unix:///var/run/docker.sock"

@@ -1,6 +1,7 @@
 {
     "bashIde.includeAllWorkspaceSymbols": true,
     "cSpell.words": [
-        "argjson"
+        "argjson",
+        "DISTRO"
     ]
 }

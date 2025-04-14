@@ -132,7 +132,7 @@ create_password_digest_pair() {
         return 0
     fi
     local output password_value digest_value
-    output=$(sg docker -c "docker run --rm authelia/authelia:latest authelia crypto hash generate argon2 --random --random.length ${password_length} --random.charset alphanumeric")
+    output=$(sg docker -c "docker run -q --rm authelia/authelia:latest authelia crypto hash generate argon2 --random --random.length ${password_length} --random.charset alphanumeric")
     password_value=$(echo "$output" | awk '/Random Password:/ {print $3}')
     digest_value=$(echo "$output" | awk '/Digest:/ {print $2}')
     if [ -z "$password_value" ] || [ -z "$digest_value" ]; then

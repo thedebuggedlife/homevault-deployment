@@ -45,6 +45,30 @@ configure_docker() {
 }
 
 ###
+# Create dynamic configuration files for enabled modules
+#
+# @return: {void}
+###
+configure_traefik() {
+    local source_dir="${APPDATA_LOCATION%/}/traefik"
+    local dest_dir="${APPDATA_LOCATION%/}/traefik/dynamic"
+
+    ensure_path_exists "$dest_dir"
+
+    # First, delete any existing module configs
+    rm "${dest_dir}/dynamic-*.yml"
+    # Next, copy the dynamic config for enabled modules
+    for module in "${ENABLED_MODULES[@]}"; do
+        src_file="${source_dir}/dynamic-${module}.yml"
+        dest_file="${dest_dir}/dynamic-${module}.yml"
+        if [[ -f "$src_file" ]]; then
+            cp "$src_file" "$dest_file"
+            echo -e "Copied dynamic Traefik configuration for ${Purple}$module${COff}"
+        fi
+    done
+}
+
+###
 # Find all applicable authelia configuration files
 #
 # @return {void}
@@ -58,12 +82,14 @@ configure_authelia() {
         fi
     done
     local configuration
-    if ! configuration=$(sg docker -c "docker run --rm -it -v '${APPDATA_LOCATION%/}/authelia':/workdir mikefarah/yq:4.45.1 -M ea '
-        (.identity_providers.oidc.clients as \$item ireduce ([]; . + \$item )) as \$clients | 
-        (.identity_providers.oidc.authorization_policies as \$item ireduce ({}; . * \$item )) as \$policies |
-        [select(fileIndex == 0) * {\"identity_providers\":{\"oidc\":{\"authorization_policies\":\$policies,\"clients\":\$clients}}}] |
-        .[0]' ${file_list[*]}"
-    ); then
+    # shellcheck disable=SC2016
+    local expr='
+        (.identity_providers.oidc.clients as $item ireduce ([]; . + $item )) as $clients | 
+        (.identity_providers.oidc.authorization_policies as $item ireduce ({}; . * $item )) as $policies |
+        [select(fileIndex == 0) * {"identity_providers":{"oidc":{"authorization_policies":$policies,"clients":$clients}}}] |
+        .[0]'
+    local docker_cmd="docker run -q --rm -it -v '${APPDATA_LOCATION%/}/authelia':/workdir mikefarah/yq:4.45.1 -M ea '$expr' ${file_list[*]}"
+    if ! configuration=$(sg docker -c "$docker_cmd"); then
         log_error "Failed to merge Authelia configuration"
         exit 1
     fi
@@ -188,6 +214,9 @@ base_pre_install() {
 
     log_header "Preparing Authelia for deployment"
     configure_authelia
+
+    log_header "Preparing Traefik for deployment"
+    configure_traefik
 }
 
 CONFIG_ENV_HOOKS+=("base_config_env")

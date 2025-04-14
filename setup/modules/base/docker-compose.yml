@@ -52,6 +52,8 @@ services:
     restart: unless-stopped
     networks:
       - proxy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     deploy:
       resources:
         limits:
@@ -68,12 +70,13 @@ services:
       HOST_HOSTNAME: ${TRAEFIK_HOSTNAME:-traefik}
       HOST_CONTAINERNAME: traefik
       CF_DNS_API_TOKEN_FILE: /run/secrets/cloudflare_dns_api_token
+      CF_DOMAIN_NAME: ${CF_DOMAIN_NAME}
       TRAEFIK_HOSTNAME: traefik
       TRAEFIK_ENTRYPOINTS_tailnet_HTTP_TLS_DOMAINS_0_MAIN: "*.${CF_DOMAIN_NAME}"
       TRAEFIK_ENTRYPOINTS_tailnet_HTTP_TLS_DOMAINS_0_SANS: ${CF_DOMAIN_NAME}
       TRAEFIK_CERTIFICATERESOLVERS_tailnetResolver_ACME_EMAIL: ${CERT_ACME_EMAIL}
       TRAEFIK_SERVERSTRANSPORT_INSECURESKIPVERIFY: true
-      TRAEFIK_HTTP_MIDDLEWARES_AUTH_FORWARDAUTH_ADDRESS: http://authelia:9091/api/verify?rd=https://authelia.${CF_DOMAIN_NAME}/
+      TRAEFIK_HTTP_MIDDLEWARES_AUTHELIA_FORWARDAUTH_ADDRESS: http://authelia:9091/api/verify?rd=https://authelia.${CF_DOMAIN_NAME}/
     labels:
       dns.manage: true
       dns.content: ${TAILSCALE_IP}

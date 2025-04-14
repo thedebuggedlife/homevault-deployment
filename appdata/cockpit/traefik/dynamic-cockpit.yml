@@ -1,0 +1,13 @@
+http:
+  routers:
+    cockpit:
+      rule: {{ expandenv "Host(`${COCKPIT_SUBDOMAIN}.${CF_DOMAIN_NAME}`)" }}
+      entrypoints:
+        - tailnet
+      service: cockpit
+
+  services:
+    cockpit:
+      loadBalancer:
+        servers:
+          - url: "http://host.docker.internal:9090"

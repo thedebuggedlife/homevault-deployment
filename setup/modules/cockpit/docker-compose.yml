@@ -1,0 +1,4 @@
+services:
+  traefik:
+    environment:
+      COCKPIT_SUBDOMAIN: ${COCKPIT_SUBDOMAIN}

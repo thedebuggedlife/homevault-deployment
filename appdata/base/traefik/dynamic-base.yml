@@ -23,7 +23,7 @@ http:
     # Add to sites where Authelia auth needs to be applied by Traefik itself
     authelia:
       forwardauth:
-        # address: ==> Use $TRAEFIK_HTTP_MIDDLEWARES_AUTH_FORWARDAUTH_ADDRESS ("http://authelia:9091/api/verify?rd=https://auth.example.com/")
+        # address: ==> Use $TRAEFIK_HTTP_MIDDLEWARES_AUTHELIA_FORWARDAUTH_ADDRESS ("http://authelia:9091/api/verify?rd=https://auth.example.com/")
         trustForwardHeader: true
         authResponseHeaders:
           - Remote-User

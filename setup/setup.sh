@@ -10,6 +10,7 @@ source "$PROJECT_ROOT/lib/smtp2go.sh"
 
 SECRETS_PATH=
 UNATTENDED=
+NO_DOWNLOAD=
 USE_SMTP2GO=true
 POST_INSTALL=
 RESUME=false
@@ -25,6 +26,12 @@ ADMIN_PASSWORD=
 ADMIN_EMAIL=
 ADMIN_DISPLAY_NAME=
 
+# Global ENV variables
+APPDATA_LOCATION=
+# shellcheck disable=SC2034
+TAILSCALE_IP=
+CF_DOMAIN_NAME=
+
 # Base module should always be first in the list
 declare -a ENABLED_MODULES=("base")
 
@@ -38,7 +45,20 @@ declare -a POST_INSTALL_HOOKS=()
 declare -a BOOTSTRAP_HOOKS=()
 declare -A MODULE_OPTIONS
 
+dedup_modules() {
+    local -A seen_modules
+    local unique_modules=()
+    for module in "${ENABLED_MODULES[@]}"; do
+        if [[ -z "${seen_modules[$module]}" ]]; then
+            unique_modules+=("$module")
+            seen_modules[$module]=1
+        fi
+    done
+    ENABLED_MODULES=("${unique_modules[@]}")
+}
+
 load_modules() {
+    dedup_modules
     for module in "${ENABLED_MODULES[@]}"; do
         local module_setup="$PROJECT_ROOT/modules/$module/setup.sh"
         if [ -s "$module_setup" ]; then
@@ -337,6 +357,7 @@ print_usage() {
     echo "  --unattended                    Automatically answer prompts with defaults (implies --resume)."
     echo "  --custom-smtp                   Do not use SMTP2GO for sending email (custom SMTP configuration required)."
     echo "  --resume                        Skip any steps that have been previously completed."
+    echo "  --no-download                   Do not download appdata from GitHub. Only use if appdata was previously downloaded."
     echo "  --post-install                  Run post-install configuration of self-hosted apps."
     echo "  --dry-run                       Execute Docker Compose in dry run mode."
     echo "  -h, --help                      Display this help message."
@@ -430,6 +451,11 @@ while [ "$#" -gt 0 ]; do
         shift 1
         continue
         ;;
+    --no-download)
+        NO_DOWNLOAD=true
+        shift 1
+        continue
+        ;;
     --dry-run)
         COMPOSE_UP_OPTIONS="$COMPOSE_UP_OPTIONS --dry-run"
         shift 1
@@ -478,7 +504,9 @@ log_header "Preparing application data folder"
 
 create_data_locations
 
-download_appdata
+if [ "$NO_DOWNLOAD" != true ]; then
+    download_appdata
+fi
 
 if [ "$USE_SMTP2GO" = "true" ]; then
 
