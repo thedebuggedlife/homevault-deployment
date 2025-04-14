@@ -25,7 +25,11 @@ In order to setup your self-hosted solution, you will need to take some preparat
 
 The project is structured using a modular approach where services are grouped into logical modules that can be installed independently (with some exceptions). This design provides flexibility, allowing you to install only the services you need while maintaining a cohesive environment.
 
-The example below will install all available modules.
+Some of the modules currently available include:
+
+* The **base** module, is always installed by default. This module includes all services necessary to connect to your server remotely, perform authentication, etc.
+* Immich, a service for photo management and sharing, is installed with the **immich** module.
+* NextCloud, a service for file management, sharing and collaboration, is installed with the **nextcloud** module.
 
 For more information see [this document](docs/modules.md).
 
@@ -50,6 +54,8 @@ curl -fsSL https://thedebuggedlife.github.io/selfhost-bootstrap/setup.zip | busy
 chmod +x setup.sh
 ./setup.sh -m all
 ```
+
+> **Note**: The example above installs **all** available modules. You can choose instead a limited set of modules to install. For more information see [this document](docs/modules.md).
 
 3. During setup, you will be asked to enter the API keys obtained earlier, as well as some additional configuration options. 
 
