@@ -89,6 +89,41 @@ cockpit_detect_distribution() {
     echo -e "Detected: ${Purple}$DISTRO $VERSION${COff}"
 }
 
+cockpit_install_navigator() {
+    case "$DISTRO" in
+        rhel)
+            if yum list installed cockpit-navigator > /dev/null 2>&1; then
+                echo -e "Package ${Purple}cockpit-navigator${COff} is already installed."
+                return 0
+            fi
+            if [[ "$VERSION" == 7* ]]; then
+                sudo curl -sSL https://repo.45drives.com/lists/45drives.repo -o /etc/yum.repos.d/45drives.repo
+                sudo sed -i 's/el8/el7/g;s/EL8/EL7/g' /etc/yum.repos.d/45drives.repo
+                sudo yum clean all
+            else
+                sudo curl -sSL https://repo.45drives.com/lists/45drives.repo -o /etc/yum.repos.d/45drives.repo
+                sudo dnf clean all
+            fi
+            sudo yum install -y cockpit-navigator
+            sudo systemctl restart cockpit
+            ;;
+        ubuntu|debian)
+            if dpkg -s cockpit-navigator > /dev/null 2>&1; then
+                echo -e "Package ${Purple}cockpit-navigator${COff} is already installed."
+                return 0
+            fi
+            wget -qO - https://repo.45drives.com/key/gpg.asc | sudo gpg --dearmor -o /usr/share/keyrings/45drives-archive-keyring.gpg
+            sudo curl -sSL https://repo.45drives.com/lists/45drives.sources -o /etc/apt/sources.list.d/45drives.sources
+            sudo apt update
+            sudo apt install -y cockpit-navigator
+            sudo systemctl restart cockpit
+            ;;
+        *)
+            echo -e "Package ${Purple}cockpit-navigator${COff} is not supported for ${Cyan}$DISTRO${COff}."
+            ;;
+    esac
+}
+
 cockpit_install_service() {
     if systemctl is-active --quiet cockpit.socket; then
         echo "Cockpit is already installed."
@@ -143,8 +178,7 @@ cockpit_install_service() {
         debian)
             echo "Installing Cockpit on Debian..."
             . /etc/os-release
-            sudo echo "deb http://deb.debian.org/debian ${VERSION_CODENAME}-backports main" > \
-                /etc/apt/sources.list.d/backports.list
+            echo "deb http://deb.debian.org/debian ${VERSION_CODENAME}-backports main" | sudo tee /etc/apt/sources.list.d/backports.list > /dev/null
             sudo apt update
             sudo apt install -y -t ${VERSION_CODENAME}-backports cockpit
             ;;
@@ -236,6 +270,7 @@ cockpit_pre_install() {
 
     cockpit_detect_distribution || return 1
     cockpit_install_service || return 1
+    cockpit_install_navigator || return 1
     cockpit_network_workaround || return 1
     cockpit_configure_system || return 1
     cockpit_configure_dns || return 1
