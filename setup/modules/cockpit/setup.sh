@@ -1,3 +1,5 @@
+#!/bin/bash
+
 if [ -n "$__SETUP_COCKPIT" ]; then return 0; fi
 
 __SETUP_COCKPIT=1
@@ -9,13 +11,83 @@ source "$PROJECT_ROOT/lib/config.sh"
 #shellcheck source=../../lib/cloudflare.sh
 source "$PROJECT_ROOT/lib/cloudflare.sh"
 
+DISTRO=
+VERSION=
 COCKPIT_SUBDOMAIN=
 COCKPIT_SETUP_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 ################################################################################
 #                            COCKPIT CONFIGURATION
 
-#!/bin/bash
+cockpit_network_workaround() {
+    # See: https://cockpit-project.org/faq#error-message-about-being-offline
+
+    if [[ "$DISTRO" != "ubuntu" && "$DISTRO" != "debian" ]]; then
+        return 0
+    fi
+
+    if sudo grep -q "renderer: *NetworkManager" /etc/netplan/*.yaml; then
+        return 0
+    fi
+
+    local requires_restart=false
+
+    local gmd_file="/etc/NetworkManager/conf.d/10-globally-managed-devices.conf"
+    if [ ! -f "$gmd_file" ]; then
+        echo -e "[keyfile]\nunmanaged-devices=none" | sudo tee "$gmd_file" > /dev/null
+        requires_restart=true
+    fi
+
+    local architecture
+    architecture=$(dpkg --print-architecture)
+    if [ "$architecture" = "arm64" ]; then
+        sudo apt install -y linux-modules-extra-raspi
+    fi
+
+    local con_name="cockpit-fake"
+    local if_name="cockpit-fake0"
+    if nmcli connection show | grep -q "$con_name" || ip link show "$if_name" &>/dev/null; then
+        echo -e "Connection ${Purple}$con_name${COff} or interface ${Purple}$if_name${COff} already exists."
+    else
+        sudo nmcli con add type dummy con-name "$con_name" ifname "$if_name" ip4 1.2.3.4/24 gw4 1.2.3.1 || {
+            log_error "Failed to create interface '$if_name'"
+            return 1
+        }
+        echo -e "Interface ${Purple}$if_name${COff} created."
+        requires_restart=true
+    fi
+
+    if [ "$requires_restart" = true ]; then
+        log_warn "The system must be rebooted before continuing with the installation."
+        build_resume_command
+        if [ "$UNATTENDED" = true ]; then
+            echo -e "\nThe system will reboot in 15 seconds..."
+            sleep 15
+            sudo shutdown -r now
+        else
+            echo ""
+            read -p "Do you want to reboot now? [Y/n] " user_input </dev/tty
+            user_input=${user_input:-Y}
+            if [[ ! "$user_input" =~ ^[Yy]$ ]]; then
+                abort_install
+            fi
+            sudo shutdown -r now
+        fi
+    fi
+}
+
+cockpit_detect_distribution() {
+    # Detect distribution
+    if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        DISTRO=$ID
+        VERSION=$VERSION_ID
+    else
+        log_warn "Cannot detect Linux distribution. /etc/os-release not found."
+    fi
+
+    echo -e "Detected: ${Purple}$DISTRO $VERSION${COff}"
+}
 
 cockpit_install_service() {
     if systemctl is-active --quiet cockpit.socket; then
@@ -23,18 +95,6 @@ cockpit_install_service() {
         return 0
     fi
 
-    # Detect distribution
-    if [ -f /etc/os-release ]; then
-        . /etc/os-release
-        DISTRO=$ID
-        VERSION=$VERSION_ID
-    else
-        echo "Cannot detect Linux distribution. /etc/os-release not found."
-        return 1
-    fi
-    
-    echo "Detected: $DISTRO $VERSION"
-    
     case "$DISTRO" in
         fedora)
             echo "Installing Cockpit on Fedora..."
@@ -174,9 +234,11 @@ cockpit_config_env() {
 cockpit_pre_install() {
     log_header "Configuring Cockpit"
 
-    cockpit_install_service
-    cockpit_configure_system
-    cockpit_configure_dns
+    cockpit_detect_distribution || return 1
+    cockpit_install_service || return 1
+    cockpit_network_workaround || return 1
+    cockpit_configure_system || return 1
+    cockpit_configure_dns || return 1
 }
 
 CONFIG_ENV_HOOKS+=("cockpit_config_env")

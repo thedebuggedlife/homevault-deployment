@@ -333,13 +333,15 @@ build_resume_command() {
     fi
 
     # Reconstruct the command as a string with proper quoting
-    echo "$(printf "%q " "${cmd[@]}")"
+    printf "%q " "${cmd[@]}" > "$PROJECT_ROOT/resume.sh"
+    chmod +x "$PROJECT_ROOT/resume.sh"
+    echo -e "To resume, run: ${BIGreen}${PROJECT_ROOT}/resume.sh${COff}\n"
 }
 
 # Terminate program and print instructions on how to invoke again to resume
 abort_install() {
     log_warn "Setup aborted by user."
-    echo -e "To resume, run: ${BIGreen}$(build_resume_command)${COff}\n"
+    build_resume_command
     exit 1
 }
 
