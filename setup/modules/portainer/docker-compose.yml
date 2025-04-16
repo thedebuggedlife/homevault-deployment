@@ -1,0 +1,36 @@
+networks:
+  portainer-proxy:
+    name: portainer-proxy
+
+secrets:
+  oidc_portainer_digest:
+    file: ${APPDATA_LOCATION:-/srv/appdata}/secrets/oidc_portainer_digest
+
+services:
+  traefik:
+    networks:
+      - portainer-proxy
+
+  authelia:
+    secrets:
+      - oidc_portainer_digest
+    environment:
+      OIDC_PORTAINER_CLIENT_ID: ${OIDC_PORTAINER_CLIENT_ID}
+      PORTAINER_SUBDOMAIN: ${PORTAINER_SUBDOMAIN}
+
+  portainer:
+    container_name: portainer
+    image: portainer/portainer-ce:lts
+    restart: unless-stopped
+    networks:
+      - portainer-proxy
+    volumes:
+      - ${APPDATA_LOCATION:-/srv/appdata}/portainer:/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    labels:
+      dns.manage: true
+      dns.content: ${TAILSCALE_IP}
+      traefik.enable: true
+      traefik.http.routers.portainer.entryPoints: tailnet
+      traefik.http.routers.portainer.rule: Host(`${PORTAINER_SUBDOMAIN}.${CF_DOMAIN_NAME}`)
+      traefik.http.services.portainer.loadbalancer.server.port: 9000

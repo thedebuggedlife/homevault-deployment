@@ -56,7 +56,9 @@ configure_traefik() {
     ensure_path_exists "$dest_dir"
 
     # First, delete any existing module configs
-    rm "${dest_dir}/dynamic-*.yml"
+    if ls "${dest_dir}"/dynamic-*.yml 1> /dev/null 2>&1; then
+        rm "${dest_dir}"/dynamic-*.yml
+    fi
     # Next, copy the dynamic config for enabled modules
     for module in "${ENABLED_MODULES[@]}"; do
         src_file="${source_dir}/dynamic-${module}.yml"
@@ -178,9 +180,6 @@ base_config_env() {
 
     # LLDAP Settings
     ask_for_env LLDAP_ADMIN_PASSWORD "LLDAP Administrator Password" true true true
-
-    # Portainer Settings
-    ask_for_env PORTAINER_ADMIN_PASSWORD "Portainer Administrator Password" true true true
 }
 
 base_config_secrets() {
@@ -188,7 +187,6 @@ base_config_secrets() {
     save_env_secret "${SECRETS_PATH}cloudflare_dns_api_token" CF_DNS_API_TOKEN
     save_env_secret "${SECRETS_PATH}smtp_password" SMTP_PASSWORD
     save_env_secret "${SECRETS_PATH}ldap_admin_password" LLDAP_ADMIN_PASSWORD
-    save_env_secret "${SECRETS_PATH}portainer_admin_password" PORTAINER_ADMIN_PASSWORD
     create_secret "${SECRETS_PATH}authelia_session_secret"
     create_secret "${SECRETS_PATH}authelia_storage_encryption_key"
     create_secret "${SECRETS_PATH}ldap_jwt_secret"

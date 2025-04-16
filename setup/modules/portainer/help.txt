@@ -1,0 +1,2 @@
+Portainer is a free, open-source, and user-friendly web-based platform for managing containerized applications, particularly those using Docker, Docker Swarm, Kubernetes, and Azure Container Instances (ACI). It offers a graphical interface for managing and deploying containers without the need to use the command line.
+More: https://www.portainer.io/

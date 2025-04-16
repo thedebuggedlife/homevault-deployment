@@ -1,0 +1,17 @@
+identity_providers:
+  oidc:
+    clients:
+      - client_id: '{{ env "OIDC_PORTAINER_CLIENT_ID" }}'
+        client_name: 'portainer'
+        client_secret: '{{ secret "/run/secrets/oidc_portainer_digest" }}'
+        public: false
+        authorization_policy: 'server_admin'
+        redirect_uris:
+          - '{{ expandenv "https://${PORTAINER_SUBDOMAIN}.${CF_DOMAIN_NAME}" }}'
+        scopes:
+          - 'openid'
+          - 'profile'
+          - 'email'
+          - 'groups'
+        userinfo_signed_response_alg: 'none'
+        token_endpoint_auth_method: client_secret_post

@@ -99,6 +99,12 @@ identity_providers:
     # hmac_secret: Use $AUTHELIA_IDENTITY_PROVIDERS_OIDC_HMAC_SECRET_FILE
     jwks:
       - key: '{{ secret "/run/secrets/oidc_jwks_key" | mindent 10 "|" | msquote }}'
+    authorization_policies:
+      server_admin:
+        default_policy: deny
+        rules:
+          - policy: 'one_factor'
+            subject: 'group:server_admin'
     clients:
       - client_id: '{{ env "OIDC_GRAFANA_CLIENT_ID" }}'
         client_name: 'grafana'

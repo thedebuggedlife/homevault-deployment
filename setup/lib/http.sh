@@ -20,11 +20,12 @@ GH_IO_BASE_URL=https://thedebuggedlife.github.io/selfhost-bootstrap
 #   -h [header]     Additional header (e.g. "X-API-Key: my-key") [optional]
 #   -c [container]  Docker container to run request within [optional]
 #   -e [code]       Expected status code. Accepts regex. [default="^2"]
+#   -s              Return only the status code.
 # Returns:  
 #   {string} The body of the response
 ###
 rest_call() {
-    local method=$1 url=$2 expected="^2" container
+    local method=$1 url=$2 expected="^2" container status_only
     local -a args=(
         -s -w "\n%{http_code}"
         --request "$method"
@@ -32,12 +33,13 @@ rest_call() {
         --header "Content-Type: application/json"
         --header "Accept: application/json")
     shift 2
-    while getopts ":h:b:c:e:" opt; do
+    while getopts ":h:b:c:e:s" opt; do
         case $opt in
             h) args+=("--header" "$OPTARG") ;;
             b) args+=("--data" "$OPTARG") ;;
             c) container="$OPTARG" ;;
             e) expected="$OPTARG" ;;
+            s) status_only=true ;;
             \?) log_warn "rest_call: Invalid option: -$OPTARG" ;;
             :) if [ "$OPTARG" != "b" ]; then log_warn "rest_call: Option -$OPTARG requires an argument"; fi ;;
         esac
@@ -46,12 +48,16 @@ rest_call() {
     if [ -z "$container" ]; then
         response=$(curl "${args[@]}")
     else
-        # Cannot use 'sg docker' because it breaks the argument expansion for CURL
-        # Instead resort to using sudo to avoid errors due to unauthorized access to docker
-        response=$(sudo docker exec "$container" curl "${args[@]}")
+        docker_cmd="docker run -q --rm --network container:$container appropriate/curl"
+        for arg in "${args[@]}"; do
+            docker_cmd+=$(printf " %q" "$arg")
+        done
+        response=$(sg docker -c "$docker_cmd")
     fi
     # Separate the body and the HTTP status code.
     http_status=$(echo "$response" | tail -n1)
+    # If only the HTTP status is required, return it
+    if [ "$status_only" = true ]; then echo "$http_status"; return 0; fi
     response=$(echo "$response" | sed '$d')
     # Check if the status code matches expected
     if [[ "$http_status" =~ $expected ]]; then
