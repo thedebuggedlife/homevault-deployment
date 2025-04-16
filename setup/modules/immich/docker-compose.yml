@@ -18,6 +18,8 @@ services:
   traefik:
     networks:
       - immich-proxy
+    labels:
+      selfhost.module.immich: 1
 
   authelia:
     secrets:
@@ -25,6 +27,8 @@ services:
     environment:
       OIDC_IMMICH_CLIENT_ID: ${OIDC_IMMICH_CLIENT_ID}
       IMMICH_SUBDOMAIN: ${IMMICH_SUBDOMAIN}
+    labels:
+      selfhost.module.immich: 1
 
   immich-server:
     container_name: immich_server
@@ -57,6 +61,7 @@ services:
       start_period: 5m
       start_interval: 10s
     labels:
+      selfhost.module.immich: 1
       dns.manage: true
       dns.cloudflare.proxied: true
       traefik.enable: true
@@ -80,6 +85,8 @@ services:
     restart: always
     healthcheck:
       disable: false
+    labels:
+      selfhost.module.immich: 1
 
   immich-redis:
     container_name: immich_redis
@@ -89,6 +96,8 @@ services:
     healthcheck:
       test: redis-cli ping || exit 1
     restart: always
+    labels:
+      selfhost.module.immich: 1
 
   immich-postgres:
     container_name: immich_postgres
@@ -113,3 +122,5 @@ services:
     command: >-
       postgres -c shared_preload_libraries=vectors.so -c 'search_path="$$user", public, vectors' -c logging_collector=on -c max_wal_size=2GB -c shared_buffers=512MB -c wal_compression=on
     restart: always
+    labels:
+      selfhost.module.immich: 1

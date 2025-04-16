@@ -34,6 +34,7 @@ CF_DOMAIN_NAME=
 
 # Base module should always be first in the list
 declare -a ENABLED_MODULES=("base")
+declare -a INSTALLED_MODULES
 
 ################################################################################
 #                           SETUP MODULES
@@ -159,6 +160,54 @@ find_modules() {
             ENABLED_MODULES+=("$module_name")
         fi
     done
+}
+
+find_missing_modules() {
+    local container_ids container_id container_labels module_name
+    container_ids=$(sg docker -c "docker ps -aq --filter label=com.docker.compose.project=$COMPOSE_PROJECT")
+
+    INSTALLED_MODULES=()
+    for container_id in $container_ids; do
+        container_labels=$(docker inspect --format '{{range $k,$v := .Config.Labels}}{{$k}}={{$v}}{{printf "\n"}}{{end}}' "$container_id")
+        
+        # Find labels matching the pattern selfhost.module.XX=1
+        while IFS= read -r label; do
+            if [[ "$label" =~ ^selfhost\.module\.(.+)=1$ ]]; then
+                module_name="${BASH_REMATCH[1]}"
+                INSTALLED_MODULES+=("$module_name")
+            fi
+        done <<< "$container_labels"
+    done
+
+    if [ ${#INSTALLED_MODULES[@]} -eq 0 ]; then
+        return 0
+    fi
+
+    # Remove duplicates from the array
+    mapfile -t INSTALLED_MODULES < <(printf "%s\n" "${INSTALLED_MODULES[@]}" | sort -u)
+
+    # Find modules that are installed but not enabled
+    local -a missing_modules=()
+    for module in "${INSTALLED_MODULES[@]}"; do
+        # shellcheck disable=SC2076
+        if [[ ! " ${ENABLED_MODULES[*]} " =~ " ${module} " ]]; then
+            missing_modules+=("$module")
+        fi
+    done
+
+    if [ ${#missing_modules[@]} -gt 0 ]; then
+        log_warn "Some modules will be removed by this operation. Please read the following carefully."
+        echo "The following modules are installed but were not included in this run:"
+        printf "  - %s\n" "${missing_modules[@]}"
+        echo -e "\nIf this was unintentional, exit and re-run the script, including them with the -m option."
+        echo
+        local user_input
+        read -p "Do you want to proceed? [y/N] " user_input </dev/tty
+        user_input=${user_input:-N}
+        if [[ ! "$user_input" =~ ^[Yy]$ ]]; then
+            abort_install
+        fi
+    fi
 }
 
 ################################################################################
@@ -545,6 +594,8 @@ configure_admin_account
 log_header "Preparing secret files"
 
 save_secrets
+
+find_missing_modules
 
 deploy_project
 

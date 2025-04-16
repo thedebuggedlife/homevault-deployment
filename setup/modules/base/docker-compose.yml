@@ -44,6 +44,8 @@ services:
       NO_AUTOUPDATE: true
       TUNNEL_URL: http://traefik:80
       TUNNEL_TOKEN_FILE: /run/secrets/cloudflare_tunnel_token
+    labels:
+      selfhost.module.base: 1
   traefik:
     container_name: traefik
     image: traefik:v3.3
@@ -76,6 +78,7 @@ services:
       TRAEFIK_SERVERSTRANSPORT_INSECURESKIPVERIFY: true
       TRAEFIK_HTTP_MIDDLEWARES_AUTHELIA_FORWARDAUTH_ADDRESS: http://authelia:9091/api/verify?rd=https://authelia.${CF_DOMAIN_NAME}/
     labels:
+      selfhost.module.base: 1
       dns.manage: true
       dns.content: ${TAILSCALE_IP}
       traefik.enable: true
@@ -102,6 +105,7 @@ services:
       LLDAP_LDAP_BASE_DN: ${CF_DOMAIN_CN}
       LLDAP_LDAP_USER_PASS_FILE: /run/secrets/ldap_admin_password
     labels:
+      selfhost.module.base: 1
       dns.manage: true
       dns.content: ${TAILSCALE_IP}
       traefik.enable: true
@@ -144,6 +148,7 @@ services:
       X_AUTHELIA_CONFIG: /config/configuration.yml
       X_AUTHELIA_CONFIG_FILTERS: template
     labels:
+      selfhost.module.base: 1
       dns.manage: true
       dns.cloudflare.proxied: true
       traefik.enable: true
@@ -169,3 +174,5 @@ services:
       CLOUDFLARE_TOKEN_FILE: /run/secrets/cloudflare_dns_api_token
       CLOUDFLARE_ZONE: ${CF_DOMAIN_NAME}
       TRAEFIK_API_URL: http://traefik:8080/api
+    labels:
+      selfhost.module.base: 1

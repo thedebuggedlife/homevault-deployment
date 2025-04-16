@@ -29,6 +29,8 @@ services:
         aliases:
           - ${NEXTCLOUD_SUBDOMAIN:-nextcloud}.${CF_DOMAIN_NAME}
           - ${COLLABORA_SUBDOMAIN:-office}.${CF_DOMAIN_NAME}
+    labels:
+      selfhost.module.nextcloud: 1
 
   authelia:
     secrets:
@@ -36,6 +38,8 @@ services:
     environment:
       OIDC_NEXTCLOUD_CLIENT_ID: ${OIDC_NEXTCLOUD_CLIENT_ID}
       NEXTCLOUD_SUBDOMAIN: ${NEXTCLOUD_SUBDOMAIN}
+    labels:
+      selfhost.module.nextcloud: 1
 
   nextcloud-db:
     container_name: nextcloud_db
@@ -61,6 +65,8 @@ services:
       - MYSQL_DATABASE=nextcloud
       - MYSQL_USER=nextcloud
       - MARIADB_MYSQL_LOCALHOST_USER=1
+    labels:
+      selfhost.module.nextcloud: 1
 
   nextcloud-app:
     container_name: nextcloud_app
@@ -118,6 +124,7 @@ services:
       - ELASTIC_SEARCH_USER=elastic
       - ELASTIC_SEARCH_PASSWORD_FILE=/run/secrets/nextcloud_elastic_password
     labels:
+      selfhost.module.nextcloud: 1
       dns.manage: true
       dns.cloudflare.proxied: true
       traefik.enable: true
@@ -143,6 +150,7 @@ services:
       aliasgroup1: https://${NEXTCLOUD_SUBDOMAIN:-nextcloud}.${CF_DOMAIN_NAME}
       extra_params: "--o:ssl.enable=false --o:ssl.termination=true --o:admin_console.enable=false"
     labels:
+      selfhost.module.nextcloud: 1
       dns.manage: true
       dns.cloudflare.proxied: true
       traefik.enable: true
@@ -185,3 +193,5 @@ services:
       - xpack.security.enabled=true                 # Enable security
       - xpack.security.authc.api_key.enabled=true   # Enable API Key authentication
       - ELASTIC_PASSWORD_FILE=/run/secrets/elastic_password
+    labels:
+      selfhost.module.nextcloud: 1

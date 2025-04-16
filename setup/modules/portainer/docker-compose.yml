@@ -10,6 +10,8 @@ services:
   traefik:
     networks:
       - portainer-proxy
+    labels:
+      selfhost.module.portainer: 1
 
   authelia:
     secrets:
@@ -17,6 +19,8 @@ services:
     environment:
       OIDC_PORTAINER_CLIENT_ID: ${OIDC_PORTAINER_CLIENT_ID}
       PORTAINER_SUBDOMAIN: ${PORTAINER_SUBDOMAIN}
+    labels:
+      selfhost.module.portainer: 1
 
   portainer:
     container_name: portainer
@@ -28,6 +32,7 @@ services:
       - ${APPDATA_LOCATION:-/srv/appdata}/portainer:/data
       - /var/run/docker.sock:/var/run/docker.sock
     labels:
+      selfhost.module.portainer: 1
       dns.manage: true
       dns.content: ${TAILSCALE_IP}
       traefik.enable: true
