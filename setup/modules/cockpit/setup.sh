@@ -64,6 +64,7 @@ cockpit_network_workaround() {
             echo -e "\nThe system will reboot in 15 seconds..."
             sleep 15
             sudo shutdown -r now
+            exit 1
         else
             echo ""
             read -p "Do you want to reboot now? [Y/n] " user_input </dev/tty
@@ -72,6 +73,7 @@ cockpit_network_workaround() {
                 abort_install
             fi
             sudo shutdown -r now
+            exit 1
         fi
     fi
 }

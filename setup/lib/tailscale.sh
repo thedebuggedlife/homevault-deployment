@@ -5,6 +5,7 @@ __LIB_TAILSCALE=1
 #shellcheck source=./logging.sh
 source "$PROJECT_ROOT/lib/logging.sh"
 
+TAILSCALE_IP=
 TAILSCALE_API_BASE_URL=https://api.tailscale.com/api/v2
 
 ################################################################################
@@ -69,10 +70,7 @@ tailscale_find_device() {
 tailscale_disable_key_expiration() {
     local device_id=$1
     local body='{"keyExpiryDisabled":true}'
-    tailscale_rest_call POST "device/${device_id}/key" "$body"
-    if [ $? -ne 0 ]; then
-        return 1
-    fi
+    tailscale_rest_call POST "device/${device_id}/key" "$body" > /dev/null || return 1
 }
 
 ################################################################################
@@ -83,7 +81,7 @@ tailscale_disable_key_expiration() {
 #
 # @return void
 ###
-check_tailscale() {
+tailscale_check_installed() {
     if ! command -v tailscale >/dev/null 2>&1; then
         echo -e "\n${Yellow}Tailscale is not installed.${COff}"
         local user_input=Y
@@ -103,6 +101,10 @@ check_tailscale() {
             abort_install
         fi
     fi
+    sudo systemctl enable --now tailscaled || {
+        log_error "Failed to enable tailscale auto-start"
+        exit 1
+    }
 }
 
 ###
@@ -110,10 +112,17 @@ check_tailscale() {
 #
 # @return void
 ###
-connect_tailscale() {
-    if tailscale status >/dev/null 2>&1; then return 0; fi
+tailscale_connect() {
+    if tailscale status >/dev/null 2>&1; then 
+        echo "Tailscale is already connected."
+        return 0; 
+    fi
+    if sudo tailscale up --timeout 5s >/dev/null 2>&1; then
+        echo "Tailscale connected with existing authentication."
+        return 0;
+    fi
     local connected=false
-    echo "Connecting to Tailscale..."
+    echo "Generating new auth key..."
     local -a up_params=()
     if [ -n "$TAILSCALE_API_KEY" ]; then
         local auth_key
@@ -122,6 +131,7 @@ connect_tailscale() {
         fi
         up_params+=("--auth-key=$auth_key")
     fi
+    echo "Authenticating with Tailscale..."
     if ! sudo tailscale up "${up_params[@]}"; then
         log_error "Failed to initiate tailscale connection."
         exit 1
@@ -140,46 +150,56 @@ connect_tailscale() {
 }
 
 ###
+# Save the Tailscale IPv4 to the environment variable
+###
+tailscale_save_ip() {
+    local tailscale_ip
+    tailscale_ip=$(tailscale ip -4)
+    if [[ ! $tailscale_ip =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+        log_error "Failed to detect the Tailnet IP"
+        exit 1
+    fi
+    save_env TAILSCALE_IP "$tailscale_ip"
+}
+
+###
+# Find and configure the device in Tailscale for the given IP
+#
+# @param $1 {string}    Tailscale IPv4
+# @return   {void}
+###
+tailscale_configure_device() {
+    local device device_id device_name expiry_disabled
+    if ! device=$(tailscale_find_device "$TAILSCALE_IP") || [ -z "$device" ]; then
+        log_error "Failed to find tailscale device with address: $TAILSCALE_IP"
+        exit 1
+    fi
+    device_name=$(echo "$device" | jq -r '.name')
+    echo -e "Tailscale device name: ${Purple}$device_name${COff}"
+    expiry_disabled=$(echo "$device" | jq -r '.keyExpiryDisabled')
+    if [ "$expiry_disabled" = true ]; then
+        echo "Key expiration is already disabled"
+        return 0
+    fi
+    if ! device_id=$(echo "$device" | jq -r '.id'); then
+        log_error "Could not extract id for tailscale device $device"
+        exit 1
+    fi
+    if ! tailscale_disable_key_expiration "$device_id" >/dev/null; then
+        exit 1
+    fi
+    echo -e "Key expiration disabled for this device."
+}
+
+###
 # Prepare Tailscale connection for deployment and save Tailnet IP
 #
 # @return void
 ###
 configure_tailscale() {
-    check_tailscale
-    if [ $? -ne 0 ]; then
-        return 1
-    fi
-    connect_tailscale
-    if [ $? -ne 0 ]; then
-        return 1
-    fi
-    sudo systemctl enable --now tailscaled
-    if [ $? -ne 0 ]; then
-        log_error "Failed to enable tailscale auto-start"
-        exit 1
-    fi
-    local tailscale_ip
-    tailscale_ip=$(tailscale ip -4)
-    if [ -z "$tailscale_ip" ]; then
-        log_error "Failed to detect the Tailnet IP"
-        exit 1
-    fi
-    echo "Tailscale is connected."
-    if [[ -z "$TAILSCALE_IP" && -n "$TAILSCALE_API_KEY" ]]; then
-        local device
-        if ! device=$(tailscale_find_device "$tailscale_ip") || [ -z "$device" ]; then
-            log_error "Failed to find tailscale device with address: $tailscale_ip"
-            exit 1
-        fi
-        local device_id
-        if ! device_id=$(echo "$device" | jq -r '.id'); then
-            log_error "Could not extract id for tailscale device $device"
-            exit 1
-        fi
-        if ! tailscale_disable_key_expiration "$device_id" >/dev/null; then
-            exit 1
-        fi
-        echo -e "Key expiration disabled for ${Cyan}$tailscale_ip${COff}"
-    fi
-    save_env TAILSCALE_IP "$tailscale_ip"
+    tailscale_check_installed || return 1
+    tailscale_connect || return 1
+    tailscale_save_ip || return 1
+    tailscale_configure_device || return 1
+    echo -e "Tailscale is connected. Address: ${Cyan}$TAILSCALE_IP${COff}"
 }

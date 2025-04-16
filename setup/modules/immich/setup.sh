@@ -40,7 +40,7 @@ immich_rest_call() {
 ###
 immich_admin_sign_up() {
     local body
-    body=$(jq -n --arg email "$1" --arg password "$2" --arg name "$3" '{"email": $email, "password": $password, "name": $name}')
+    body=$(jq -n -c --arg email "$1" --arg password "$2" --arg name "$3" '{"email": $email, "password": $password, "name": $name}')
     immich_rest_call POST auth/admin-sign-up "$body" > /dev/null || return 1
 }
 
@@ -56,7 +56,7 @@ immich_admin_sign_up() {
 ###
 immich_login() {
     local body
-    body=$(jq -n --arg email "$1" --arg password "$2" '{"email": $email, "password": $password}')
+    body=$(jq -n -c --arg email "$1" --arg password "$2" '{"email": $email, "password": $password}')
     immich_rest_call POST auth/login "$body" || return 1
 }
 
@@ -85,7 +85,7 @@ immich_create_api_key() {
     local permissions=("$@")
     if [ ${#permissions[@]} -eq 0 ]; then permissions=("all"); fi
     local body
-    if ! body=$(jq -c -n --arg name "$name" --args '{"name": $name, "permissions":$ARGS.positional}' "${permissions[@]}"); then
+    if ! body=$(jq -n -c --arg name "$name" --args '{"name": $name, "permissions":$ARGS.positional}' "${permissions[@]}"); then
         log_error "immich_create_api_key: Failed to format JSON for request"
         return 1
     fi
@@ -130,7 +130,7 @@ immich_configure_admin_account() {
     fi
     echo "Onboarding Immich administrator account..."
     immich_admin_sign_up "$ADMIN_EMAIL" "$ADMIN_PASSWORD" "$ADMIN_DISPLAY_NAME" > /dev/null || return 1
-    echo -e "Administrator account ${Purple}$ADMIN_USERNAME${COff} has been onboarded to Immich"
+    echo -e "Administrator account ${Purple}$ADMIN_EMAIL${COff} has been onboarded to Immich"
 }
 
 immich_configure_api_key() {
@@ -140,7 +140,7 @@ immich_configure_api_key() {
     fi
     echo "Logging in administrator account..."
     if ! IMMICH_TOKEN=$(immich_login "$ADMIN_EMAIL" "$ADMIN_PASSWORD" | jq -r '.accessToken'); then
-        log_error "Failed to sign user '$ADMIN_USERNAME' to Immich."
+        log_error "Failed to sign user '$ADMIN_EMAIL' to Immich."
         return 1
     fi
     echo "Creating new API Key..."
@@ -164,7 +164,7 @@ immich_configure_oauth() {
         return 1
     fi
 
-    if ! immich_config=$(echo "$immich_config" | jq \
+    if ! immich_config=$(echo "$immich_config" | jq -c \
         --arg clientId "$OIDC_IMMICH_CLIENT_ID" \
         --arg clientSecret "$client_secret" \
         --argjson storageQuota "$IMMICH_DEFAULT_QUOTA" \
@@ -224,7 +224,7 @@ immich_pre_install() {
 }
 
 immich_post_install() {
-    log_header "Bootstrapping Immich"
+    log_header "Configuring Immich"
 
     immich_configure_admin_account || return 1
     immich_configure_api_key || return 1

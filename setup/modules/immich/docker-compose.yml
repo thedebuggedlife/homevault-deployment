@@ -24,6 +24,7 @@ services:
       - oidc_immich_digest
     environment:
       OIDC_IMMICH_CLIENT_ID: ${OIDC_IMMICH_CLIENT_ID}
+      IMMICH_SUBDOMAIN: ${IMMICH_SUBDOMAIN}
 
   immich-server:
     container_name: immich_server

@@ -15,7 +15,7 @@ identity_providers:
         require_pkce: true
         pkce_challenge_method: 'S256'
         redirect_uris:
-          - '{{ expandenv "https://nextcloud.${CF_DOMAIN_NAME}/apps/user_oidc/code" }}'
+          - '{{ expandenv "https://${NEXTCLOUD_SUBDOMAIN}.${CF_DOMAIN_NAME}/apps/user_oidc/code" }}'
         scopes:
           - 'openid'
           - 'profile'

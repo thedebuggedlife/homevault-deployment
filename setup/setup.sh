@@ -85,9 +85,7 @@ execute_hooks() {
     local hook_name="${!#}"  # Get the last argument (hook name)
     local -a hooks=("${@:1:$#-1}")  # Get all arguments except the last one
     
-    echo -e "Executing ${Purple}$hook_name${COff} hooks..."
-
-    echo "${hooks[@]}"
+    echo -e "\n\nExecuting ${Purple}$hook_name${COff} hooks..."
 
     for hook in "${hooks[@]}"; do
         if ! $hook; then
@@ -206,7 +204,7 @@ save_secrets() {
 deploy_project() {
     local user_input=Y
     if [ "$UNATTENDED" != true ]; then
-        echo -en "Project ${Purple}$COMPOSE_PROJECT${COff} is ready for deployment. "
+        echo -en "\n\nProject ${Purple}$COMPOSE_PROJECT${COff} is ready for deployment. "
         read -p "Do you want to proceed? [Y/n] " user_input </dev/tty
         user_input=${user_input:-Y}
     fi
@@ -492,15 +490,20 @@ if [ "$POST_INSTALL" = "true" ]; then
     exit 0
 fi
 
-log_header "Preparing deployment files"
+log_header "Preparing environment files"
 
-prepare_env_file
-if [ $? -ne 0 ]; then
+if ! prepare_env_file; then
     log_error "Failed to prepare '$ENV_FILE'."
     exit 1
 fi
 
 ask_for_variables
+
+log_header "Configuring Docker"
+configure_docker
+
+log_header "Configuring Tailscale"
+configure_tailscale
 
 log_header "Preparing application data folder"
 
@@ -509,6 +512,10 @@ create_data_locations
 if [ "$NO_DOWNLOAD" != true ]; then
     download_appdata
 fi
+
+# Configuring CF tunnel requires that $SECRETS_LOCATION has already been created
+log_header "Configuring CloudFlare Tunnel"
+configure_cloudflare_tunnel
 
 if [ "$USE_SMTP2GO" = "true" ]; then
 

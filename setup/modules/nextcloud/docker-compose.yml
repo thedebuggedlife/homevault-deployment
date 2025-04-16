@@ -35,6 +35,7 @@ services:
       - oidc_nextcloud_digest
     environment:
       OIDC_NEXTCLOUD_CLIENT_ID: ${OIDC_NEXTCLOUD_CLIENT_ID}
+      NEXTCLOUD_SUBDOMAIN: ${NEXTCLOUD_SUBDOMAIN}
 
   nextcloud-db:
     container_name: nextcloud_db

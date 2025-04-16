@@ -169,7 +169,7 @@ portainer_configure_admin_account() {
     local has_admin
     if ! has_admin=$(portainer_admin_check); then return 1; fi
     if [ "$has_admin" = true ]; then
-        echo "There is an administrator account configured in Portainer already."
+        echo "The administrator account has been onboarded previously."
         return 0
     fi
     local portainer_password
@@ -177,7 +177,9 @@ portainer_configure_admin_account() {
         log_error "Could not read admin password from '${SECRETS_PATH}portainer_admin_password'"
         return 1
     fi
+    echo "Onboarding Portainer administrator account..."
     portainer_admin_init "$ADMIN_USERNAME" "$portainer_password" || return 1
+    echo -e "Administrator account ${Purple}$ADMIN_USERNAME${COff} has been onboarded to Immich"
 }
 
 portainer_configure_api_key() {

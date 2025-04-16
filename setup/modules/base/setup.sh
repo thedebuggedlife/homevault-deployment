@@ -129,7 +129,7 @@ lldap_bootstrap() {
     }
 
     # Run LLDAP's built-in bootstrap script to create/update users and groups
-    echo -e "Bootstrapping LLDAP with pre-configured users and groups...\n"
+    echo -e "Configuring LLDAP with built-in users and groups...\n"
     sg docker -c "docker exec \
         -e LLDAP_ADMIN_PASSWORD_FILE=/run/secrets/ldap_admin_password \
         -e USER_CONFIGS_DIR=/data/bootstrap/user-configs \
@@ -198,15 +198,6 @@ base_config_secrets() {
 }
 
 base_pre_install() {
-    log_header "Configuring Docker"
-    configure_docker
-
-    log_header "Configuring Tailscale"
-    configure_tailscale
-
-    log_header "Configuring CloudFlare Tunnel"
-    configure_cloudflare_tunnel
-
     log_header "Preparing LLDAP for deployment"
     lldap_bootstrap
 
