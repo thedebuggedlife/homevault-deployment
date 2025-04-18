@@ -95,16 +95,16 @@ tailscale_check_installed() {
                 log_error "Failed to install tailscale"
                 exit 1
             else
+                sudo systemctl enable --now tailscaled || {
+                    log_error "Failed to enable tailscale auto-start"
+                    exit 1
+                }
                 echo -e "\n✅ Tailscale installation completed successfully\n"
             fi
         else
             abort_install
         fi
     fi
-    sudo systemctl enable --now tailscaled || {
-        log_error "Failed to enable tailscale auto-start"
-        exit 1
-    }
 }
 
 ###

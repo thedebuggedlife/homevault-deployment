@@ -1,4 +1,5 @@
 #!/bin/bash
+
 set -o pipefail
 
 PROJECT_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
@@ -8,7 +9,9 @@ source "$PROJECT_ROOT/lib/logging.sh"
 source "$PROJECT_ROOT/lib/config.sh"
 source "$PROJECT_ROOT/lib/smtp2go.sh"
 
+COMPOSE_PATH=
 SECRETS_PATH=
+OVERRIDE_COMPOSE=false
 UNATTENDED=
 NO_DOWNLOAD=
 USE_SMTP2GO=true
@@ -16,7 +19,7 @@ POST_INSTALL=
 RESUME=false
 ENV_FILE=.env
 AS_USER="$USER"
-COMPOSE_PROJECT=self-host
+COMPOSE_PROJECT_NAME=self-host
 COMPOSE_OPTIONS=
 COMPOSE_UP_OPTIONS=
 
@@ -164,7 +167,7 @@ find_modules() {
 
 find_missing_modules() {
     local container_ids container_id container_labels module_name
-    container_ids=$(sg docker -c "docker ps -aq --filter label=com.docker.compose.project=$COMPOSE_PROJECT")
+    container_ids=$(sg docker -c "docker ps -aq --filter label=com.docker.compose.project=$COMPOSE_PROJECT_NAME")
 
     INSTALLED_MODULES=()
     for container_id in $container_ids; do
@@ -231,6 +234,7 @@ create_data_locations() {
 ask_for_variables() {
     execute_hooks "${CONFIG_ENV_HOOKS[@]}" "config-env"
     SECRETS_PATH="${APPDATA_LOCATION%/}/secrets/"
+    COMPOSE_PATH="${APPDATA_LOCATION%/}/compose/$COMPOSE_PROJECT_NAME/"
 }
 
 ###
@@ -253,7 +257,7 @@ save_secrets() {
 deploy_project() {
     local user_input=Y
     if [ "$UNATTENDED" != true ]; then
-        echo -en "\n\nProject ${Purple}$COMPOSE_PROJECT${COff} is ready for deployment. "
+        echo -en "\n\nProject ${Purple}$COMPOSE_PROJECT_NAME${COff} is ready for deployment. "
         read -p "Do you want to proceed? [Y/n] " user_input </dev/tty
         user_input=${user_input:-Y}
     fi
@@ -261,13 +265,34 @@ deploy_project() {
         abort_install
     fi
 
-    COMPOSE_OPTIONS="-p '$COMPOSE_PROJECT' --env-file '$ENV_FILE' $COMPOSE_OPTIONS"
+    echo
+
+    COMPOSE_OPTIONS="-p '$COMPOSE_PROJECT_NAME' --env-file '$ENV_FILE' $COMPOSE_OPTIONS"
     COMPOSE_UP_OPTIONS="-d -y --remove-orphans --quiet-pull --wait $COMPOSE_UP_OPTIONS"
 
+    # Copy the ENV file to include in backup/restore - always override existing file
+    ensure_path_exists "${COMPOSE_PATH%/}/$module/"
+    cp -f "$ENV_FILE" "${COMPOSE_PATH%/}/$module/.env"
+
     for module in "${ENABLED_MODULES[@]}"; do
-        local compose_file="$PROJECT_ROOT/modules/$module/docker-compose.yml"
-        if [ -f "$compose_file" ]; then
-            COMPOSE_OPTIONS="$COMPOSE_OPTIONS -f $compose_file"
+        local original_file="${PROJECT_ROOT%/}/modules/$module/docker-compose.yml"
+        local project_file="${COMPOSE_PATH%/}/$module/docker-compose.yml"
+        if [ -f "$original_file" ]; then
+            # Copy docker-compose files only if they do not currently exist under appdata (unless overridden)
+            # This is important because, the files in appdata may be modified during container-update operations
+            if [[ -f "$project_file" && "$OVERRIDE_COMPOSE" != true ]]; then
+                echo -e "Using existing compose file: ${Cyan}$project_file${COff}"
+            else
+                echo -e "Copying docker compose file for ${Purple}$module${COff} to ${Cyan}$project_file${COff}"
+                ensure_path_exists "$( dirname "$project_file" )"
+                cp -f "$original_file" "$project_file" && chmod 666 "$project_file" || {
+                    log_error "Failed to copy docker compose file for '$module'"
+                    exit 1
+                }
+            fi
+        fi
+        if [ -f "$project_file" ]; then
+            COMPOSE_OPTIONS="$COMPOSE_OPTIONS -f '$project_file'"
         fi
     done
 
@@ -275,7 +300,7 @@ deploy_project() {
 
     log_header "Deploying services"
 
-    echo -e "Deploying project ${Purple}$COMPOSE_PROJECT${COff}..."
+    echo -e "Deploying project ${Purple}$COMPOSE_PROJECT_NAME${COff}..."
     if ! sg docker -c "docker compose $COMPOSE_OPTIONS up $COMPOSE_UP_OPTIONS"; then
         log_error "Docker Compose deployment failed"
         exit 1
@@ -403,10 +428,11 @@ print_usage() {
     echo "  -m, --module <module>           Includes the given module in the project. Can be specified multiple times."
     echo "  -o, --override <var>=<value>    Application data for deployment. [Default: '/srv/appdata']"
     echo "  -u, --user <user>               User to apply for file permissions. [Default: '$USER']"
-    echo "  --unattended                    Automatically answer prompts with defaults (implies --resume)."
-    echo "  --custom-smtp                   Do not use SMTP2GO for sending email (custom SMTP configuration required)."
     echo "  --resume                        Skip any steps that have been previously completed."
+    echo "  --unattended                    Automatically answer prompts with defaults (implies --resume)."
     echo "  --no-download                   Do not download appdata from GitHub. Only use if appdata was previously downloaded."
+    echo "  --override-compose              Replace existing docker-compose files from previous deployments. Use with caution!"
+    echo "  --custom-smtp                   Do not use SMTP2GO for sending email (custom SMTP configuration required)."
     echo "  --post-install                  Run post-install configuration of self-hosted apps."
     echo "  --dry-run                       Execute Docker Compose in dry run mode."
     echo "  -h, --help                      Display this help message."
@@ -425,7 +451,7 @@ while [ "$#" -gt 0 ]; do
     case "$(echo "$1" | tr '[:upper:]' '[:lower:]')" in
     --project | -p)
         if [ -n "$2" ]; then
-            COMPOSE_PROJECT="$2"
+            COMPOSE_PROJECT_NAME="$2"
             shift 2
             continue
         else
@@ -482,6 +508,11 @@ while [ "$#" -gt 0 ]; do
     --unattended)
         UNATTENDED=true
         RESUME=true
+        shift 1
+        continue
+        ;;
+    --override-compose)
+        OVERRIDE_COMPOSE=true
         shift 1
         continue
         ;;

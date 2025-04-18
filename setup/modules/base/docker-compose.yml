@@ -46,9 +46,16 @@ services:
       TUNNEL_TOKEN_FILE: /run/secrets/cloudflare_tunnel_token
     labels:
       selfhost.module.base: 1
+      wud.watch: true
+      wud.trigger.include: dockercompose.base
+      wud.display.icon: sh-cloudflare
+      wud.tag.include: ^latest$$
+      wud.watch.digest: true
+      wud.link.template: https://github.com/lldap/lldap/releases
+
   traefik:
     container_name: traefik
-    image: traefik:v3.3
+    image: traefik:v3.3.4
     restart: unless-stopped
     networks:
       - proxy
@@ -76,7 +83,6 @@ services:
       TRAEFIK_ENTRYPOINTS_tailnet_HTTP_TLS_DOMAINS_0_SANS: ${CF_DOMAIN_NAME}
       TRAEFIK_CERTIFICATERESOLVERS_tailnetResolver_ACME_EMAIL: ${CERT_ACME_EMAIL}
       TRAEFIK_SERVERSTRANSPORT_INSECURESKIPVERIFY: true
-      TRAEFIK_HTTP_MIDDLEWARES_AUTHELIA_FORWARDAUTH_ADDRESS: http://authelia:9091/api/verify?rd=https://authelia.${CF_DOMAIN_NAME}/
     labels:
       selfhost.module.base: 1
       dns.manage: true
@@ -85,10 +91,16 @@ services:
       traefik.http.routers.api.entryPoints: tailnet
       traefik.http.routers.api.service: api@internal
       traefik.http.routers.api.rule: Host(`traefik.${CF_DOMAIN_NAME}`)
-      # traefik.http.routers.api.middlewares: authelia@file
+      traefik.http.routers.api.middlewares: authelia@file
+      wud.watch: true
+      wud.trigger.include: dockercompose.base
+      wud.display.icon: sh-traefik
+      wud.tag.include: ^v3\.\d+\.\d+$$
+      wud.link.template: https://github.com/traefik/traefik/releases/tag/v$${major}.$${minor}.$${patch}
+
   lldap:
     container_name: lldap
-    image: lldap/lldap:stable
+    image: ghcr.io/lldap/lldap:stable
     restart: unless-stopped
     networks:
       - proxy
@@ -113,9 +125,16 @@ services:
       traefik.http.routers.lldap.rule: Host(`lldap.${CF_DOMAIN_NAME}`)
       traefik.http.services.lldap.loadbalancer.server.port: 17170
       # traefik.http.routers.api.middlewares: authelia@file
+      wud.watch: true
+      wud.trigger.include: dockercompose.base
+      wud.display.icon: sh-ldap
+      wud.tag.include: ^stable$$
+      wud.watch.digest: true
+      wud.link.template: https://github.com/lldap/lldap/releases
+
   authelia:
     container_name: authelia
-    image: authelia/authelia:4
+    image: ghcr.io/authelia/authelia:4.39.1
     restart: unless-stopped
     networks:
       - proxy
@@ -155,9 +174,15 @@ services:
       traefik.http.routers.authelia.entryPoints: cloudflare
       traefik.http.routers.authelia.rule: Host(`authelia.${CF_DOMAIN_NAME}`)
       traefik.http.services.authelia.loadbalancer.server.port: 9091
+      wud.watch: true
+      wud.trigger.include: dockercompose.base
+      wud.display.icon: sh-authelia
+      wud.tag.include: ^4\.\d+\.\d+$$
+      wud.link.template: https://github.com/authelia/authelia/releases/tag/v$${major}.$${minor}.$${patch}
+
   trafego:
     container_name: trafego
-    image: eafxx/trafegodns:1.9.1
+    image: ghcr.io/elmerfds/trafegodns:1.9.1
     restart: unless-stopped
     networks:
       - proxy
@@ -176,3 +201,39 @@ services:
       TRAEFIK_API_URL: http://traefik:8080/api
     labels:
       selfhost.module.base: 1
+      wud.watch: true
+      wud.trigger.include: dockercompose.base
+      wud.display.icon: sh-ddns-updater
+      wud.tag.include: ^\d+\.\d+\.\d+$$
+      wud.link.template: https://github.com/elmerfds/TrafegoDNS/releases/tag/v$${major}.$${minor}.$${patch}
+
+  wud:
+    container_name: wud
+    image: ghcr.io/getwud/wud:8.0.1
+    restart: unless-stopped
+    networks:
+      - proxy
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${APPDATA_LOCATION:-/srv/appdata}/compose/${COMPOSE_PROJECT_NAME}:/wud/compose
+    environment:
+      - TZ=${TZ}
+      - WUD_WATCHER_LOCAL_CRON=0 8 * * *
+      - WUD_WATCHER_LOCAL_WATCHBYDEFAULT=false
+      - WUD_TRIGGER_DOCKERCOMPOSE_BASE_AUTO=false
+      - WUD_TRIGGER_DOCKERCOMPOSE_BASE_FILE=/wud/compose/base/docker-compose.yml
+      - WUD_TRIGGER_DOCKERCOMPOSE_BASE_PRUNE=true
+    labels:
+      selfhost.module.base: 1
+      dns.manage: true
+      dns.content: ${TAILSCALE_IP}
+      traefik.enable: true
+      traefik.http.routers.wud.entryPoints: tailnet
+      traefik.http.routers.wud.rule: Host(`updates.${CF_DOMAIN_NAME}`)
+      traefik.http.services.wud.loadbalancer.server.port: 3000
+      traefik.http.routers.wud.middlewares: authelia@file
+      wud.watch: true
+      wud.trigger.include: dockercompose.base
+      wud.display.icon: sh-wud
+      wud.tag.include: ^\d+\.\d+\.\d+$$
+      wud.link.template: https://getwud.github.io/wud/#/changelog/?id=_$${major}$${minor}$${patch}
