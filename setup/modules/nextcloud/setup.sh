@@ -11,7 +11,6 @@ source "$PROJECT_ROOT/lib/config.sh"
 #                         NEXTCLOUD SETUP HOOKS
 
 nextcloud_config_env() {
-    ask_for_env NEXTCLOUD_VERSION "Version of Nextcloud to install"
     ask_for_env NEXTCLOUD_SUBDOMAIN "Subdomain under ${CF_DOMAIN_NAME} to use for Nextcloud"
     ask_for_env NEXTCLOUD_DATA_LOCATION "Nextcloud document storage location"
     ask_for_env NEXTCLOUD_FTS_MEMORY_LIMIT "Memory limit for ElasticSearch (units: #m or #g)"

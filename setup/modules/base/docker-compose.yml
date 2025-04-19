@@ -47,7 +47,6 @@ services:
     labels:
       selfhost.module.base: 1
       wud.watch: true
-      wud.trigger.include: dockercompose.base
       wud.display.icon: sh-cloudflare
       wud.tag.include: ^latest$$
       wud.watch.digest: true
@@ -93,7 +92,6 @@ services:
       traefik.http.routers.api.rule: Host(`traefik.${CF_DOMAIN_NAME}`)
       traefik.http.routers.api.middlewares: authelia@file
       wud.watch: true
-      wud.trigger.include: dockercompose.base
       wud.display.icon: sh-traefik
       wud.tag.include: ^v3\.\d+\.\d+$$
       wud.link.template: https://github.com/traefik/traefik/releases/tag/v$${major}.$${minor}.$${patch}
@@ -126,7 +124,6 @@ services:
       traefik.http.services.lldap.loadbalancer.server.port: 17170
       # traefik.http.routers.api.middlewares: authelia@file
       wud.watch: true
-      wud.trigger.include: dockercompose.base
       wud.display.icon: sh-ldap
       wud.tag.include: ^stable$$
       wud.watch.digest: true
@@ -175,7 +172,6 @@ services:
       traefik.http.routers.authelia.rule: Host(`authelia.${CF_DOMAIN_NAME}`)
       traefik.http.services.authelia.loadbalancer.server.port: 9091
       wud.watch: true
-      wud.trigger.include: dockercompose.base
       wud.display.icon: sh-authelia
       wud.tag.include: ^4\.\d+\.\d+$$
       wud.link.template: https://github.com/authelia/authelia/releases/tag/v$${major}.$${minor}.$${patch}
@@ -202,7 +198,7 @@ services:
     labels:
       selfhost.module.base: 1
       wud.watch: true
-      wud.trigger.include: dockercompose.base
+      # wud.trigger.include: dockercompose.base,smtp.default
       wud.display.icon: sh-ddns-updater
       wud.tag.include: ^\d+\.\d+\.\d+$$
       wud.link.template: https://github.com/elmerfds/TrafegoDNS/releases/tag/v$${major}.$${minor}.$${patch}
@@ -220,9 +216,16 @@ services:
       - TZ=${TZ}
       - WUD_WATCHER_LOCAL_CRON=0 8 * * *
       - WUD_WATCHER_LOCAL_WATCHBYDEFAULT=false
-      - WUD_TRIGGER_DOCKERCOMPOSE_BASE_AUTO=false
-      - WUD_TRIGGER_DOCKERCOMPOSE_BASE_FILE=/wud/compose/base/docker-compose.yml
-      - WUD_TRIGGER_DOCKERCOMPOSE_BASE_PRUNE=true
+      - WUD_TRIGGER_DOCKER_LOCAL_AUTO=false
+      - WUD_TRIGGER_SMTP_DEFAULT_HOST=${SMTP_SERVER}
+      - WUD_TRIGGER_SMTP_DEFAULT_PORT=${SMTP_PORT}
+      - WUD_TRIGGER_SMTP_DEFAULT_FROM=${SMTP_SENDER}@${CF_DOMAIN_NAME}
+      - WUD_TRIGGER_SMTP_DEFAULT_TO=${ADMIN_EMAIL}
+      - WUD_TRIGGER_SMTP_DEFAULT_USER=${SMTP_USERNAME}
+      - WUD_TRIGGER_SMTP_DEFAULT_PASS=${SMTP_PASSWORD}
+      # - WUD_TRIGGER_SMTP_DEFAULT_TLS_ENABLED=true
+      - "WUD_TRIGGER_SMTP_DEFAULT_SIMPLETITLE=An update is available for: $${container.displayName}!"
+      - "WUD_TRIGGER_SMTP_DEFAULT_SIMPLEBODY=A new version was found for $${container.displayName}. $${container.updateKind.kind=='tag' ? 'The current version ' + container.updateKind.localValue + ' can be updated to ' + container.updateKind.remoteValue : 'The digest for tag ' + container.result.tag + ' has changed.'}\\n\\n$${container.result && container.result.link ? 'Please review what has changed before updating: ' + container.result.link : ''}\\n\\nTo apply the update, visit: https://updates.${CF_DOMAIN_NAME}"
     labels:
       selfhost.module.base: 1
       dns.manage: true
@@ -233,7 +236,6 @@ services:
       traefik.http.services.wud.loadbalancer.server.port: 3000
       traefik.http.routers.wud.middlewares: authelia@file
       wud.watch: true
-      wud.trigger.include: dockercompose.base
       wud.display.icon: sh-wud
       wud.tag.include: ^\d+\.\d+\.\d+$$
       wud.link.template: https://getwud.github.io/wud/#/changelog/?id=_$${major}$${minor}$${patch}

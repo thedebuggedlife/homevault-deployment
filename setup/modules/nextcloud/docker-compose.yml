@@ -70,7 +70,7 @@ services:
 
   nextcloud-app:
     container_name: nextcloud_app
-    image: nextcloud:${NEXTCLOUD_VERSION:-production}
+    image: nextcloud:31.0.2
     restart: always
     depends_on:
       nextcloud-db:
@@ -132,10 +132,15 @@ services:
       traefik.http.routers.nextcloud-server.entryPoints: cloudflare,tailnet
       traefik.http.routers.nextcloud-server.rule: Host(`${NEXTCLOUD_SUBDOMAIN:-nextcloud}.${CF_DOMAIN_NAME}`)
       traefik.http.services.nextcloud-server.loadbalancer.server.port: 80
+      wud.watch: true
+      wud.display.icon: sh-nextcloud
+      wud.display.name: nextcloud
+      wud.tag.include: ^31\.\d+\.\d+$$
+      wud.link.template: https://nextcloud.com/changelog/#$${major}-$${minor}-$${patch}
 
   collabora:
     container_name: collabora
-    image: collabora/code:latest
+    image: collabora/code:24.04.13.2.1
     restart: always
     networks:
       - nextcloud-proxy
@@ -158,6 +163,12 @@ services:
       traefik.http.routers.collabora.entryPoints: cloudflare,tailnet
       traefik.http.routers.collabora.rule: Host(`${COLLABORA_SUBDOMAIN:-office}.${CF_DOMAIN_NAME}`)
       traefik.http.services.collabora.loadbalancer.server.port: 9980
+      wud.watch: true
+      wud.display.icon: sh-nextcloud-office
+      wud.display.name: collabora
+      wud.tag.include: ^24.04.\d+\.\d+\.\d+$$
+      wud.tag.transform: ^24.04.(\d+\.\d+\.\d+)$$ => $$1
+      wud.link.template: https://www.collaboraonline.com/code-24-04-release-notes/#h-code-24-04-$${major}-$${minor}
 
   nextcloud-elastic:
     container_name: nextcloud_elastic

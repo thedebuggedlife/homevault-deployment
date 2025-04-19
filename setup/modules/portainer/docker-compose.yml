@@ -39,3 +39,8 @@ services:
       traefik.http.routers.portainer.entryPoints: tailnet
       traefik.http.routers.portainer.rule: Host(`${PORTAINER_SUBDOMAIN}.${CF_DOMAIN_NAME}`)
       traefik.http.services.portainer.loadbalancer.server.port: 9000
+      wud.watch: true
+      wud.watch.digest: true
+      wud.display.icon: sh-portainer
+      wud.tag.include: ^lts$$
+      wud.link.template: https://docs.portainer.io/release-notes

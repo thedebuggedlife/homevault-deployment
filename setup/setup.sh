@@ -8,10 +8,12 @@ PROJECT_ROOT="${PROJECT_ROOT%/}"
 source "$PROJECT_ROOT/lib/logging.sh"
 source "$PROJECT_ROOT/lib/config.sh"
 source "$PROJECT_ROOT/lib/smtp2go.sh"
+source "$PROJECT_ROOT/lib/docker.sh"
 
 COMPOSE_PATH=
 SECRETS_PATH=
 OVERRIDE_COMPOSE=false
+OVERRIDE_VERSIONS=false
 UNATTENDED=
 NO_DOWNLOAD=
 USE_SMTP2GO=true
@@ -167,7 +169,7 @@ find_modules() {
 
 find_missing_modules() {
     local container_ids container_id container_labels module_name
-    container_ids=$(sg docker -c "docker ps -aq --filter label=com.docker.compose.project=$COMPOSE_PROJECT_NAME")
+    container_ids=$(docker ps -aq --filter "label=com.docker.compose.project=$COMPOSE_PROJECT_NAME")
 
     INSTALLED_MODULES=()
     for container_id in $container_ids; do
@@ -291,6 +293,12 @@ deploy_project() {
                 }
             fi
         fi
+        if [ "$OVERRIDE_VERSIONS" != true ]; then
+            if ! compose_match_container_versions "$project_file" "$COMPOSE_PROJECT_NAME"; then
+                log_error "Failed to match existing container versions in compose project files"
+                exit 1
+            fi
+        fi
         if [ -f "$project_file" ]; then
             COMPOSE_OPTIONS="$COMPOSE_OPTIONS -f '$project_file'"
         fi
@@ -359,7 +367,10 @@ configure_admin_account() {
         save_file=true
     fi
 
-    if [ "$load_only" = "true" ]; then return 0; fi
+    if [ "$load_only" = "true" ]; then 
+        save_env ADMIN_EMAIL "$ADMIN_EMAIL"
+        return 0
+    fi
 
     if [ "$save_file" = "true" ]; then
         local json
@@ -383,6 +394,7 @@ configure_admin_account() {
         write_file "$json" "$config_file"
     fi
 
+    save_env ADMIN_EMAIL "$ADMIN_EMAIL"
     write_file "$ADMIN_USERNAME" "${SECRETS_PATH}server_admin_username"
     write_file "$ADMIN_PASSWORD" "${SECRETS_PATH}server_admin_password"
 }
@@ -431,7 +443,8 @@ print_usage() {
     echo "  --resume                        Skip any steps that have been previously completed."
     echo "  --unattended                    Automatically answer prompts with defaults (implies --resume)."
     echo "  --no-download                   Do not download appdata from GitHub. Only use if appdata was previously downloaded."
-    echo "  --override-compose              Replace existing docker-compose files from previous deployments. Use with caution!"
+    echo "  --override-compose              Override previously deployed docker-compose files. Use with caution!"
+    echo "  --override-versions             Override image versions with those specified in compose file. Use with caution!"
     echo "  --custom-smtp                   Do not use SMTP2GO for sending email (custom SMTP configuration required)."
     echo "  --post-install                  Run post-install configuration of self-hosted apps."
     echo "  --dry-run                       Execute Docker Compose in dry run mode."
@@ -513,6 +526,11 @@ while [ "$#" -gt 0 ]; do
         ;;
     --override-compose)
         OVERRIDE_COMPOSE=true
+        shift 1
+        continue
+        ;;
+    --override-versions)
+        OVERRIDE_VERSIONS=true
         shift 1
         continue
         ;;

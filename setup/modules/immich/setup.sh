@@ -207,7 +207,6 @@ immich_configure_oauth() {
 #                          IMMICH SETUP HOOKS
 
 immich_config_env() {
-    ask_for_env IMMICH_VERSION "Version of Immich to install"
     ask_for_env IMMICH_SUBDOMAIN "Subdomain under ${CF_DOMAIN_NAME} to use for Immich"
     ask_for_env IMMICH_UPLOAD_LOCATION "Immich photo upload location"
     ask_for_env IMMICH_DEFAULT_QUOTA "Immich default user storage quota (in GB)"

@@ -2,6 +2,7 @@
     "bashIde.includeAllWorkspaceSymbols": true,
     "cSpell.words": [
         "argjson",
-        "DISTRO"
+        "DISTRO",
+        "dockercompose"
     ]
 }

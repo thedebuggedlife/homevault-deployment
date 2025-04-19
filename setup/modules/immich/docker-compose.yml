@@ -32,7 +32,7 @@ services:
 
   immich-server:
     container_name: immich_server
-    image: ghcr.io/immich-app/immich-server:${IMMICH_VERSION:-release}
+    image: ghcr.io/immich-app/immich-server:v1.131.3
     # extends:
     #   file: hwaccel.transcoding.yml
     #   service: cpu # set to one of [nvenc, quicksync, rkmpp, vaapi, vaapi-wsl] for accelerated transcoding
@@ -69,12 +69,17 @@ services:
       traefik.http.routers.immich-server.entryPoints: cloudflare
       traefik.http.routers.immich-server.rule: Host(`${IMMICH_SUBDOMAIN:-immich}.${CF_DOMAIN_NAME}`)
       traefik.http.services.immich-server.loadbalancer.server.port: 2283
+      wud.watch: true
+      wud.display.icon: sh-immich
+      wud.display.name: "immich: server"
+      wud.tag.include: ^v\d+\.\d+\.\d+$$
+      wud.link.template: https://github.com/immich-app/immich/releases/tag/v$${major}.$${minor}.$${patch}
 
   immich-machine-learning:
     container_name: immich_machine_learning
     # For hardware acceleration, add one of -[armnn, cuda, rocm, openvino, rknn] to the image tag.
     # Example tag: ${IMMICH_VERSION:-release}-cuda
-    image: ghcr.io/immich-app/immich-machine-learning:${IMMICH_VERSION:-release}
+    image: ghcr.io/immich-app/immich-machine-learning:v1.131.3
     # extends: # uncomment this section for hardware acceleration - see https://immich.app/docs/features/ml-hardware-acceleration
     #   file: hwaccel.ml.yml
     #   service: cpu # set to one of [armnn, cuda, rocm, openvino, openvino-wsl, rknn] for accelerated inference - use the `-wsl` version for WSL2 where applicable
@@ -87,6 +92,11 @@ services:
       disable: false
     labels:
       selfhost.module.immich: 1
+      wud.watch: true
+      wud.display.icon: sh-immich
+      wud.display.name: "immich: ml"
+      wud.tag.include: ^v\d+\.\d+\.\d+$$
+      wud.link.template: https://github.com/immich-app/immich/releases/tag/v$${major}.$${minor}.$${patch}
 
   immich-redis:
     container_name: immich_redis
