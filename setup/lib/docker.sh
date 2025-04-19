@@ -107,7 +107,7 @@ compose_match_container_versions() {
         # shellcheck disable=SC2016
         while read -r service version; do
             local installed_version=${installed_services["$service"]}
-            if [[ "$version" != "null" && "$version" != "$installed_version" ]]; then
+            if [[ -n "$installed_version" && "$version" != "null" && "$version" != "$installed_version" ]]; then
                 echo -e "Updating service definition for ${Cyan}$service${COff} with image: ${Purple}$installed_version${COff}"
                 yq "$temp_file_path" -i ".services.$service.image = \"$installed_version\"" "$temp_file_name" > /dev/null
                 any_replaced=true

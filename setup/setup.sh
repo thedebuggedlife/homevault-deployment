@@ -300,6 +300,8 @@ deploy_project() {
         fi
     done
 
+    echo
+
     if [ "$OVERRIDE_VERSIONS" != true ]; then
         if ! compose_match_container_versions "$COMPOSE_PROJECT_NAME" "${project_files[@]}"; then
             log_error "Failed to match existing container versions in compose project files"
