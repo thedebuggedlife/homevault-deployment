@@ -12,39 +12,6 @@ source "$PROJECT_ROOT/lib/tailscale.sh"
 source "$PROJECT_ROOT/lib/cloudflare.sh"
 
 ###
-# Check that Docker is installed
-#
-# @return void
-###
-configure_docker() {
-    if ! command -v docker >/dev/null 2>&1; then
-        echo -e "\n${Yellow}Docker is not installed.${COff}"
-        local user_input=Y
-        if [ "$UNATTENDED" != "true" ]; then
-            read -p "Do you want to install Docker? [Y/n] " user_input </dev/tty
-            user_input=${user_input:-Y}
-        fi
-        if [[ "$user_input" =~ ^[Yy]$ ]]; then
-            echo "Installing Docker..."
-            if ! curl -fsSL https://get.docker.com | sudo sh; then
-                log_error "Docker installation failed"
-                exit 1
-            else
-                echo -e "\n✅ Docker installation completed successfully\n"
-            fi
-            sudo systemctl enable --now docker > /dev/null
-            if ! getent group docker > /dev/null 2>&1; then
-                sudo groupadd docker > /dev/null
-            fi
-            sudo usermod -aG docker $AS_USER > /dev/null
-        else
-            abort_install
-            exit 1
-        fi
-    fi
-}
-
-###
 # Create dynamic configuration files for enabled modules
 #
 # @return: {void}

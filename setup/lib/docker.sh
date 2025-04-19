@@ -1,9 +1,11 @@
-if [ -n "$__LIB_COMPOSE" ]; then return 0; fi
+if [ -n "$__LIB_DOCKER" ]; then return 0; fi
 
-__LIB_COMPOSE=1
+__LIB_DOCKER=1
 
 #shellcheck source=./logging.sh
 source "$PROJECT_ROOT/lib/logging.sh"
+
+_DOCKER_INSTALLED=$(if ! command -v docker >/dev/null 2>&1; then echo "false"; else echo "true"; fi)
 
 ###
 # Runs the YQ utility using a docker container rather than requiring installing it
@@ -37,6 +39,40 @@ docker() {
     done
     if ! result=$(sg docker -c "$cmd"); then return 1; fi
     echo "$result"
+}
+
+###
+# Check that Docker is installed
+#
+# @return void
+###
+configure_docker() {
+    if [ "$_DOCKER_INSTALLED" != "true" ]; then
+        echo -e "\n${Yellow}Docker is not installed.${COff}"
+        local user_input=Y
+        if [ "$UNATTENDED" != "true" ]; then
+            read -p "Do you want to install Docker? [Y/n] " user_input </dev/tty
+            user_input=${user_input:-Y}
+        fi
+        if [[ "$user_input" =~ ^[Yy]$ ]]; then
+            echo "Installing Docker..."
+            if ! curl -fsSL https://get.docker.com | sudo sh; then
+                log_error "Docker installation failed"
+                exit 1
+            else
+                echo -e "\n✅ Docker installation completed successfully\n"
+            fi
+            sudo systemctl enable --now docker > /dev/null
+            if ! getent group docker > /dev/null 2>&1; then
+                sudo groupadd docker > /dev/null
+            fi
+            sudo usermod -aG docker $AS_USER > /dev/null
+            _DOCKER_INSTALLED=true
+        else
+            abort_install
+            exit 1
+        fi
+    fi
 }
 
 ###
