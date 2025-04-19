@@ -14,7 +14,7 @@ source "$PROJECT_ROOT/lib/logging.sh"
 ###
 yq() {
     local cmd result workdir=$1
-    cmd="docker run -q --rm -it -v '$workdir':/workdir mikefarah/yq:4.45.1 -M"
+    cmd="docker run -q --rm -v '$workdir':/workdir mikefarah/yq:4.45.1 -M"
     shift
     for arg in "$@"; do
         cmd+=$(printf " %q" "$arg")
@@ -43,96 +43,44 @@ docker() {
 # Reads the image version of service containers within a compose project and updates the
 # specified docker-compose file to match
 #
-# @param $1 {string} The path to the compose file
-# @param $2 {string} The name of the compose project (to load existing containers from)
+# @param $1 {string} The name of the compose project (to load existing containers from)
+# @param $* {string} The path to the compose files to update
 # @return   {void}
 ###
 compose_match_container_versions() {
-    local compose_path compose_file compose_full_path=$1 compose_project=$2
-    compose_path=$( dirname "$compose_full_path" )
-    compose_file=$( basename "$compose_full_path" )
+    local compose_project=$1
+    shift
 
-    local temp_file temp_path temp_full_path
-    temp_full_path=$(mktemp)
-    temp_path=$( dirname "$temp_full_path" )
-    temp_file=$( basename "$temp_full_path" )
-    cp -f "$compose_full_path" "$temp_full_path"
+    local -A installed_services
+    local service version
+    while read -r service version; do
+        installed_services["$service"]="$version"
+    done < <(docker compose -p "$compose_project" ps --format json | jq -s -r '.[] | "\(.Service) \(.Image)"')
 
-    echo -n "Matching container versions "
+    echo "Matching container image tags ..."
 
-    local compose_services deployed_services
-    if ! compose_services=$(yq "$compose_path" e '.services | keys | .[]' "$compose_file"); then
-        log_error "Failed extracting services from compose file '$compose_full_path'"
-        return 1
-    fi
+    local project_file
+    for project_file in "$@"; do
+        local temp_file temp_file_name temp_file_path
+        temp_file=$(mktemp)
+        temp_file_name=$(basename "$temp_file")
+        temp_file_path=$(dirname "$temp_file")
+        cp -f "$project_file" "$temp_file"
 
-    local compose_output
-    if ! compose_output=$(docker compose -p "$compose_project" ps --format json); then
-        log_error "Failed to enumerate deployed services"
-        return 1
-    fi
+        local any_replaced=false
+        # shellcheck disable=SC2016
+        while read -r service version; do
+            local installed_version=${installed_services["$service"]}
+            if [[ "$version" != "null" && "$version" != "$installed_version" ]]; then
+                echo -e "Updating service definition for ${Cyan}$service${COff} with image: ${Purple}$installed_version${COff}"
+                yq "$temp_file_path" -i ".services.$service.image = \"$installed_version\"" "$temp_file_name" > /dev/null
+                any_replaced=true
+            fi
+        done < <(yq "$temp_file_path" '(.services | keys | .[] | .) as $service | "\($service) \(.services[$service].image)"' "$temp_file_name")
 
-    if [[ $(echo "$compose_output" | grep -c '^{') -gt 0 ]]; then
-        # Line-by-line JSON objects format
-        if ! deployed_services=$(echo "$compose_output" | jq -s -r '.[] | (.Service // .service)'); then
-            log_error "Failed to enumerate deployed services"
-            return 1
+        if [ "$any_replaced" = true ]; then
+            cp -f "$project_file" "$project_file".bak
+            mv "$temp_file" "$project_file"
         fi
-    else
-        # JSON array format
-        if ! deployed_services=$(echo "$compose_output" | jq -r '.[] | (.Service // .service)'); then
-            log_error "Failed to enumerate deployed services"
-            return 1
-        fi
-    fi
-
-    local service
-    for service in $compose_services; do
-        echo -n ". "
-
-        if yq "$compose_path" e ".services.$service.image" "$compose_file" | grep -q "null"; then
-            continue
-        fi
-
-        if ! echo "$deployed_services" | grep -q "^$service$"; then
-            continue
-        fi
-
-        local container_id
-        container_id=$(docker compose -p "$compose_project" ps -q "$service")
-        
-        if [[ -z $container_id ]]; then
-            continue
-        fi
-
-        local current_image
-        current_image=$(docker inspect --format='{{.Config.Image}}' "$container_id")
-
-        if [[ -z $current_image ]]; then
-            echo -e "\n${Yellow}Could not find image for service: ${Purple}$service{$COff}"
-            continue
-        fi
-
-        # Get the current image value from the compose file
-        local old_image
-        old_image=$(yq "$compose_path" e ".services.$service.image" "$compose_file")
-
-        if [ "${current_image}" != "${old_image}" ]; then
-            # Update the image in the temporary file
-            echo -e "\n\n${Yellow}Updating service definition for '$service' with image: '$current_image'${COff}"
-            yq "$temp_path" -i ".services.$service.image = \"$current_image\"" "$temp_file" > /dev/null
-        fi
-        
     done
-
-    echo
-
-    if ! cp -f "$compose_full_path" "${compose_full_path}.bak"; then
-        log_error "Failed to create backup compose file '${compose_full_path}.bak'"
-        return 1
-    fi
-    if ! mv "$temp_full_path" "$compose_full_path"; then
-        log_error "Failed to replace compose file '$compose_full_path'"
-        return 1
-    fi
 }

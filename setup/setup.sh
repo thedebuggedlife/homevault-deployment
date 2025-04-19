@@ -276,6 +276,7 @@ deploy_project() {
     ensure_path_exists "${COMPOSE_PATH%/}/$module/"
     cp -f "$ENV_FILE" "${COMPOSE_PATH%/}/$module/.env"
 
+    local -a project_files=()
     for module in "${ENABLED_MODULES[@]}"; do
         local original_file="${PROJECT_ROOT%/}/modules/$module/docker-compose.yml"
         local project_file="${COMPOSE_PATH%/}/$module/docker-compose.yml"
@@ -287,22 +288,24 @@ deploy_project() {
             else
                 echo -e "Copying docker compose file for ${Purple}$module${COff} to ${Cyan}$project_file${COff}"
                 ensure_path_exists "$( dirname "$project_file" )"
-                cp -f "$original_file" "$project_file" && chmod 666 "$project_file" || {
+                (cp -f "$original_file" "$project_file" && chmod 666 "$project_file") || {
                     log_error "Failed to copy docker compose file for '$module'"
                     exit 1
                 }
             fi
         fi
-        if [ "$OVERRIDE_VERSIONS" != true ]; then
-            if ! compose_match_container_versions "$project_file" "$COMPOSE_PROJECT_NAME"; then
-                log_error "Failed to match existing container versions in compose project files"
-                exit 1
-            fi
-        fi
         if [ -f "$project_file" ]; then
+            project_files+=("$project_file")
             COMPOSE_OPTIONS="$COMPOSE_OPTIONS -f '$project_file'"
         fi
     done
+
+    if [ "$OVERRIDE_VERSIONS" != true ]; then
+        if ! compose_match_container_versions "$COMPOSE_PROJECT_NAME" "${project_files[@]}"; then
+            log_error "Failed to match existing container versions in compose project files"
+            exit 1
+        fi
+    fi
 
     execute_hooks "${PRE_INSTALL_HOOKS[@]}" "pre-install"
 
