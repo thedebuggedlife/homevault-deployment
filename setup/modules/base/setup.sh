@@ -144,16 +144,13 @@ base_config_env() {
 
     # Authelia Settings
     ask_for_env AUTHELIA_THEME "Authelia admin website theme (dark | light)"
-
-    # LLDAP Settings
-    ask_for_env LLDAP_ADMIN_PASSWORD "LLDAP Administrator Password" true true true
 }
 
 base_config_secrets() {
     save_env_id OIDC_GRAFANA_CLIENT_ID
     save_env_secret "${SECRETS_PATH}cloudflare_dns_api_token" CF_DNS_API_TOKEN
     save_env_secret "${SECRETS_PATH}smtp_password" SMTP_PASSWORD
-    save_env_secret "${SECRETS_PATH}ldap_admin_password" LLDAP_ADMIN_PASSWORD
+    create_secret "${SECRETS_PATH}ldap_admin_password"
     create_secret "${SECRETS_PATH}authelia_session_secret"
     create_secret "${SECRETS_PATH}authelia_storage_encryption_key"
     create_secret "${SECRETS_PATH}ldap_jwt_secret"

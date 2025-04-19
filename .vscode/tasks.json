@@ -8,7 +8,10 @@
             "type": "shell",
             "command": "bash ${workspaceFolder}/.local/reset.sh",
             "options": {
-                "cwd": "${workspaceFolder}"
+                "cwd": "${workspaceFolder}",
+            },
+            "presentation": {
+                "focus": true,
             },
             "problemMatcher": []
         },

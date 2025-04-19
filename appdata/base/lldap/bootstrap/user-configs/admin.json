@@ -4,6 +4,7 @@
     "password": "",
     "displayName": "",
     "groups": [
+        "lldap_admin",
         "server_admin",
         "immich_user",
         "nextcloud_user"
