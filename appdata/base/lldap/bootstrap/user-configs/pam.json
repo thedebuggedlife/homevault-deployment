@@ -1,0 +1,8 @@
+{
+    "id": "pam",
+    "email": "pam@pam",
+    "password": "",
+    "groups": [
+        "lldap_strict_readonly"
+    ]
+}

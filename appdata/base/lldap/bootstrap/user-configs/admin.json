@@ -8,5 +8,9 @@
         "server_admin",
         "immich_user",
         "nextcloud_user"
-    ]
+    ],
+    "homeDirectory": "",
+    "unixShell": "",
+    "uidNumber": "1100",
+    "gidNumber": []
 }

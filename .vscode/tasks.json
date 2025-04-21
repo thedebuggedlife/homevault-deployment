@@ -31,6 +31,9 @@
             "options": {
                 "cwd": "${workspaceFolder}"
             },
+            "presentation": {
+                "focus": true,
+            },
             "problemMatcher": []
         },
         {

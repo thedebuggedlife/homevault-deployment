@@ -1,0 +1,37 @@
+[
+    {
+      "name": "uidNumber",
+      "attributeType": "INTEGER",
+      "isEditable": false,
+      "isList": false,
+      "isVisible": true
+    },
+    {
+      "name": "gidNumber",
+      "attributeType": "INTEGER",
+      "isEditable": false,
+      "isList": true,
+      "isVisible": true
+    },
+    {
+      "name": "homeDirectory",
+      "attributeType": "STRING",
+      "isEditable": false,
+      "isList": false,
+      "isVisible": true
+    },
+    {
+      "name": "unixShell",
+      "attributeType": "STRING",
+      "isEditable": false,
+      "isList": false,
+      "isVisible": true
+    },
+    {
+      "name": "sshPublicKey",
+      "attributeType": "STRING",
+      "isEditable": false,
+      "isList": false,
+      "isVisible": true
+    }
+  ]

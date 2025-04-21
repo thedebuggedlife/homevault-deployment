@@ -276,3 +276,118 @@ append_file() {
         exit 1
     }
 }
+
+###
+# Checks if the specified packages are installed, if not it proceeds to install them
+#
+# @param $1 {string} The list of packages separated by spaces, e.g. "sssd sssd-tools"
+#
+# @return   {void}
+###
+ensure_packages_installed() {
+    local packages=$1
+
+    # Detect package manager
+    if command -v dpkg >/dev/null 2>&1; then
+        # Debian/Ubuntu
+        for pkg in $packages; do
+            if dpkg -s "$pkg" >/dev/null 2>&1; then
+                echo -e "${Purple}$pkg${COff} is already installed"
+            else
+                echo -e "Installing ${Purple}$pkg${COff} ..."
+                if ! sudo apt-get install -y "$pkg"; then
+                    log_error "Failed to install package '$pkg'"
+                    return 1
+                fi
+            fi
+        done
+    elif command -v rpm >/dev/null 2>&1; then
+        # Determine if it's RHEL/CentOS/Fedora
+        if command -v dnf >/dev/null 2>&1; then
+            # Fedora or newer RHEL/CentOS
+            for pkg in $packages; do
+                if rpm -q "$pkg" >/dev/null 2>&1; then
+                    echo -e "${Purple}$pkg${COff} is already installed"
+                else
+                    echo -e "Installing ${Purple}$pkg${COff} ..."
+                    if ! sudo dnf install -y "$pkg"; then
+                        log_error "Failed to install package '$pkg'"
+                        return 1
+                    fi
+                fi
+            done
+        elif command -v yum >/dev/null 2>&1; then
+            # Older RHEL/CentOS
+            for pkg in $packages; do
+                if rpm -q "$pkg" >/dev/null 2>&1; then
+                    echo -e "${Purple}$pkg${COff} is already installed"
+                else
+                    echo -e "Installing ${Purple}$pkg${COff} ..."
+                    if ! sudo yum install -y "$pkg"; then
+                        log_error "Failed to install package '$pkg'"
+                        return 1
+                    fi
+                fi
+            done
+        else
+            log_error "Unknown distribution, cannot install packages '$packages'"
+            return 1
+        fi
+    elif command -v pacman >/dev/null 2>&1; then
+        # Arch Linux
+        for pkg in $packages; do
+            if pacman -Qq "$pkg" >/dev/null 2>&1; then
+                echo -e "${Purple}$pkg${COff} is already installed"
+            else
+                echo -e "Installing ${Purple}$pkg${COff} ..."
+                if ! sudo pacman -S --noconfirm "$pkg"; then
+                    log_error "Failed to install package '$pkg'"
+                    return 1
+                fi
+            fi
+        done
+    elif command -v zypper >/dev/null 2>&1; then
+        # OpenSUSE
+        for pkg in $packages; do
+            if zypper search -i "$pkg" | grep -q "$pkg"; then
+                echo -e "${Purple}$pkg${COff} is already installed"
+            else
+                echo -e "Installing ${Purple}$pkg${COff} ..."
+                if ! sudo zypper install -y "$pkg"; then
+                    log_error "Failed to install package '$pkg'"
+                    return 1
+                fi
+            fi
+        done
+    elif command -v apk >/dev/null 2>&1; then
+        # Alpine
+        for pkg in $packages; do
+            if apk info -e "$pkg" >/dev/null 2>&1; then
+                echo -e "${Purple}$pkg${COff} is already installed"
+            else
+                echo -e "Installing ${Purple}$pkg${COff} ..."
+                if ! sudo apk add "$pkg"; then
+                    log_error "Failed to install package '$pkg'"
+                    return 1
+                fi
+            fi
+        done
+    elif command -v emerge >/dev/null 2>&1; then
+        # Gentoo
+        for pkg in $packages; do
+            # In Gentoo, we need to check differently since package names have categories
+            if equery list "*/$pkg" >/dev/null 2>&1; then
+                echo -e "${Purple}$pkg${COff} is already installed"
+            else
+                echo -e "Installing ${Purple}$pkg${COff} ..."
+                if ! sudo emerge --ask=n "$pkg"; then
+                    log_error "Failed to install package '$pkg'"
+                    return 1
+                fi
+            fi
+        done
+    else
+        log_error "Unknown distribution, cannot install packages '$packages'"
+        return 1
+    fi
+}

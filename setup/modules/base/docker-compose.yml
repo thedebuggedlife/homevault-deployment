@@ -102,6 +102,8 @@ services:
     restart: unless-stopped
     networks:
       - proxy
+    ports:
+      - 6360:6360
     volumes: 
       - ${APPDATA_LOCATION:-/srv/appdata}/lldap:/data
     secrets:
@@ -114,6 +116,9 @@ services:
       LLDAP_KEY_SEED_FILE: /run/secrets/ldap_key_seed
       LLDAP_LDAP_BASE_DN: ${CF_DOMAIN_CN}
       LLDAP_LDAP_USER_PASS_FILE: /run/secrets/ldap_admin_password
+      LLDAP_LDAPS_OPTIONS__ENABLED: true
+      LLDAP_LDAPS_OPTIONS__CERT_FILE: /data/cert.pem
+      LLDAP_LDAPS_OPTIONS__KEY_FILE: /data/key.pem
     labels:
       selfhost.module.base: 1
       dns.manage: true
