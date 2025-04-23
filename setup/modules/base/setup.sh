@@ -334,6 +334,7 @@ base_config_env() {
     ask_for_env APPDATA_LOCATION "Application Data folder"
     ask_for_env TZ "Server Timezone"
     ask_for_env CERT_ACME_EMAIL "Email For Certificate Registration"
+    save_env INSTALLER_UID "$(id -u "$USER")"
 
     # Tailscale Settings
     ask_for_env TAILSCALE_API_KEY "Tailscale API Key"
@@ -352,7 +353,7 @@ base_config_env() {
         ask_for_env SMTP_PASSWORD "SMTP Server Password"
         ask_for_env SMTP_SERVER "SMTP Server Address"
         ask_for_env SMTP_PORT "SMTP Server Port"
-        ask_for_env SMTP_SECURE "SMTP Security Protocol (optional) ('tls' or 'ssl')" true false
+        ask_for_env SMTP_SECURE "SMTP Security Protocol (optional) ('tls' or 'ssl')" -e
     else
         if [ -z "$SMTP_USERNAME" ]; then
             save_env SMTP_USERNAME "selfhost@${CF_DOMAIN_NAME}"

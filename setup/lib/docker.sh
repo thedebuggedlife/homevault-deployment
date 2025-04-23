@@ -10,16 +10,16 @@ _DOCKER_INSTALLED=$(if ! command -v docker >/dev/null 2>&1; then echo "false"; e
 ###
 # Runs the YQ utility using a docker container rather than requiring installing it
 #
-# @option    -w [workdir]   Working directory where files can be loaded in the container (default=${PWD})
-# @param    (*)             Any additional parameters are passed down to yq
-# @return   {string}        Any output from yq
+# @param    $1          Working directory where files can be loaded in the container (default=${PWD})
+# @param    (*)         Any additional parameters are passed down to yq
+# @return   {string}    Any output from yq
 ###
 yq() {
     local cmd result workdir=$1
-    cmd="docker run -q --rm -v '$workdir':/workdir mikefarah/yq:4.45.1 -M"
     shift
+    cmd="docker run -q --rm -v '$workdir':/workdir mikefarah/yq:4.45.1 -M"
     for arg in "$@"; do
-        cmd+=$(printf " %q" "$arg")
+        cmd+=$(printf " '%s'" "$arg")
     done
     if ! result=$(sg docker -c "$cmd" | tr -d '\r'); then return 1; fi
     echo "$result"

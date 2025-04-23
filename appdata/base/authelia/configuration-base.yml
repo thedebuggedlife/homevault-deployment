@@ -105,20 +105,3 @@ identity_providers:
         rules:
           - policy: 'one_factor'
             subject: 'group:server_admin'
-    clients:
-      - client_id: '{{ env "OIDC_GRAFANA_CLIENT_ID" }}'
-        client_name: 'grafana'
-        client_secret: '{{ secret "/run/secrets/oidc_grafana_digest" }}'  # The digest of 'insecure_secret'.
-        public: false
-        authorization_policy: 'one_factor' # grafana does its own RBAC
-        require_pkce: true
-        pkce_challenge_method: 'S256'
-        redirect_uris:
-          - '{{ expandenv "https://grafana.${CF_DOMAIN_NAME}/login/generic_oauth" }}'
-        scopes:
-          - 'openid'
-          - 'profile'
-          - 'email'
-          - 'groups'
-        userinfo_signed_response_alg: 'none'
-        token_endpoint_auth_method: 'client_secret_post'

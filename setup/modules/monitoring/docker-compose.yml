@@ -1,0 +1,158 @@
+networks:
+  monitoring:
+  monitoring-proxy:
+    name: monitoring-proxy
+
+secrets:
+  oidc_grafana_digest:
+    file: ${APPDATA_LOCATION:-/srv/appdata}/secrets/oidc_grafana_digest
+  oidc_grafana_password:
+    file: ${APPDATA_LOCATION:-/srv/appdata}/secrets/oidc_grafana_password
+  smtp_password:
+    file: ${APPDATA_LOCATION:-/srv/appdata}/secrets/smtp_password
+
+services:
+  traefik:
+    networks:
+      - monitoring-proxy
+    labels:
+      selfhost.module.monitoring: 1
+
+  authelia:
+    secrets:
+      - oidc_grafana_digest
+    environment:
+      OIDC_GRAFANA_CLIENT_ID: ${OIDC_GRAFANA_CLIENT_ID}
+      GRAFANA_SUBDOMAIN: ${GRAFANA_SUBDOMAIN}
+    labels:
+      selfhost.module.monitoring: 1
+
+  node-exporter:
+    container_name: node-exporter
+    image: quay.io/prometheus/node-exporter:v1.9.1
+    restart: unless-stopped
+    network_mode: host
+    pid: host
+    command: ['--path.rootfs=/host']
+    cap_add:
+      - SYS_TIME
+    volumes:
+      - /:/host:ro,rslave
+    labels:
+      selfhost.module.monitoring: 1
+      wud.watch: true
+      wud.display.icon: mdi-cpu-64-bit
+      wud.tag.include: ^v\d+\.\d+\.\d+$$
+      wud.link.template: https://github.com/prometheus/node_exporter/releases/tag/v$${major}.$${minor}.$${patch}
+  process-exporter:
+    container_name: process-exporter
+    image: ncabatoff/process-exporter:0.8.7
+    restart: unless-stopped
+    privileged: true
+    command: ['--procfs', /host/proc, '-config.path', /config/config.yml]
+    networks:
+      - monitoring
+    volumes:
+      - /proc:/host/proc
+      - ${APPDATA_LOCATION:-/srv/appdata}/process-exporter:/config
+    labels:
+      selfhost.module.monitoring: 1
+      wud.watch: true
+      wud.display.icon: mdi-folder-cog
+      wud.tag.include: ^v?\d+\.\d+\.\d+$$
+      wud.link.template: https://github.com/ncabatoff/process-exporter/releases/tag/v$${major}.$${minor}.$${patch}
+  smartctl-exporter:
+    container_name: smartctl-exporter
+    image: prometheuscommunity/smartctl-exporter:v0.14.0
+    restart: unless-stopped
+    command: ['--smartctl.interval=${SMARTCTL_INTERVAL:-30s}']
+    privileged: true
+    user: root
+    networks:
+      - monitoring
+    labels:
+      selfhost.module.monitoring: 1
+      wud.watch: true
+      wud.display.icon: mdi-harddisk
+      wud.tag.include: ^v\d+\.\d+\.\d+$$
+      wud.link.template: https://github.com/prometheus-community/smartctl_exporter/releases/tag/v$${major}.$${minor}.$${patch}
+  cadvisor:
+    container_name: cadvisor
+    image: gcr.io/cadvisor/cadvisor:v0.52.0
+    restart: unless-stopped
+    privileged: true
+    networks:
+      - monitoring
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    devices:
+      - /dev/kmsg:/dev/kmsg
+    labels:
+      selfhost.module.monitoring: 1
+      wud.watch: true
+      wud.display.icon: sh-cadvisor
+      wud.tag.include: ^v\d+\.\d+\.\d+$$
+      wud.link.template: https://github.com/google/cadvisor/releases/tag/v$${major}.$${minor}.$${patch}
+  prometheus:
+    container_name: prometheus
+    image: quay.io/prometheus/prometheus:v3.3.0
+    restart: unless-stopped
+    user: ${INSTALLER_UID}
+    command:
+      - --storage.tsdb.path=/prometheus/data
+      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION_TIME:-90d}
+      - --storage.tsdb.retention.size=${PROMETHEUS_RETENTION_SIZE:-150GB}
+    networks:
+      - monitoring
+    volumes:
+      - ${APPDATA_LOCATION:-/srv/appdata}/prometheus:/prometheus
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    labels:
+      selfhost.module.monitoring: 1
+      wud.watch: true
+      wud.display.icon: sh-prometheus
+      wud.tag.include: ^v\d+\.\d+\.\d+$$
+      wud.link.template: https://github.com/prometheus/prometheus/releases/tag/v$${major}.$${minor}.$${patch}
+  grafana:
+    container_name: grafana
+    image: grafana/grafana-oss:11.6.0
+    restart: unless-stopped
+    user: ${INSTALLER_UID}
+    networks:
+      - monitoring
+      - monitoring-proxy
+    secrets:
+      - oidc_grafana_password
+      - smtp_password
+    volumes:
+      - ${APPDATA_LOCATION:-/srv/appdata}/grafana:/var/lib/grafana
+    environment:
+      - GF_PATHS_CONFIG=/var/lib/grafana/grafana.ini
+      - GF_PATHS_DATA=/var/lib/grafana/data
+      - GF_PATHS_PLUGINS=/var/lib/grafana/plugins
+      - GF_PATHS_PROVISIONING=/var/lib/grafana/provisioning
+      - CF_DOMAIN_NAME=${CF_DOMAIN_NAME}
+      - GRAFANA_SUBDOMAIN=${GRAFANA_SUBDOMAIN}
+      - OIDC_GRAFANA_CLIENT_ID=${OIDC_GRAFANA_CLIENT_ID}
+      - SMTP_SERVER=${SMTP_SERVER}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_USERNAME=${SMTP_USERNAME}
+      - SMTP_SENDER=${SMTP_SENDER}
+    labels:
+      selfhost.module.monitoring: 1
+      dns.manage: true
+      dns.content: ${TAILSCALE_IP}
+      traefik.enable: true
+      traefik.docker.network: monitoring-proxy
+      traefik.http.routers.grafana.entryPoints: tailnet
+      traefik.http.routers.grafana.rule: Host(`${GRAFANA_SUBDOMAIN}.${CF_DOMAIN_NAME}`)
+      traefik.http.services.grafana.loadbalancer.server.port: 3000
+      wud.watch: true
+      wud.display.icon: sh-grafana
+      wud.tag.include: ^\d+\.\d+\.\d+$$
+      wud.link.template: https://grafana.com/docs/grafana/latest/whatsnew/whats-new-in-v$${major}-$${minor}/

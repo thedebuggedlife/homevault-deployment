@@ -1,0 +1,5 @@
+# Target all running processes
+process_names:
+  - name: "{{.Comm}}"
+    cmdline:
+    - '.+'

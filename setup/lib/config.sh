@@ -48,18 +48,35 @@ save_env_id() {
     save_env "$env_variable" "$env_value"
 }
 
+###
 # Prompt user for a value and save to $ENV_FILE
-# Params:   $1 Variable name
-#           $2 Text prompt
-#           $3 If `true`, offer existing variable value as default [default=true]
-#           $4 If `true`, do not allow empty values [default=true]
-#           $5 If `true`, mask the input (password) [default=false]
+#
+# Params:
+#   $1 Variable name
+#   $2 Text prompt
+# Options:
+#   -i Ignore existing value (i.e. do not offer as default)
+#   -e Allow empty values
+#   -m Mask the input (e.g. for passwords)
+###
 ask_for_env() {
     local env_variable=$1
     local prompt=$2
-    local use_default=${3:-true}
-    local required=${4:-true}
-    local masked=${5:-false}
+    shift 2
+
+    local use_default=true
+    local required=true
+    local masked=false
+
+    while getopts ":iem" opt; do
+        case $opt in
+            i) use_default=false ;;
+            e) required=false ;;
+            m) masked=true ;;
+            \?) log_warn "ask_for_env: Invalid option: -$OPTARG" ;;
+            :) if [ "$OPTARG" != "b" ]; then log_warn "ask_for_env: Option -$OPTARG requires an argument"; fi ;;
+        esac
+    done
 
     # If an override is specified in command line, that takes priority
     local name_override="${env_variable}_OVERRIDE"
