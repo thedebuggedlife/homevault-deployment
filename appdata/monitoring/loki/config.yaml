@@ -1,0 +1,59 @@
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+  grpc_listen_port: 9096
+  log_level: ${LOG_LEVEL:-info}
+  grpc_server_max_concurrent_streams: 1000
+
+common:
+  instance_addr: 127.0.0.1
+  path_prefix: /mnt/loki/data
+  storage:
+    filesystem:
+      chunks_directory: /mnt/loki/data/chunks
+      rules_directory: /mnt/loki/data/rules
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
+compactor:
+  retention_enabled: true
+  delete_request_store: filesystem
+  working_directory: /mnt/loki/data/compactor
+
+query_range:
+  results_cache:
+    cache:
+      embedded_cache:
+        enabled: true
+        max_size_mb: 100
+
+limits_config:
+  metric_aggregation_enabled: true
+  retention_period: ${RETENTION_TIME:-15d}
+
+schema_config:
+  configs:
+    - from: 2020-10-24
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+pattern_ingester:
+  enabled: true
+  metric_aggregation:
+    loki_address: localhost:3100
+
+ruler:
+  alertmanager_url: ${ALERTMANAGER_URL:-http://grafana:9093}
+
+frontend:
+  encoding: protobuf
+
+analytics:
+  reporting_enabled: false

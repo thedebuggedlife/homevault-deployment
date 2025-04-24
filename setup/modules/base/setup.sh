@@ -335,6 +335,7 @@ base_config_env() {
     ask_for_env TZ "Server Timezone"
     ask_for_env CERT_ACME_EMAIL "Email For Certificate Registration"
     save_env INSTALLER_UID "$(id -u "$USER")"
+    save_env DOCKER_GID "$(getent group docker | cut -d: -f3)"
 
     # Tailscale Settings
     ask_for_env TAILSCALE_API_KEY "Tailscale API Key"

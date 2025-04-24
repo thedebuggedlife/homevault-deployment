@@ -42,6 +42,7 @@ configure_prometheus() {
 
 monitoring_config_env() {
     ask_for_env GRAFANA_SUBDOMAIN "Subdomain under ${CF_DOMAIN_NAME} to use for Grafana"
+    ask_for_env LOKI_RETENTION_TIME "Retention time for monitoring logs (empty=infinite)" -e
     ask_for_env PROMETHEUS_RETENTION_TIME "Retention time for monitoring metrics (empty=infinite)" -e
     ask_for_env PROMETHEUS_RETENTION_SIZE "Maximum size for monitoring time-series database (empty=infinite)" -e
     ask_for_env SMARTCTL_INTERVAL "Polling interval to retrieve hard-drive statistics"

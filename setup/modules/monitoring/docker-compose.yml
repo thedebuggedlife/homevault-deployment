@@ -101,7 +101,7 @@ services:
     container_name: prometheus
     image: quay.io/prometheus/prometheus:v3.3.0
     restart: unless-stopped
-    user: ${INSTALLER_UID}
+    user: ${INSTALLER_UID}:${DOCKER_GID}
     command:
       - --storage.tsdb.path=/prometheus/data
       - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION_TIME:-90d}
@@ -118,11 +118,54 @@ services:
       wud.display.icon: sh-prometheus
       wud.tag.include: ^v\d+\.\d+\.\d+$$
       wud.link.template: https://github.com/prometheus/prometheus/releases/tag/v$${major}.$${minor}.$${patch}
+  alloy:
+    container_name: alloy
+    image: grafana/alloy:v1.8.2
+    restart: unless-stopped
+    user: ${INSTALLER_UID}:${DOCKER_GID}
+    command:
+      - run 
+      - --server.http.listen-addr=0.0.0.0:12345 
+      - --storage.path=/var/lib/alloy/data 
+      - /var/lib/alloy/config.alloy
+    networks:
+      - monitoring
+    volumes:
+      - ${APPDATA_LOCATION:-/srv/appdata}/alloy:/var/lib/alloy
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    labels:
+      selfhost.module.monitoring: 1
+      wud.watch: true
+      wud.display.icon: sh-grafana-alloy
+      wud.tag.include: ^v\d+\.\d+\.\d+$$
+      wud.link.template: https://github.com/grafana/alloy/releases/tag/v$${major}.$${minor}.$${patch}
+  loki:
+    container_name: loki
+    image: grafana/loki:3.4.3
+    restart: unless-stopped
+    user: ${INSTALLER_UID}:${DOCKER_GID}
+    command: 
+      - -config.file=/mnt/loki/config.yaml
+      - -config.expand-env=true
+    networks:
+      - monitoring
+    volumes:
+      - ${APPDATA_LOCATION:-/srv/appdata}/loki:/mnt/loki
+    environment:
+      - LOG_LEVEL=info
+      - ALERTMANAGER_URL=http://grafana:9093
+      - RETENTION_TIME=${LOKI_RETENTION_TIME:-15d}
+    labels:
+      selfhost.module.monitoring: 1
+      wud.watch: true
+      wud.display.icon: sh-loki
+      wud.tag.include: ^v?\d+\.\d+\.\d+$$
+      wud.link.template: https://github.com/grafana/loki/releases/tag/v$${major}.$${minor}.$${patch}
   grafana:
     container_name: grafana
     image: grafana/grafana-oss:11.6.0
     restart: unless-stopped
-    user: ${INSTALLER_UID}
+    user: ${INSTALLER_UID}:${DOCKER_GID}
     networks:
       - monitoring
       - monitoring-proxy
