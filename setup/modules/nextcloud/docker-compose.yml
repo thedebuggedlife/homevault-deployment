@@ -127,6 +127,11 @@ services:
       selfhost.module.nextcloud: 1
       dns.manage: true
       dns.cloudflare.proxied: true
+      homepage.group: Applications
+      homepage.name: Nextcloud
+      homepage.description: Cloud storage and collaboration platform
+      homepage.icon: sh-nextcloud
+      homepage.href: https://${NEXTCLOUD_SUBDOMAIN:-nextcloud}.${CF_DOMAIN_NAME}/
       traefik.enable: true
       traefik.docker.network: nextcloud-proxy
       traefik.http.routers.nextcloud-server.entryPoints: cloudflare,tailnet

@@ -35,6 +35,11 @@ services:
       selfhost.module.portainer: 1
       dns.manage: true
       dns.content: ${TAILSCALE_IP}
+      homepage.group: System
+      homepage.name: Portainer
+      homepage.description: Docker container management
+      homepage.icon: sh-portainer
+      homepage.href: https://${PORTAINER_SUBDOMAIN}.${CF_DOMAIN_NAME}/
       traefik.enable: true
       traefik.http.routers.portainer.entryPoints: tailnet
       traefik.http.routers.portainer.rule: Host(`${PORTAINER_SUBDOMAIN}.${CF_DOMAIN_NAME}`)

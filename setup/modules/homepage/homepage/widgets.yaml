@@ -1,0 +1,6 @@
+- resources:
+    cpu: true
+    memory: true
+    disk: /
+    refresh: 5000
+    diskUnits: bytes

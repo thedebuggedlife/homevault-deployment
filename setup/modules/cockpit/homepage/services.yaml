@@ -1,0 +1,6 @@
+- System:
+    - Cockpit:
+        group: System
+        description: Linux management console
+        icon: sh-cockpit-light
+        href: https://${COCKPIT_SUBDOMAIN}.${CF_DOMAIN_NAME}

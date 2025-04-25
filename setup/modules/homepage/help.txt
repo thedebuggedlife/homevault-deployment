@@ -1,0 +1,2 @@
+This module installs Homepage, modern, fully static, fast, secure fully proxied, highly customizable application dashboard with integrations for over 100 services.
+More information: https://gethomepage.dev/

@@ -1,0 +1,5 @@
+disableUpdateCheck: true
+background: 
+  image: {{HOMEPAGE_VAR_BACKGROUND_IMAGE}}
+  opacity: {{HOMEPAGE_VAR_BACKGROUND_OPACITY}}
+theme: {{HOMEPAGE_VAR_THEME}}

@@ -1,0 +1,52 @@
+networks:
+  homepage:
+    name: homepage
+  homepage-proxy:
+    name: homepage-proxy
+
+secrets:
+  oidc_grafana_digest:
+    file: ${APPDATA_LOCATION:-/srv/appdata}/secrets/oidc_grafana_digest
+  oidc_grafana_password:
+    file: ${APPDATA_LOCATION:-/srv/appdata}/secrets/oidc_grafana_password
+  smtp_password:
+    file: ${APPDATA_LOCATION:-/srv/appdata}/secrets/smtp_password
+
+services:
+  traefik:
+    networks:
+      - homepage-proxy
+    labels:
+      selfhost.module.homepage: 1
+
+  homepage:
+    image: ghcr.io/gethomepage/homepage:v1.1.1
+    container_name: homepage
+    user: ${INSTALLER_UID}:${DOCKER_GID}
+    networks:
+      - homepage
+      - homepage-proxy
+    volumes:
+      - ${APPDATA_LOCATION:-/srv/appdata}/homepage/config:/app/config
+      - ${APPDATA_LOCATION:-/srv/appdata}/homepage/images:/app/public/images
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      HOMEPAGE_ALLOWED_HOSTS: ${HOMEPAGE_SUBDOMAIN}.${CF_DOMAIN_NAME}
+      HOMEPAGE_VAR_BACKGROUND_IMAGE: /images/background.jpg
+      HOMEPAGE_VAR_BACKGROUND_OPACITY: 30
+      HOMEPAGE_VAR_THEME: dark
+      HOMEPAGE_VAR_CF_DOMAIN_NAME: ${CF_DOMAIN_NAME}
+    labels:
+      selfhost.module.homepage: 1
+      dns.manage: true
+      dns.content: ${TAILSCALE_IP}
+      traefik.enable: true
+      traefik.docker.network: homepage-proxy
+      traefik.http.routers.homepage.entryPoints: tailnet
+      traefik.http.routers.homepage.rule: Host(`${HOMEPAGE_SUBDOMAIN}.${CF_DOMAIN_NAME}`)
+      traefik.http.routers.homepage.middlewares: authelia@file
+      traefik.http.services.homepage.loadbalancer.server.port: 3000
+      wud.watch: true
+      wud.display.icon: sh-homepage
+      wud.tag.include: ^v\d+\.\d+\.\d+$$
+      wud.link.template: https://github.com/gethomepage/homepage/releases/tag/v$${major}.$${minor}.$${patch}

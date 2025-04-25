@@ -190,6 +190,11 @@ services:
       selfhost.module.monitoring: 1
       dns.manage: true
       dns.content: ${TAILSCALE_IP}
+      homepage.group: System
+      homepage.name: Grafana
+      homepage.description: Dashboards and logs for monitoring
+      homepage.icon: sh-grafana
+      homepage.href: https://${GRAFANA_SUBDOMAIN}.${CF_DOMAIN_NAME}/
       traefik.enable: true
       traefik.docker.network: monitoring-proxy
       traefik.http.routers.grafana.entryPoints: tailnet

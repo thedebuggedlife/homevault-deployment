@@ -1,6 +1,8 @@
 networks:
   proxy:
     name: proxy
+  homepage:
+    name: homepage
 
 secrets:
   authelia_session_secret:
@@ -86,6 +88,13 @@ services:
       selfhost.module.base: 1
       dns.manage: true
       dns.content: ${TAILSCALE_IP}
+      homepage.group: Proxy
+      homepage.name: Traefik
+      homepage.description: Reverse proxy and traffic manager
+      homepage.icon: sh-traefik
+      homepage.href: https://traefik.${CF_DOMAIN_NAME}/
+      homepage.widget.type: traefik
+      homepage.widget.url: http://traefik:8080/
       traefik.enable: true
       traefik.http.routers.api.entryPoints: tailnet
       traefik.http.routers.api.service: api@internal
@@ -111,6 +120,8 @@ services:
       - ldap_key_seed
       - ldap_admin_password
     environment:
+      UID: ${INSTALLER_UID:-1000}
+      GID: ${DOCKER_GID:-1000}
       TZ: ${TZ:-America/Los_Angeles}
       LLDAP_JWT_SECRET_FILE: /run/secrets/ldap_jwt_secret
       LLDAP_KEY_SEED_FILE: /run/secrets/ldap_key_seed
@@ -123,6 +134,11 @@ services:
       selfhost.module.base: 1
       dns.manage: true
       dns.content: ${TAILSCALE_IP}
+      homepage.group: System
+      homepage.name: Light LDAP
+      homepage.description: User account management
+      homepage.icon: sh-ldap
+      homepage.href: https://lldap.${CF_DOMAIN_NAME}/
       traefik.enable: true
       traefik.http.routers.lldap.entryPoints: tailnet
       traefik.http.routers.lldap.rule: Host(`lldap.${CF_DOMAIN_NAME}`)
@@ -152,6 +168,8 @@ services:
       - oidc_jwks_key
       - oidc_grafana_digest
     environment:
+      PUID: ${INSTALLER_UID:-0}
+      GUID: ${DOCKER_GID:-0}
       CF_DOMAIN_NAME: ${CF_DOMAIN_NAME}
       CF_DOMAIN_CN: ${CF_DOMAIN_CN}
       AUTHELIA_THEME: ${AUTHELIA_THEME}
@@ -172,6 +190,11 @@ services:
       selfhost.module.base: 1
       dns.manage: true
       dns.cloudflare.proxied: true
+      homepage.group: Proxy
+      homepage.name: Authelia
+      homepage.description: Authentication and SSO
+      homepage.icon: sh-authelia
+      homepage.href: https://authelia.${CF_DOMAIN_NAME}/
       traefik.enable: true
       traefik.http.routers.authelia.entryPoints: cloudflare
       traefik.http.routers.authelia.rule: Host(`authelia.${CF_DOMAIN_NAME}`)
@@ -214,6 +237,7 @@ services:
     restart: unless-stopped
     networks:
       - proxy
+      - homepage
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ${APPDATA_LOCATION:-/srv/appdata}/compose/${COMPOSE_PROJECT_NAME}:/wud/compose
@@ -235,7 +259,15 @@ services:
       selfhost.module.base: 1
       dns.manage: true
       dns.content: ${TAILSCALE_IP}
+      homepage.group: System
+      homepage.name: WUD
+      homepage.description: Install application updates
+      homepage.icon: sh-wud
+      homepage.href: https://updates.${CF_DOMAIN_NAME}/
+      homepage.widget.type: whatsupdocker
+      homepage.widget.url: http://wud:3000/
       traefik.enable: true
+      traefik.docker.network: proxy
       traefik.http.routers.wud.entryPoints: tailnet
       traefik.http.routers.wud.rule: Host(`updates.${CF_DOMAIN_NAME}`)
       traefik.http.services.wud.loadbalancer.server.port: 3000

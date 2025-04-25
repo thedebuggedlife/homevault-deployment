@@ -408,3 +408,7 @@ ensure_packages_installed() {
         return 1
     fi
 }
+
+env_subst() {
+    (set -a; source "$ENV_FILE"; set +a; echo "$1" | envsubst)
+}
