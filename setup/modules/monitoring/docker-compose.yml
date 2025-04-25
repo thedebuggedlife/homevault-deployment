@@ -81,6 +81,10 @@ services:
     image: gcr.io/cadvisor/cadvisor:v0.52.0
     restart: unless-stopped
     privileged: true
+    command:
+      - --store_container_labels=false 
+      - --docker_only=true 
+      - --enable_metrics=cpu,cpuLoad,disk,diskIO,memory,network
     networks:
       - monitoring
     volumes:
