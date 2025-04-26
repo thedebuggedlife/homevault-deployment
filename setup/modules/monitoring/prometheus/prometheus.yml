@@ -32,3 +32,6 @@ scrape_configs:
     relabel_configs:
       - replacement: '${HOSTNAME}'
         target_label: monitor
+  - job_name: 'alloy'
+    static_configs:
+      - targets: ['alloy:12345']

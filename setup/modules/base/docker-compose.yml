@@ -193,7 +193,7 @@ services:
       homepage.group: Proxy
       homepage.name: Authelia
       homepage.description: Authentication and SSO
-      homepage.icon: sh-authelia
+      homepage.icon: sh-authelia-light
       homepage.href: https://authelia.${CF_DOMAIN_NAME}/
       traefik.enable: true
       traefik.http.routers.authelia.entryPoints: cloudflare
@@ -263,7 +263,7 @@ services:
       homepage.name: WUD
       homepage.description: Install application updates
       homepage.icon: sh-wud
-      homepage.href: https://updates.${CF_DOMAIN_NAME}/
+      homepage.href: https://updates.${CF_DOMAIN_NAME}/containers?update-available=true
       homepage.widget.type: whatsupdocker
       homepage.widget.url: http://wud:3000/
       traefik.enable: true

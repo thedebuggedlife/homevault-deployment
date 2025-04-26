@@ -112,6 +112,7 @@ services:
       - --storage.tsdb.retention.size=${PROMETHEUS_RETENTION_SIZE:-150GB}
     networks:
       - monitoring
+      - homepage
     volumes:
       - ${APPDATA_LOCATION:-/srv/appdata}/prometheus:/prometheus
     extra_hosts:
@@ -137,6 +138,8 @@ services:
     volumes:
       - ${APPDATA_LOCATION:-/srv/appdata}/alloy:/var/lib/alloy
       - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - ALLOY_MONITOR=${HOSTNAME}
     labels:
       selfhost.module.monitoring: 1
       wud.watch: true
@@ -199,6 +202,13 @@ services:
       homepage.description: Dashboards and logs for monitoring
       homepage.icon: sh-grafana
       homepage.href: https://${GRAFANA_SUBDOMAIN}.${CF_DOMAIN_NAME}/
+      homepage.widget.type: prometheusmetric
+      homepage.widget.url: http://prometheus:9090
+      homepage.widget.refreshInterval: 5000
+      homepage.widget.metrics[0].label: Errors
+      homepage.widget.metrics[0].query: ceil(sum(increase(self_host_log_lines_total{level="error",monitor="${HOSTNAME}"}[10m])))
+      homepage.widget.metrics[1].label: Warnings
+      homepage.widget.metrics[1].query: ceil(sum(increase(self_host_log_lines_total{level="warn",monitor="${HOSTNAME}"}[10m])))
       traefik.enable: true
       traefik.docker.network: monitoring-proxy
       traefik.http.routers.grafana.entryPoints: tailnet

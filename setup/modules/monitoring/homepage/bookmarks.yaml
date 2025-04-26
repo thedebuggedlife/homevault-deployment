@@ -1,0 +1,11 @@
+- Monitoring:
+  - Overview:
+    - abbr: GF
+      name: "System Overview"
+      icon: sh-grafana
+      href: https://${GRAFANA_SUBDOMAIN}.${CF_DOMAIN_NAME}/d/aeeksdfizs16oe/linux
+  - Logs:
+    - abbr: GF
+      name: "Server Logs"
+      icon: sh-loki
+      href: https://${GRAFANA_SUBDOMAIN}.${CF_DOMAIN_NAME}/d/fek0j4jv40cn4c/logs

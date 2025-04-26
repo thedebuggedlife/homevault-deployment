@@ -67,8 +67,18 @@ loki.process "normalize" {
   }
   stage.static_labels {
     values = {
-      monitor = constants.hostname,
+      monitor = sys.env("ALLOY_MONITOR"),
       platform = constants.os,
+    }
+  }
+  stage.metrics {
+    metric.counter {
+      name = "log_lines_total"
+      description = "total log lines processed"
+      prefix = "self_host_"
+      match_all = true
+      action = "inc"
+      max_idle_duration = "24h"
     }
   }
 }
