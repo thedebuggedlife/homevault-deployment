@@ -272,6 +272,7 @@ write_file() {
     local content=$1
     local filename=$2
     echo -e "Creating file ${Cyan}$filename${COff}"
+    ensure_path_exists "$(dirname "$filename")"
     printf "%s" "$content" >"$filename" || {
         log_error "Failed to write to file: '$filename'"
         exit 1
