@@ -1,0 +1,11 @@
+
+- Applications:
+  - Nextcloud:
+      description: Cloud storage and collaboration platform
+      icon: sh-nextcloud
+      href: https://${NEXTCLOUD_SUBDOMAIN}.${CF_DOMAIN_NAME}/
+      container: nextcloud_app
+      widget:
+        type: nextcloud
+        url: https://${NEXTCLOUD_SUBDOMAIN}.${CF_DOMAIN_NAME}/
+        key: ${NEXTCLOUD_TOKEN}

@@ -13,7 +13,7 @@ source "$PROJECT_ROOT/lib/docker.sh"
 
 homepage_merge_config() {
     local filename="$1"
-    local grouped=${2:-false}
+    local filetype="$2"
     local -a file_list=()
     # Create a new array of modules, where 'homepage' is always in the first position
     # shellcheck disable=SC2207
@@ -23,12 +23,16 @@ homepage_merge_config() {
             file_list+=("modules/$module/homepage/$filename")
         fi
     done
-    local configuration
-    # shellcheck disable=SC2016
-    local expr='.[] as $item ireduce([]; . + $item)'
-    if [ "$grouped" = true ]; then
+    local expr configuration
+    if [ "$filetype" = "arrays" ]; then
+        # shellcheck disable=SC2016
+        expr='.[] as $item ireduce([]; . + $item)'
+    elif [ "$filetype" = "groups" ]; then
         # shellcheck disable=SC2016
         expr='(.[] as $item ireduce({}; . *+ $item)) as $map | ($map | keys | .[]) as $key ireduce([]; . + [{$key: $map[$key]}])'
+    else
+        # shellcheck disable=SC2016
+        expr='. as $item ireduce({}; . *+ $item)'
     fi
     if ! configuration=$(yq "${PROJECT_ROOT%/}/" ea "$expr" "${file_list[@]}"); then
         log_error "Failed to merge Homepage configuration"
@@ -48,15 +52,17 @@ homepage_config_env() {
     ask_for_env HOMEPAGE_SUBDOMAIN "Subdomain under ${CF_DOMAIN_NAME} to use for Homepage"
 }
 
-homepage_pre_install() {
-    log_header "Preparing Homepage for deployment"
-    homepage_merge_config "bookmarks.yaml" true || return 1
-    homepage_merge_config "services.yaml" true || return 1
-    homepage_merge_config "widgets.yaml" || return 1
+homepage_bootstrap() {
+    # These steps require some of the work done during post-install, hence running as bootstrap
+    log_header "Generating Homepage configuration"
+    homepage_merge_config "settings.yaml" || return 1
+    homepage_merge_config "bookmarks.yaml" groups || return 1
+    homepage_merge_config "services.yaml" groups || return 1
+    homepage_merge_config "widgets.yaml" arrays || return 1
 }
 
 CONFIG_ENV_HOOKS+=("homepage_config_env")
 # CONFIG_SECRETS_HOOKS+=("")
-PRE_INSTALL_HOOKS+=("homepage_pre_install")
+# PRE_INSTALL_HOOKS+=("")
 # POST_INSTALL_HOOKS+=("")
-# BOOTSTRAP_HOOKS+=("")
+BOOTSTRAP_HOOKS+=("homepage_bootstrap")

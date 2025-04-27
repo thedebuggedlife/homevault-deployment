@@ -1,8 +1,6 @@
 networks:
   proxy:
     name: proxy
-  homepage:
-    name: homepage
 
 secrets:
   authelia_session_secret:
@@ -88,13 +86,6 @@ services:
       selfhost.module.base: 1
       dns.manage: true
       dns.content: ${TAILSCALE_IP}
-      homepage.group: Proxy
-      homepage.name: Traefik
-      homepage.description: Reverse proxy and traffic manager
-      homepage.icon: sh-traefik
-      homepage.href: https://traefik.${CF_DOMAIN_NAME}/
-      homepage.widget.type: traefik
-      homepage.widget.url: http://traefik:8080/
       traefik.enable: true
       traefik.http.routers.api.entryPoints: tailnet
       traefik.http.routers.api.service: api@internal
@@ -134,11 +125,6 @@ services:
       selfhost.module.base: 1
       dns.manage: true
       dns.content: ${TAILSCALE_IP}
-      homepage.group: System
-      homepage.name: Light LDAP
-      homepage.description: User account management
-      homepage.icon: sh-ldap
-      homepage.href: https://lldap.${CF_DOMAIN_NAME}/
       traefik.enable: true
       traefik.http.routers.lldap.entryPoints: tailnet
       traefik.http.routers.lldap.rule: Host(`lldap.${CF_DOMAIN_NAME}`)
@@ -190,11 +176,6 @@ services:
       selfhost.module.base: 1
       dns.manage: true
       dns.cloudflare.proxied: true
-      homepage.group: Proxy
-      homepage.name: Authelia
-      homepage.description: Authentication and SSO
-      homepage.icon: sh-authelia-light
-      homepage.href: https://authelia.${CF_DOMAIN_NAME}/
       traefik.enable: true
       traefik.http.routers.authelia.entryPoints: cloudflare
       traefik.http.routers.authelia.rule: Host(`authelia.${CF_DOMAIN_NAME}`)
@@ -237,7 +218,6 @@ services:
     restart: unless-stopped
     networks:
       - proxy
-      - homepage
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ${APPDATA_LOCATION:-/srv/appdata}/compose/${COMPOSE_PROJECT_NAME}:/wud/compose
@@ -259,13 +239,6 @@ services:
       selfhost.module.base: 1
       dns.manage: true
       dns.content: ${TAILSCALE_IP}
-      homepage.group: System
-      homepage.name: WUD
-      homepage.description: Install application updates
-      homepage.icon: sh-wud
-      homepage.href: https://updates.${CF_DOMAIN_NAME}/containers?update-available=true
-      homepage.widget.type: whatsupdocker
-      homepage.widget.url: http://wud:3000/
       traefik.enable: true
       traefik.docker.network: proxy
       traefik.http.routers.wud.entryPoints: tailnet

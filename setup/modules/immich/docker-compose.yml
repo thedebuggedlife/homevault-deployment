@@ -64,11 +64,6 @@ services:
       selfhost.module.immich: 1
       dns.manage: true
       dns.cloudflare.proxied: true
-      homepage.group: Applications
-      homepage.name: Immich
-      homepage.description: Photo and video storage and sharing
-      homepage.icon: sh-immich
-      homepage.href: https://${IMMICH_SUBDOMAIN:-immich}.${CF_DOMAIN_NAME}/
       traefik.enable: true
       traefik.docker.network: immich-proxy
       traefik.http.routers.immich-server.entryPoints: cloudflare

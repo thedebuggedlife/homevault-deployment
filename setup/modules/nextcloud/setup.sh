@@ -7,6 +7,10 @@ source "$PROJECT_ROOT/lib/logging.sh"
 #shellcheck source=../../lib/config.sh
 source "$PROJECT_ROOT/lib/config.sh"
 
+## Environment variables
+
+NEXTCLOUD_TOKEN=
+
 ################################################################################
 #                         NEXTCLOUD SETUP HOOKS
 
@@ -14,6 +18,7 @@ nextcloud_config_env() {
     ask_for_env NEXTCLOUD_SUBDOMAIN "Subdomain under ${CF_DOMAIN_NAME} to use for Nextcloud"
     ask_for_env NEXTCLOUD_DATA_LOCATION "Nextcloud document storage location"
     ask_for_env NEXTCLOUD_FTS_MEMORY_LIMIT "Memory limit for ElasticSearch (units: #m or #g)"
+    save_env_id NEXTCLOUD_TOKEN
 }
 
 nextcloud_config_secrets() {
@@ -21,6 +26,7 @@ nextcloud_config_secrets() {
     create_secret "${SECRETS_PATH}nextcloud_db_root_password"
     create_secret "${SECRETS_PATH}nextcloud_db_password"
     create_secret "${SECRETS_PATH}nextcloud_elastic_password"
+    save_env_secret "${SECRETS_PATH}nextcloud_server_token" NEXTCLOUD_TOKEN
     create_password_digest_pair "${SECRETS_PATH}oidc_nextcloud"
 }
 

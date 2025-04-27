@@ -1,0 +1,11 @@
+- Applications:
+  - Immich:
+      description: Photo and video storage and sharing
+      icon: sh-immich
+      href: https://${IMMICH_SUBDOMAIN}.${CF_DOMAIN_NAME}/
+      container: immich_server
+      widget:
+        type: immich
+        url: https://${IMMICH_SUBDOMAIN}.${CF_DOMAIN_NAME}/
+        key: ${IMMICH_API_KEY}
+        version: 2

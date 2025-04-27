@@ -273,31 +273,40 @@ deploy_project() {
     COMPOSE_UP_OPTIONS="-d -y --remove-orphans --quiet-pull --wait $COMPOSE_UP_OPTIONS"
 
     # Copy the ENV file to include in backup/restore - always override existing file
-    ensure_path_exists "${COMPOSE_PATH%/}/$module/"
-    cp -f "$ENV_FILE" "${COMPOSE_PATH%/}/$module/.env"
-
+    ensure_path_exists "${COMPOSE_PATH%/}/"
+    cp -f "$ENV_FILE" "${COMPOSE_PATH%/}/.env"
     local -a project_files=()
     for module in "${ENABLED_MODULES[@]}"; do
-        local original_file="${PROJECT_ROOT%/}/modules/$module/docker-compose.yml"
-        local project_file="${COMPOSE_PATH%/}/$module/docker-compose.yml"
-        if [ -f "$original_file" ]; then
-            # Copy docker-compose files only if they do not currently exist under appdata (unless overridden)
-            # This is important because, the files in appdata may be modified during container-update operations
-            if [[ -f "$project_file" && "$OVERRIDE_COMPOSE" != true ]]; then
-                echo -e "Using existing compose file: ${Cyan}$project_file${COff}"
+        for inner in "${ENABLED_MODULES[@]}"; do
+            local original_file project_file target_project
+            if [ "$module" = "$inner" ]; then
+                target_project="$module"
+                original_file="${PROJECT_ROOT%/}/modules/$module/docker-compose.yml"
+                project_file="${COMPOSE_PATH%/}/$module/docker-compose.yml"
             else
-                echo -e "Copying docker compose file for ${Purple}$module${COff} to ${Cyan}$project_file${COff}"
-                ensure_path_exists "$( dirname "$project_file" )"
-                (cp -f "$original_file" "$project_file" && chmod 666 "$project_file") || {
-                    log_error "Failed to copy docker compose file for '$module'"
-                    exit 1
-                }
+                target_project="$module ($inner)"
+                original_file="${PROJECT_ROOT%/}/modules/$module/docker-compose.$inner.yml"
+                project_file="${COMPOSE_PATH%/}/$inner/docker-compose.$module.yml"
             fi
-        fi
-        if [ -f "$project_file" ]; then
-            project_files+=("$project_file")
-            COMPOSE_OPTIONS="$COMPOSE_OPTIONS -f '$project_file'"
-        fi
+            if [ -f "$original_file" ]; then
+                # Copy docker-compose files only if they do not currently exist under appdata (unless overridden)
+                # This is important because, the files in appdata may be modified during container-update operations
+                if [[ -f "$project_file" && "$OVERRIDE_COMPOSE" != true ]]; then
+                    echo -e "Using existing compose file: ${Cyan}$project_file${COff}"
+                else
+                    echo -e "Copying docker compose file for ${Purple}$target_project${COff} to ${Cyan}$project_file${COff}"
+                    ensure_path_exists "$( dirname "$project_file" )"
+                    (cp -f "$original_file" "$project_file") || {
+                        log_error "Failed to copy docker compose file for '$module'"
+                        exit 1
+                    }
+                fi
+            fi
+            if [ -f "$project_file" ]; then
+                project_files+=("$project_file")
+                COMPOSE_OPTIONS="$COMPOSE_OPTIONS -f '$project_file'"
+            fi
+        done
     done
 
     echo
@@ -587,7 +596,7 @@ if [ "$POST_INSTALL" = "true" ]; then
 
     configure_admin_account -l
 
-    execute_hooks "${BOOTSTRAP_HOOKS[@]}" "post-install"
+    execute_hooks "${BOOTSTRAP_HOOKS[@]}" "bootstrap"
 
     log_done
     exit 0
@@ -652,5 +661,7 @@ save_secrets
 find_missing_modules
 
 deploy_project
+
+execute_hooks "${BOOTSTRAP_HOOKS[@]}" "bootstrap"
 
 log_done

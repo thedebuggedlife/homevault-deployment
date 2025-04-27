@@ -1,0 +1,36 @@
+services:
+  traefik:
+    labels:
+      homepage.group: Proxy
+      homepage.name: Traefik
+      homepage.description: Reverse proxy and traffic manager
+      homepage.icon: sh-traefik
+      homepage.href: https://traefik.${CF_DOMAIN_NAME}/
+      homepage.widget.type: traefik
+      homepage.widget.url: http://traefik:8080/
+  lldap:
+    labels:
+      homepage.group: System
+      homepage.name: Light LDAP
+      homepage.description: User account management
+      homepage.icon: sh-ldap
+      homepage.href: https://lldap.${CF_DOMAIN_NAME}/
+  authelia:
+    labels:
+
+      homepage.group: Proxy
+      homepage.name: Authelia
+      homepage.description: Authentication and SSO
+      homepage.icon: sh-authelia-light
+      homepage.href: https://authelia.${CF_DOMAIN_NAME}/
+  wud:
+    networks:
+      - homepage
+    labels:
+      homepage.group: System
+      homepage.name: WUD
+      homepage.description: Install application updates
+      homepage.icon: sh-wud
+      homepage.href: https://updates.${CF_DOMAIN_NAME}/containers?update-available=true
+      homepage.widget.type: whatsupdocker
+      homepage.widget.url: http://wud:3000/

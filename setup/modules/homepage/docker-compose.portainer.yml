@@ -1,0 +1,8 @@
+services:
+  portainer:
+    labels:
+      homepage.group: System
+      homepage.name: Portainer
+      homepage.description: Docker container management
+      homepage.icon: sh-portainer
+      homepage.href: https://${PORTAINER_SUBDOMAIN}.${CF_DOMAIN_NAME}/
