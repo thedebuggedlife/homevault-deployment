@@ -14,16 +14,7 @@ source "$PROJECT_ROOT/lib/docker.sh"
 homepage_merge_config() {
     local filename="$1"
     local filetype="$2"
-    local -a file_list=()
-    # Create a new array of modules, where 'homepage' is always in the first position
-    # shellcheck disable=SC2207
-    local -a modules=("homepage" $(printf '%s\n' "${ENABLED_MODULES[@]}" | grep -v '^homepage$'))
-    for module in "${modules[@]}"; do
-        if [[ -f "${PROJECT_ROOT%/}/modules/$module/homepage/$filename" ]]; then
-            file_list+=("modules/$module/homepage/$filename")
-        fi
-    done
-    local expr configuration
+    local expr
     if [ "$filetype" = "arrays" ]; then
         # shellcheck disable=SC2016
         expr='.[] as $item ireduce([]; . + $item)'
@@ -34,15 +25,7 @@ homepage_merge_config() {
         # shellcheck disable=SC2016
         expr='. as $item ireduce({}; . *+ $item)'
     fi
-    if ! configuration=$(yq "${PROJECT_ROOT%/}/" ea "$expr" "${file_list[@]}"); then
-        log_error "Failed to merge Homepage configuration"
-        return 1
-    fi
-    configuration=$(env_subst "$configuration")
-    write_file "$configuration" "${APPDATA_LOCATION%/}/homepage/config/$filename" || {
-        log_error "Failed to write Homepage configuration"
-        return 1
-    }
+    merge_yaml_config "$filename" "homepage" -d "homepage/config" -e "$expr" -m "homepage" || return 1
 }
 
 ################################################################################

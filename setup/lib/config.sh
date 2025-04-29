@@ -62,19 +62,16 @@ save_env_id() {
 ask_for_env() {
     local env_variable=$1
     local prompt=$2
-    shift 2
-
+    local -a input_opts=()
     local use_default=true
-    local required=true
-    local masked=false
-
+    OPTIND=3
     while getopts ":iem" opt; do
         case $opt in
             i) use_default=false ;;
-            e) required=false ;;
-            m) masked=true ;;
-            \?) log_warn "ask_for_env: Invalid option: -$OPTARG" ;;
-            :) if [ "$OPTARG" != "b" ]; then log_warn "ask_for_env: Option -$OPTARG requires an argument"; fi ;;
+            e) input_opts+=("-e") ;;
+            m) input_opts+=("-m") ;;
+            \?) log_warn "Invalid option: -$OPTARG" ;;
+            :) log_warn "Option -$OPTARG requires an argument" ;;
         esac
     done
 
@@ -91,15 +88,14 @@ ask_for_env() {
     fi
 
     # Choose the right default value to include in the prompt
-    local default_value
     if [[ "$use_default" = "true" ]]; then
         local env_variable_default="${env_variable}_DEFAULT"
-        default_value="${!env_variable:-${!env_variable_default}}"
+        input_opts+=("-d" "${!env_variable:-${!env_variable_default}}")
     fi
 
     # Show the prompt to the use and save the result
     local user_input
-    user_input=$(ask_value "$prompt" "$default_value" "$required" "" "$masked")
+    user_input=$(ask_value "$prompt" "${input_opts[@]}")
     save_env "$env_variable" "$user_input"
 }
 
@@ -231,21 +227,39 @@ mask_password() {
 # @param {boolean} required - If `true`, keep asking user for value until not empty
 # @param {string} display   - The options to show in between square braces []
 # @param {boolean} masked   - If `true` value will be treated as a secret (***)
+# Options:
+#   -e              Allow empty values
+#   -m              Mask the input (e.g. for passwords)
+#   -o {options}    Options to show between square braces
 # @return {string} The value entered by the user
 ###
 ask_value() {
     local prompt="$1"
-    local default="$2"
-    local required=${3:-false}
-    local display="${4:-${default}}"
-    local masked=${5:-false}
+    local default display
+    local required=true
+    local masked=false
     local user_input
+    OPTIND=2
+    while getopts ":emd:o:" opt; do
+        case $opt in
+            e) required=false ;;
+            m) masked=true ;;
+            d) default="$OPTARG" ;;
+            o) display="$OPTARG" ;;
+            \?) log_warn "Invalid option: -$OPTARG" ;;
+            :) log_warn "Option -$OPTARG requires an argument" ;;
+        esac
+    done
+
+    display=${display:-"$default"}
+
     while true; do
         if [ "$masked" = "true" ]; then 
             display=$(mask_password "$display")
         fi
         local -a args=()
         if [ "$masked" = true ]; then args+=("-s"); fi
+        echo >&2
         if [[ -n "$display" ]]; then
             read "${args[@]}" -p "$prompt [${display}]: " user_input </dev/tty
         else
@@ -292,6 +306,56 @@ append_file() {
     printf "%s\n" "$content" >>"$filename" || {
         log_error "Failed to write to file: '$filename'"
         exit 1
+    }
+}
+
+###
+# Merge YAML configuration files using yq and the provided expression. Output
+# is placed in $APPDATA_LOCATION under the specified path
+#
+# @param    $1  {string}    Name of the configuration file
+# @param    $2  {string}    Path under '$PROJECT_ROOT/modules/<module>/' where the source is located
+# @option   -d  {string}    Destination path under '$APPDATA_LOCATION' where the output is saved (optional)
+# @option   -e  {string}    YQ expression to use for the merge operation (optional)
+# @option   -m  {string}    First module to load configuration for (optional)
+###
+merge_yaml_config() {
+    local filename="$1"
+    local module_path="$2"
+    local appdata_path="$2"
+    # shellcheck disable=SC2016
+    local expression='. as $item ireduce({}; . *+ $item)'
+    local -a modules=("${ENABLED_MODULES[@]}")
+    OPTIND=3
+    while getopts ":d:e:m:" opt; do
+        # shellcheck disable=SC2207
+        case $opt in
+            d) appdata_path="$OPTARG" ;;
+            e) expression="$OPTARG" ;;
+            m) modules=("$OPTARG" $(printf '%s\n' "${ENABLED_MODULES[@]}" | grep -v "^${OPTARG}\$")) ;;
+            \?) log_warn "Invalid option: -$OPTARG" ;;
+            :) log_warn "Option -$OPTARG requires an argument" ;;
+        esac
+    done
+
+    local -a file_list=()
+    for module in "${modules[@]}"; do
+        if [[ -f "${PROJECT_ROOT%/}/modules/$module/$module_path/$filename" ]]; then
+            file_list+=("modules/$module/$module_path/$filename")
+        fi
+    done
+
+    local configuration
+    if ! configuration=$(yq "${PROJECT_ROOT%/}/" ea "$expression" "${file_list[@]}"); then
+        log_error "Failed to merge configuration"
+        return 1
+    fi
+
+    # Substitute environment variables with format ${VAR} and also un-quote any go-template placeholders
+    configuration=$(env_subst "$configuration" | sed 's/'\''{{/{{/g; s/}}'\''/}}/g')
+    write_file "$configuration" "${APPDATA_LOCATION%/}/$appdata_path/$filename" || {
+        log_error "Failed to write configuration"
+        return 1
     }
 }
 

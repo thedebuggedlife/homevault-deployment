@@ -22,55 +22,34 @@ _SSSD_CONFIG_PATH="/etc/sssd/sssd.conf"
 # @return: {void}
 ###
 configure_traefik() {
-    local source_dir="${APPDATA_LOCATION%/}/traefik"
-    local dest_dir="${APPDATA_LOCATION%/}/traefik/dynamic"
-
-    ensure_path_exists "$dest_dir"
-
-    # First, delete any existing module configs
-    if ls "${dest_dir}"/dynamic-*.yml 1> /dev/null 2>&1; then
-        rm "${dest_dir}"/dynamic-*.yml
-    fi
-    # Next, copy the dynamic config for enabled modules
-    for module in "${ENABLED_MODULES[@]}"; do
-        src_file="${source_dir}/dynamic-${module}.yml"
-        dest_file="${dest_dir}/dynamic-${module}.yml"
-        if [[ -f "$src_file" ]]; then
-            cp "$src_file" "$dest_file"
-            echo -e "Copied dynamic Traefik configuration for ${Purple}$module${COff}"
-        fi
-    done
+    merge_yaml_config "dynamic.yml" traefik
 }
 
 ###
-# Find all applicable authelia configuration files
+# Merge all applicable authelia configuration files
 #
 # @return {void}
 ###
 configure_authelia() {
-    local -a file_list=()
-    for module in "${ENABLED_MODULES[@]}"; do
-        local config_file="${APPDATA_LOCATION%/}/authelia/configuration-${module}.yml"
-        if [[ -f "$config_file" ]]; then
-            file_list+=("configuration-${module}.yml")
-        fi
-    done
-    local configuration
+    # If no OIDC clients are configured (depending on the number of selected modules)
+    # then a 'dummy' client is inserted as Authelia requires a non-empty definition
+    # for .identity_providers.oidc.clients
+
     # shellcheck disable=SC2016
     local expr='
-        (.identity_providers.oidc.clients as $item ireduce ([]; . + $item )) as $clients | 
-        (.identity_providers.oidc.authorization_policies as $item ireduce ({}; . * $item )) as $policies |
-        [select(fileIndex == 0) * {"identity_providers":{"oidc":{"authorization_policies":$policies,"clients":$clients}}}] |
-        .[0]'
-    local docker_cmd="docker run -q --rm -it -v '${APPDATA_LOCATION%/}/authelia':/workdir mikefarah/yq:4.45.1 -M ea '$expr' ${file_list[*]}"
-    if ! configuration=$(sg docker -c "$docker_cmd"); then
-        log_error "Failed to merge Authelia configuration"
-        exit 1
-    fi
-    echo "$configuration" | sed 's/'\''{{/{{/g; s/}}'\''/}}/g' | sudo tee "${APPDATA_LOCATION%/}/authelia/configuration.yml" > /dev/null || {
-        log_error "Failed to write Authelia configuration"
-        exit 1
-    }
+        . as $item ireduce({}; . *+ $item) | 
+        with(
+            .identity_providers.oidc; 
+            select(.clients == null or .clients == []) | 
+            .clients = [
+                {
+                    "client_id":"dummy",
+                    "public":true,
+                    "redirect_uris":["https://dummy.example.com"]
+                }
+            ]
+        )'
+    merge_yaml_config "configuration.yml" "authelia" -e "$expr"
 }
 
 ###
@@ -333,7 +312,6 @@ base_config_env() {
     # Global Settings
     ask_for_env APPDATA_LOCATION "Application Data folder"
     ask_for_env TZ "Server Timezone"
-    ask_for_env CERT_ACME_EMAIL "Email For Certificate Registration"
     save_env HOSTNAME "${HOSTNAME}"
     save_env INSTALLER_UID "$(id -u "$USER")"
     save_env DOCKER_GID "$(getent group docker | cut -d: -f3)"

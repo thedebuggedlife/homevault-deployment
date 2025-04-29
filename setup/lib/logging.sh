@@ -63,16 +63,27 @@ BIWhite='\033[1;97m'      # White
 ################################################################################
 #                                   LOGGING
 
+function stack_trace() {
+  local i=0
+  local frames=${#BASH_SOURCE[@]}
+  
+  echo "Stack trace:"
+  for ((i=1; i<frames; i++)); do
+    echo "  $i: ${BASH_SOURCE[$i]}:${BASH_LINENO[$i-1]} ${FUNCNAME[$i]}()"
+  done
+}
+
 log_header() {
     echo -e "\n${BWhite}================================================================================\n$1${COff}\n"
 }
 
 log_warn() {
-    echo -en "\n🟡 ${BIYellow}WARN:${IYellow} $1${COff}\n\n" >&2
+    echo -en "\n🟡 ${BIYellow}WARN:${IYellow} $1${COff}\n\n$(stack_trace)\n\n" >&2
+
 }
 
 log_error() {
-    echo -en "\n🔴 ${BIRed}ERROR:${IRed} $1${COff}\n\n" >&2
+    echo -en "\n🔴 ${BIRed}ERROR:${IRed} $1${COff}\n\n$(stack_trace)\n\n" >&2
 }
 
 log_done() {

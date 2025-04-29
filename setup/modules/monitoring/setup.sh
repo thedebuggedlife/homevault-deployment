@@ -12,28 +12,8 @@ source "$PROJECT_ROOT/lib/config.sh"
 source "$PROJECT_ROOT/lib/docker.sh"
 
 prometheus_merge_config() {
-    local filename="$1"
-    local -a file_list=()
-    # Create a new array of modules, where 'monitoring' is always in the first position
-    # shellcheck disable=SC2207
-    local -a modules=("monitoring" $(printf '%s\n' "${ENABLED_MODULES[@]}" | grep -v '^monitoring$'))
-    for module in "${modules[@]}"; do
-        if [[ -f "${PROJECT_ROOT%/}/modules/$module/prometheus/$filename" ]]; then
-            file_list+=("modules/$module/prometheus/$filename")
-        fi
-    done
-    local configuration
     # shellcheck disable=SC2016
-    local expr='. as $item ireduce({}; . *+ $item)'
-    if ! configuration=$(yq "${PROJECT_ROOT%/}/" ea "$expr" "${file_list[@]}"); then
-        log_error "Failed to merge Prometheus configuration"
-        return 1
-    fi
-    configuration=$(env_subst "$configuration")
-    write_file "$configuration" "${APPDATA_LOCATION%/}/prometheus/$filename" || {
-        log_error "Failed to write Prometheus configuration"
-        return 1
-    }
+    merge_yaml_config "prometheus.yml" "prometheus" -m "monitoring"
 }
 
 ################################################################################
@@ -53,7 +33,8 @@ monitoring_config_secrets() {
 }
 
 monitoring_pre_install() {
-    prometheus_merge_config "prometheus.yml" || return 1
+    log_header "Configuring Prometheus"
+    prometheus_merge_config || return 1
 }
 
 CONFIG_ENV_HOOKS+=("monitoring_config_env")

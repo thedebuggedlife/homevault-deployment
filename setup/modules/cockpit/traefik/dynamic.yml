@@ -1,7 +1,7 @@
 http:
   routers:
     cockpit:
-      rule: {{ expandenv "Host(`${COCKPIT_SUBDOMAIN}.${CF_DOMAIN_NAME}`)" }}
+      rule: Host(`${COCKPIT_SUBDOMAIN}.${CF_DOMAIN_NAME}`)
       entrypoints:
         - tailnet
       service: cockpit

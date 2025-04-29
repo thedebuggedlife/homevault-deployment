@@ -23,7 +23,7 @@ http:
     # Add to sites where Authelia auth needs to be applied by Traefik itself
     authelia:
       forwardauth:
-        address: {{ expandenv "http://authelia:9091/api/verify?rd=https://authelia.${CF_DOMAIN_NAME}/" }}
+        address: "http://authelia:9091/api/verify?rd=https://authelia.${CF_DOMAIN_NAME}/"
         trustForwardHeader: true
         authResponseHeaders:
           - Remote-User

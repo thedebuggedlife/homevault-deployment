@@ -32,7 +32,7 @@ rest_call() {
         --url "$url"
         --header "Content-Type: application/json"
         --header "Accept: application/json")
-    shift 2
+    OPTIND=3
     while getopts ":h:b:c:e:s" opt; do
         case $opt in
             h) args+=("--header" "$OPTARG") ;;
@@ -41,7 +41,7 @@ rest_call() {
             e) expected="$OPTARG" ;;
             s) status_only=true ;;
             \?) log_warn "rest_call: Invalid option: -$OPTARG" ;;
-            :) if [ "$OPTARG" != "b" ]; then log_warn "rest_call: Option -$OPTARG requires an argument"; fi ;;
+            :) log_warn "rest_call: Option -$OPTARG requires an argument" ;;
         esac
     done
     local response http_status

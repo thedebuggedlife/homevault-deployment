@@ -342,12 +342,12 @@ deploy_project() {
 ###
 configure_admin_account() {
     local config_file="${APPDATA_LOCATION%/}/lldap/bootstrap/user-configs/admin.json"
-
     local load_only=false
+    OPTIND=1
     while getopts ":l" opt; do
         case $opt in
             l) load_only=true ;;
-            \?) log_warn "configure_admin_account: Invalid option: -$OPTARG" ;;
+            \?) log_warn "Invalid option: -$OPTARG" ;;
         esac
     done
 
@@ -373,11 +373,19 @@ configure_admin_account() {
     # If already configured and the --resume flag was specified, skip the rest
     if [[ -z "$ADMIN_USERNAME" || -z "$ADMIN_EMAIL" || -z "$ADMIN_PASSWORD" || -z "$ADMIN_DISPLAY_NAME" || "$RESUME" != "true" ]]; then
 
-        ADMIN_USERNAME=$(ask_value "Username" "$ADMIN_USERNAME" true)
-        ADMIN_EMAIL=$(ask_value "Email address" "$ADMIN_EMAIL" true)
-        ADMIN_PASSWORD=$(ask_value "Password" "$ADMIN_PASSWORD" true "$ADMIN_PASSWORD" true)
-        ADMIN_DISPLAY_NAME=$(ask_value "Display name (e.g. <First> <Last>)" "$ADMIN_DISPLAY_NAME" true)
-
+        ADMIN_USERNAME=$(ask_value "Username" -d "$ADMIN_USERNAME")
+        ADMIN_EMAIL=$(ask_value "Email address" -d "$ADMIN_EMAIL")
+        while true; do
+            local confirm_pass
+            ADMIN_PASSWORD=$(ask_value "Password" -m)
+            confirm_pass=$(ask_value "Confirm password" -m)
+            if [ "$ADMIN_PASSWORD" != "$confirm_pass" ]; then
+                log_warn "Passwords do not match. Please try again."
+            else
+                break
+            fi
+        done
+        ADMIN_DISPLAY_NAME=$(ask_value "Display name (e.g. <First> <Last>)" -d "$ADMIN_DISPLAY_NAME")
         save_file=true
     fi
 
@@ -611,19 +619,21 @@ fi
 
 ask_for_variables
 
-log_header "Configuring Docker"
-configure_docker
-
-log_header "Configuring Tailscale"
-configure_tailscale
-
 log_header "Preparing application data folder"
-
 create_data_locations
 
 if [ "$NO_DOWNLOAD" != true ]; then
     download_appdata
 fi
+
+log_header "Server administrator account"
+configure_admin_account
+
+log_header "Configuring Docker"
+configure_docker
+
+log_header "Configuring Tailscale"
+configure_tailscale
 
 # Configuring CF tunnel requires that $SECRETS_LOCATION has already been created
 log_header "Configuring CloudFlare Tunnel"
@@ -649,10 +659,6 @@ if [ "$USE_SMTP2GO" = "true" ]; then
     save_env SMTP_PORT "587"
     save_env SMTP_SECURE "tls"
 fi
-
-log_header "Configuring server administrator account"
-
-configure_admin_account
 
 log_header "Preparing secret files"
 
