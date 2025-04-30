@@ -6,13 +6,11 @@ Some of the services we will be setting up as part of this project have the abil
 - **Immich**, our photo management solution, allow us to send emails when sharing a photo album with other people.
 - **Nextcloud**, our file management and collaboration solution, also allow us to send emails when sharing content with other people.
 
-It is possible to configure our server to use the SMTP service offered by GMail, Outlook.com. However, perhaps a more polished solution is to configure our server to send email from our own domain (e.g. `administrator@example.com`). This is possible, easy to configure, and free, using a service called [SMTP2GO](https://www.smtp2go.com/)
+It is possible to configure the server to use an SMTP service like GMail, Outlook.com. However, a more polished solution is to send email from our own domain (e.g. `administrator@mydomain.com`). This is possible, easy to configure, and free, using a service called [SMTP2GO](https://www.smtp2go.com/)
 
-With an account for SMTP2GO, you can also use it to send and receive emails from your personal GMail inbox using a custom email address, like `my.name@example.com`. If you are interested, you can find more details here: https://thedebugged.life/custom-email-domain-with-gmail/
+> You can also use your SMTP2GO account to send and receive emails from your personal GMail inbox using a custom email address, like `my.name@example.com`. If this is something you're interested in, you can find more details on how to set it up here: https://thedebugged.life/custom-email-domain-with-gmail/
 
 ## Step by Step Guide
-
- After that, you will create an API token to provide during the setup phase. The configuration script will take care of the rest.
 
 ### 1. Create an account
 

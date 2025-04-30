@@ -1,14 +1,14 @@
 # Tailscale Account Setup
 
-It is always useful to have access to tools that can let us manage our server, whether at home or remotely. However, we want to make sure that access to these tools is extra secure. For this project, we are going to use [Tailscale](https://tailscale.com/) to accomplish this. With Tailscale, we will be use a VPN network to ensure only other personal devices (e.g. a laptop or phone) can reach certain access points on our server.
+It is always useful to have remote access to tools that can let us manage our server, even when we are not at home. However, we want to make sure that access to these administration tools is secure. To accomplish this, we are going to setup our own VPN using [Tailscale](https://tailscale.com/). With Tailscale, we will be creating a private network for our server and other personal devices, ensuring that our server administration tools are never exposed to the open internet, and instead, are only visible to our devices (e.g. a laptop or phone).
 
-## Tailscale VPN
+## What is Tailscale VPN
 
 Tailscale is a peer-to-peer virtual private network (VPN) solution that allows you to create a secure, private network between your devices—no matter where they are. Unlike traditional VPNs, which require complex setup and dedicated servers, Tailscale is built on top of the WireGuard protocol and works seamlessly by connecting devices directly to each other using encrypted tunnels. This peer-to-peer architecture minimizes latency and provides fast, secure access without the need for manual firewall or NAT configuration.
 
 ![](https://thedebugged.life/content/images/2025/02/homeseer-direct-access-tailscale.drawio.png)
 
-Learn more about Tailscale at https://thedebugged.life/direct-access-for-homeseer/
+> Learn more about other uses for Tailscale at https://thedebugged.life/direct-access-for-homeseer/
 
 ## Step by Step Guide
 
