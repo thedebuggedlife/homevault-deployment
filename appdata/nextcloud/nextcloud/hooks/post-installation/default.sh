@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Use cron to run background jobs
+./occ background:cron
+
 echo "INITIALIZING OIDC"
 
 # Load the client secret from file

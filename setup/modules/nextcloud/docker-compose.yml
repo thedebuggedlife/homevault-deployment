@@ -141,6 +141,16 @@ services:
       wud.tag.include: ^31\.\d+\.\d+$$
       wud.link.template: https://nextcloud.com/changelog/#$${major}-$${minor}-$${patch}
 
+  nextcloud-cron:
+    container_name: nextcloud_cron
+    extends: nextcloud-app
+    entrypoint: /cron.sh
+    depends_on:
+      nextcloud-app:
+        condition: service_healthy
+    healthcheck:
+      disable: true
+
   collabora:
     container_name: collabora
     image: collabora/code:24.04.13.2.1
