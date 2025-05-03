@@ -149,7 +149,9 @@ services:
       nextcloud-app:
         condition: service_healthy
     healthcheck:
-      disable: true
+      test: ["CMD", "true"]
+    labels:
+      traefik.enable: false
 
   collabora:
     container_name: collabora
