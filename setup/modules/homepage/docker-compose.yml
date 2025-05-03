@@ -32,9 +32,6 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
       HOMEPAGE_ALLOWED_HOSTS: ${HOMEPAGE_SUBDOMAIN}.${CF_DOMAIN_NAME}
-      HOMEPAGE_VAR_BACKGROUND_IMAGE: /images/background.jpg
-      HOMEPAGE_VAR_BACKGROUND_OPACITY: 30
-      HOMEPAGE_VAR_THEME: dark
       HOMEPAGE_VAR_CF_DOMAIN_NAME: ${CF_DOMAIN_NAME}
     labels:
       selfhost.module.homepage: 1
