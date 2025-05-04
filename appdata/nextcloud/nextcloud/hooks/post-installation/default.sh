@@ -20,7 +20,7 @@ client_secret=$(<"/run/secrets/oidc_nextcloud_password")
 # Disable other forms of login to the server
 ./occ config:app:set --value=0 user_oidc allow_multiple_user_backends
 
-echo "FINISHED INITiALIZING OIDC"
+echo "FINISHED INITIALIZING OIDC"
 
 echo "SETTING UP DEFAULT QUOTA"
 
@@ -51,6 +51,12 @@ done
 ./occ richdocuments:activate-config
 
 echo "FINISHED INITIALIZING NEXTCLOUD OFFICE"
+
+echo "INSTALLING NEXTCLOUD TALK"
+
+./occ app:install spreed
+
+echo "FINISHED INSTALLING NEXTCLOUD TALK"
 
 echo "INITIALIZING NEXTCLOUD FULL TEXT SEARCH"
 
