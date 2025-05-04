@@ -17,7 +17,6 @@ OVERRIDE_VERSIONS=false
 UNATTENDED=
 NO_DOWNLOAD=
 USE_SMTP2GO=true
-POST_INSTALL=
 RESUME=false
 ENV_FILE=.env
 AS_USER="$USER"
@@ -566,11 +565,6 @@ while [ "$#" -gt 0 ]; do
         shift 1
         continue
         ;;
-    --post-install)
-        POST_INSTALL=true
-        shift 1
-        continue
-        ;;
     --no-download)
         NO_DOWNLOAD=true
         shift 1
@@ -596,19 +590,8 @@ load_modules
 ################################################################################
 #                           MAIN PROGRAM LOGIC
 
-if [ "$POST_INSTALL" = "true" ]; then
-    # shellcheck source=/dev/null
-    source "$ENV_FILE"
-
-    SECRETS_PATH="${APPDATA_LOCATION}/secrets/"
-
-    configure_admin_account -l
-
-    execute_hooks "${BOOTSTRAP_HOOKS[@]}" "bootstrap"
-
-    log_done
-    exit 0
-fi
+log_header "Configuring Docker"
+configure_docker
 
 log_header "Preparing environment files"
 
@@ -628,9 +611,6 @@ fi
 
 log_header "Server administrator account"
 configure_admin_account
-
-log_header "Configuring Docker"
-configure_docker
 
 log_header "Configuring Tailscale"
 configure_tailscale
