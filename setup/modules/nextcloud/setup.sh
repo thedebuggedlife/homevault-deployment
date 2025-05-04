@@ -7,10 +7,6 @@ source "$PROJECT_ROOT/lib/logging.sh"
 #shellcheck source=../../lib/config.sh
 source "$PROJECT_ROOT/lib/config.sh"
 
-## Environment variables
-
-NEXTCLOUD_TOKEN=
-
 ################################################################################
 #                         NEXTCLOUD SETUP HOOKS
 

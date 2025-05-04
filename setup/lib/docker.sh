@@ -35,9 +35,9 @@ docker() {
     local cmd result
     cmd="docker"
     for arg in "$@"; do
-        cmd+=$(printf " %q" "$arg")
+        cmd+=$(printf " '%s'" "$arg")
     done
-    if ! result=$(sg docker -c "$cmd"); then return 1; fi
+    if ! result=$(sg docker -c "$cmd" | tr -d '\r'); then return 1; fi
     echo "$result"
 }
 
