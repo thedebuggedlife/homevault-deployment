@@ -1,0 +1,6 @@
+- Documentation:
+  - Immich:
+    - abbr: IM
+      name: "Immich Docs"
+      icon: sh-immich
+      href: https://immich.app/docs/overview/introduction

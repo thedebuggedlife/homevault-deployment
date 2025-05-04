@@ -1,6 +1,6 @@
 - Documentation:
   - Project:
     - abbr: GH
-      name: "Self-host Bootstrap Project"
-      icon: sh-github-light
-      href: https://github.com/thedebuggedlife/selfhost-bootstrap
+      name: "Bootstrap Project"
+      icon: https://img.icons8.com/isometric/50/bug--v1.png
+      href: https://thedebugged.life/bootstrap/bootstrap-project/

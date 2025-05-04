@@ -1,0 +1,6 @@
+- Documentation:
+  - Nextcloud:
+    - abbr: NC
+      name: "Nextcloud User Manual"
+      icon: sh-nextcloud
+      href: https://docs.nextcloud.com/server/latest/user_manual/en/contents.html
