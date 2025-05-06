@@ -5,12 +5,74 @@ __LIB_CONFIG=1
 #shellcheck source=./logging.sh
 source "$PROJECT_ROOT/lib/logging.sh"
 
+_PYTHON_INSTALLED=
+_UPNPC_INSTALLED=
+
 ################################################################################
 #                           MANIPULATING .ENV FILE
 
+###
+# Asks user for input
+#
+# @param {string} prompt    - The prompt to display
+# Options:
+#   -e              Allow empty values
+#   -m              Mask the input (e.g. for passwords)
+#   -d {default}    Default value if not specified
+#   -o {options}    Valid options user can provide
+# @return {string} The value entered by the user
+###
+ask_value() {
+    local prompt="$1"
+    local default options
+    local required=true
+    local masked=false
+    local user_input
+    OPTIND=2
+    while getopts ":emd:o:" opt; do
+        case $opt in
+            e) required=false ;;
+            m) masked=true ;;
+            d) default="$OPTARG" ;;
+            o) options="$OPTARG" ;;
+            \?) log_warn "Invalid option: -$OPTARG" ;;
+            :) log_warn "Option -$OPTARG requires an argument" ;;
+        esac
+    done
+
+    local -a args=()
+    local display="$default"
+    if [ "$masked" = "true" ]; then 
+        args+=("-s")
+        display=$(mask_password "$default")
+    fi
+
+    if [ -n "$options" ]; then prompt="$prompt ($options)"; fi
+    if [ -n "$display" ]; then prompt="$prompt [$display]"; fi
+
+    while true; do
+        echo >&2
+        read "${args[@]}" -p "$prompt: " user_input </dev/tty
+        if [ "$masked" = true ]; then echo >&2; fi
+        user_input=${user_input:-${default}}
+        if [[ -z "$user_input" && "$required" = "true" ]]; then
+            echo -e "\n${Yellow}Empty value is not allowed. Please try again.${COff}\n" >&2
+            continue
+        fi
+        if [ -n "$options" ] && ! echo ",$options," | grep -q ",${user_input},"; then
+            echo -e "\n${Yellow}Value must be one of the options: ${options}\n" >&2
+            continue
+        fi
+        break
+    done
+    echo "$user_input"
+}
+
+###
 # Save a kvp to $ENV_FILE
 # Params:   $1 Variable name
 #           $2 Variable value
+###
 save_env() {
     local env_variable=$1
     local env_value=$2
@@ -35,9 +97,11 @@ save_env() {
     eval "$env_variable=$env_value"
 }
 
+###
 # Generate a random id and save to $ENV_FILE
 # Params:   $1 Variable name
 #           $2 Length (#chars) of value [default=20]
+###
 save_env_id() {
     local env_variable=$1
     local id_length=${2:-20}
@@ -58,6 +122,7 @@ save_env_id() {
 #   -i Ignore existing value (i.e. do not offer as default)
 #   -e Allow empty values
 #   -m Mask the input (e.g. for passwords)
+#   -o Valid options (comma-separated list)
 ###
 ask_for_env() {
     local env_variable=$1
@@ -65,11 +130,12 @@ ask_for_env() {
     local -a input_opts=()
     local use_default=true
     OPTIND=3
-    while getopts ":iem" opt; do
+    while getopts ":iemo:" opt; do
         case $opt in
             i) use_default=false ;;
             e) input_opts+=("-e") ;;
             m) input_opts+=("-m") ;;
+            o) input_opts+=("-o" "$OPTARG") ;;
             \?) log_warn "Invalid option: -$OPTARG" ;;
             :) log_warn "Option -$OPTARG requires an argument" ;;
         esac
@@ -217,62 +283,6 @@ mask_password() {
     local input="$1"
     local len=${#input}
     printf "%${len}s" "" | tr ' ' '*'
-}
-
-###
-# Asks user for input
-#
-# @param {string} prompt    - The prompt to display
-# @param {string} default   - The default value if user does not enter a value
-# @param {boolean} required - If `true`, keep asking user for value until not empty
-# @param {string} display   - The options to show in between square braces []
-# @param {boolean} masked   - If `true` value will be treated as a secret (***)
-# Options:
-#   -e              Allow empty values
-#   -m              Mask the input (e.g. for passwords)
-#   -o {options}    Options to show between square braces
-# @return {string} The value entered by the user
-###
-ask_value() {
-    local prompt="$1"
-    local default display
-    local required=true
-    local masked=false
-    local user_input
-    OPTIND=2
-    while getopts ":emd:o:" opt; do
-        case $opt in
-            e) required=false ;;
-            m) masked=true ;;
-            d) default="$OPTARG" ;;
-            o) display="$OPTARG" ;;
-            \?) log_warn "Invalid option: -$OPTARG" ;;
-            :) log_warn "Option -$OPTARG requires an argument" ;;
-        esac
-    done
-
-    display=${display:-"$default"}
-
-    while true; do
-        if [ "$masked" = "true" ]; then 
-            display=$(mask_password "$display")
-        fi
-        local -a args=()
-        if [ "$masked" = true ]; then args+=("-s"); fi
-        echo >&2
-        if [[ -n "$display" ]]; then
-            read "${args[@]}" -p "$prompt [${display}]: " user_input </dev/tty
-        else
-            read "${args[@]}" -p "$prompt: " user_input </dev/tty
-        fi
-        if [ "$masked" = true ]; then echo >&2; fi
-        user_input=${user_input:-${default}}
-        if [[ -n "$user_input" || "$required" != "true" ]]; then
-            break
-        fi
-        echo -e "\n${Yellow}Empty value is not allowed. Please try again.${COff}\n" >&2
-    done
-    echo "$user_input"
 }
 
 ###
@@ -475,5 +485,35 @@ ensure_packages_installed() {
 }
 
 env_subst() {
+    # shellcheck source=/dev/null
     (set -a; source "$ENV_FILE"; set +a; echo "$1" | envsubst)
+}
+
+check_python3() {
+    if [ "${_PYTHON_INSTALLED}" = true ]; then return 0; fi
+    if command -v python3 >/dev/null 2>&1; then
+        _PYTHON_INSTALLED=true
+        # shellcheck disable=SC2155
+        local version=$(python3 --version 2>&1 | awk '{print $2}')
+        echo -e "Python 3 is installed, version: ${Purple}$version${COff}"
+        return 0
+    else
+        echo -e "\n${Yellow}Python is not installed.${COff}\n"
+        echo "Installing Python..."
+        ensure_packages_installed "python3" || return 1
+        _PYTHON_INSTALLED=true
+    fi
+}
+
+check_upnpc() {
+    if [ "${_UPNPC_INSTALLED}" = true ]; then return 0; fi
+    if command -v upnpc >/dev/null 2>&1; then
+        _UPNPC_INSTALLED=true
+        return 0
+    else
+        echo -e "\n${Yellow}upnpc is not installed.${COff}\n"
+        echo "Installing upnpc..."
+        ensure_packages_installed "miniupnpc" || return 1
+        _UPNPC_INSTALLED=true
+    fi
 }

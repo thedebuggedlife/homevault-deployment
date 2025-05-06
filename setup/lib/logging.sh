@@ -78,7 +78,7 @@ log_header() {
 }
 
 log_warn() {
-    echo -en "\n🟡 ${BIYellow}WARN:${IYellow} $1${COff}\n\n$(stack_trace)\n\n" >&2
+    echo -en "\n🟡 ${BIYellow}WARN:${IYellow} $1${COff}\n\n" >&2
 
 }
 

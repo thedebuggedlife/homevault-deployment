@@ -1,0 +1,38 @@
+# Source: https://github.com/nextcloud-snap/nextcloud-snap/wiki/How-to-configure-talk-HPB-with-Docker
+networks:
+  nextcloud-proxy:
+    name: nextcloud-proxy
+
+services:
+
+  nextcloud-talk:
+    container_name: nextcloud_talk
+    image: ghcr.io/nextcloud-releases/aio-talk:latest
+    init: true
+    restart: always
+    networks:
+      - nextcloud-proxy
+    environment:
+      - TZ
+      - NC_DOMAIN=${NEXTCLOUD_SUBDOMAIN}.${CF_DOMAIN_NAME}
+      - TALK_HOST=${NEXTCLOUD_TALK_SUBDOMAIN}.${CF_DOMAIN_NAME}
+      - TALK_PORT=3478
+      - TURN_SECRET=${NEXTCLOUD_TALK_TURN_SECRET}
+      - SIGNALING_SECRET=${NEXTCLOUD_TALK_SIGNALING_SECRET}
+      - INTERNAL_SECRET=${NEXTCLOUD_TALK_INTERNAL_SECRET}
+    labels:
+      selfhost.module.nextcloud.talk: 1
+      dns.manage: true
+      dns.hostname: ${NEXTCLOUD_TALK_SUBDOMAIN:-talk}.${CF_DOMAIN_NAME}
+      dns.content: ${CF_TUNNEL_ID}.cfargotunnel.com
+      dns.cloudflare.proxied: true
+      traefik.enable: true
+      traefik.docker.network: nextcloud-proxy
+      traefik.http.routers.nextcloud-talk.entryPoints: cloudflare
+      traefik.http.routers.nextcloud-talk.rule: Host(`${NEXTCLOUD_TALK_SUBDOMAIN:-talk}.${CF_DOMAIN_NAME}`)
+      traefik.http.services.nextcloud-talk.loadbalancer.server.port: 8081
+      wud.watch: true
+      wud.display.icon: sh-nextcloud-talk
+      wud.display.name: nextcloud (talk)
+      wud.tag.include: ^latest$$
+      wud.watch.digest: true

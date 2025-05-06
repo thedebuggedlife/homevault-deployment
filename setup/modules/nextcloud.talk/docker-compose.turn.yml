@@ -1,0 +1,25 @@
+services:
+
+  nextcloud-talk:
+    ports:
+      - ${NEXTCLOUD_TURN_HOST_PORT}:3478/tcp
+      - ${NEXTCLOUD_TURN_HOST_PORT}:3478/udp
+
+  nextcloud-turn:
+    container_name: nextcloud_turn
+    image: bash
+    command: /scripts/turn-upnpc.sh
+    network_mode: host
+    healthcheck:
+      test: ["CMD", "true"]
+    environment:
+      - HOST_PORT=${NEXTCLOUD_TURN_HOST_PORT:-3478}
+      - ROUTER_PORT=${NEXTCLOUD_TURN_ROUTER_PORT:-3478}
+      - UPNP_SLEEP=${NEXTCLOUD_TURN_UPNP_SLEEP:-3600}
+    volumes:
+      - ${APPDATA_LOCATION:-/srv/appdata}/nextcloud/scripts/:/scripts/
+    labels:
+      selfhost.module.nextcloud.talk: 1
+      dns.manage: true
+      dns.type: A
+      dns.hostname: ${NEXTCLOUD_TURN_SUBDOMAIN:-turn}.${CF_DOMAIN_NAME}

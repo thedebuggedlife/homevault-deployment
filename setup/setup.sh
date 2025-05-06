@@ -12,7 +12,7 @@ source "$PROJECT_ROOT/lib/docker.sh"
 
 COMPOSE_PATH=
 SECRETS_PATH=
-OVERRIDE_COMPOSE=false
+OVERRIDE_COMPOSE=true
 OVERRIDE_VERSIONS=false
 UNATTENDED=
 NO_DOWNLOAD=
@@ -45,6 +45,7 @@ declare -a INSTALLED_MODULES
 
 declare -a CONFIG_ENV_HOOKS=()
 declare -a CONFIG_SECRETS_HOOKS=()
+declare -a COMPOSE_EXTRA_HOOKS=()
 declare -a PRE_INSTALL_HOOKS=()
 declare -a POST_INSTALL_HOOKS=()
 declare -a BOOTSTRAP_HOOKS=()
@@ -65,8 +66,9 @@ dedup_modules() {
 load_modules() {
     dedup_modules
     for module in "${ENABLED_MODULES[@]}"; do
+        echo -e "Loading module ${Purple}$module${COff}"
         local module_setup="$PROJECT_ROOT/modules/$module/setup.sh"
-        if [ -s "$module_setup" ]; then
+        if [ -f "$module_setup" ]; then
             # shellcheck source=/dev/null
             source "$module_setup"
         else
@@ -90,8 +92,7 @@ execute_hooks() {
     local hook_name="${!#}"  # Get the last argument (hook name)
     local -a hooks=("${@:1:$#-1}")  # Get all arguments except the last one
     
-    echo -e "\n\nExecuting ${Purple}$hook_name${COff} hooks..."
-
+    echo -e "\n\nExecuting ${Purple}$hook_name${COff} hooks..." >&2
     for hook in "${hooks[@]}"; do
         if ! $hook; then
             log_error "Hook '$hook' failed"
@@ -142,7 +143,6 @@ prepare_env_file() {
 #
 # @return void
 ###
-
 download_appdata() {
     for module in "${ENABLED_MODULES[@]}"; do
         download_module_appdata "$module"
@@ -256,56 +256,66 @@ save_secrets() {
 # @return void
 ###
 deploy_project() {
-    local user_input=Y
-    if [ "$UNATTENDED" != true ]; then
-        echo -en "\n\nProject ${Purple}$COMPOSE_PROJECT_NAME${COff} is ready for deployment. "
-        read -p "Do you want to proceed? [Y/n] " user_input </dev/tty
-        user_input=${user_input:-Y}
-    fi
-    if [[ ! "$user_input" =~ ^[Yy]$ ]]; then
-        abort_install
-    fi
-
-    echo
-
     COMPOSE_OPTIONS="-p '$COMPOSE_PROJECT_NAME' --env-file '$ENV_FILE' $COMPOSE_OPTIONS"
     COMPOSE_UP_OPTIONS="-d -y --remove-orphans --quiet-pull --wait $COMPOSE_UP_OPTIONS"
 
-    # Copy the ENV file to include in backup/restore - always override existing file
     ensure_path_exists "${COMPOSE_PATH%/}/"
+    if [ "$OVERRIDE_COMPOSE" = true ]; then
+        rm -rf "${COMPOSE_PATH:?}/"* || {
+            log_error "Failed to delete previous compose files"
+            exit 1
+        }
+    fi
+
+    # Copy the ENV file to include in backup/restore - always override existing file
     cp -f "$ENV_FILE" "${COMPOSE_PATH%/}/.env"
+
+    # Grab the default "docker-compose.yml" file for each module
+    local -a original_files=()
     local -a project_files=()
     for module in "${ENABLED_MODULES[@]}"; do
-        for inner in "${ENABLED_MODULES[@]}"; do
-            local original_file project_file target_project
-            if [ "$module" = "$inner" ]; then
-                target_project="$module"
-                original_file="${PROJECT_ROOT%/}/modules/$module/docker-compose.yml"
-                project_file="${COMPOSE_PATH%/}/$module/docker-compose.yml"
+        local default_file="${PROJECT_ROOT%/}/modules/$module/docker-compose.yml"
+        if [ -f "$default_file" ]; then
+            original_files+=("$module:$default_file")
+        fi
+    done
+
+    # Collect any additional files provided by the enabled modules
+    readarray -t extra_files < <(execute_hooks  "${COMPOSE_EXTRA_HOOKS[@]}" "compose-extra")
+    original_files+=("${extra_files[@]}")
+
+    # Copy the files to match the following file layout: 
+    # "{APPDATA_LOCATION}/compose/{PROJECT}/{module}/docker-compose[.{extra}].yml"
+    for original_file in "${original_files[@]}"; do
+        local project_file target_project inner
+        # Original file format "<source_module>:<full_path>[:<target_module>]"
+        IFS=':' read -r module original_file inner <<< "$original_file"
+        if [ -z "$inner" ]; then
+            target_project="$module"
+            project_file="${COMPOSE_PATH%/}/$module/$(basename "$original_file")"
+        else
+            printf '%s\n' "${ENABLED_MODULES[@]}" | grep -q "^$inner$" || continue
+            target_project="$inner ($module)"
+            project_file="${COMPOSE_PATH%/}/$inner/docker-compose.$module.yml"
+        fi
+        if [ -f "$original_file" ]; then
+            # Copy docker-compose files only if they do not currently exist under appdata (unless overridden)
+            # This is important because, the files in appdata may be modified during container-update operations
+            if [[ -f "$project_file" ]]; then
+                echo -e "Using existing compose file: ${Cyan}$project_file${COff}"
             else
-                target_project="$module ($inner)"
-                original_file="${PROJECT_ROOT%/}/modules/$module/docker-compose.$inner.yml"
-                project_file="${COMPOSE_PATH%/}/$inner/docker-compose.$module.yml"
+                echo -e "Copying docker compose file for ${Purple}$target_project${COff} to ${Cyan}$project_file${COff}"
+                ensure_path_exists "$( dirname "$project_file" )"
+                (cp -f "$original_file" "$project_file") || {
+                    log_error "Failed to copy docker compose file for '$target_project'"
+                    exit 1
+                }
             fi
-            if [ -f "$original_file" ]; then
-                # Copy docker-compose files only if they do not currently exist under appdata (unless overridden)
-                # This is important because, the files in appdata may be modified during container-update operations
-                if [[ -f "$project_file" && "$OVERRIDE_COMPOSE" != true ]]; then
-                    echo -e "Using existing compose file: ${Cyan}$project_file${COff}"
-                else
-                    echo -e "Copying docker compose file for ${Purple}$target_project${COff} to ${Cyan}$project_file${COff}"
-                    ensure_path_exists "$( dirname "$project_file" )"
-                    (cp -f "$original_file" "$project_file") || {
-                        log_error "Failed to copy docker compose file for '$module'"
-                        exit 1
-                    }
-                fi
-            fi
-            if [ -f "$project_file" ]; then
-                project_files+=("$project_file")
-                COMPOSE_OPTIONS="$COMPOSE_OPTIONS -f '$project_file'"
-            fi
-        done
+        fi
+        if [ -f "$project_file" ]; then
+            project_files+=("$project_file")
+            COMPOSE_OPTIONS="$COMPOSE_OPTIONS -f '$project_file'"
+        fi
     done
 
     echo
@@ -315,6 +325,16 @@ deploy_project() {
             log_error "Failed to match existing container versions in compose project files"
             exit 1
         fi
+    fi
+
+    local user_input=Y
+    if [ "$UNATTENDED" != true ]; then
+        echo -en "\n\nProject ${Purple}$COMPOSE_PROJECT_NAME${COff} is ready for docker deployment. "
+        read -p "Do you want to proceed? [Y/n] " user_input </dev/tty
+        user_input=${user_input:-Y}
+    fi
+    if [[ ! "$user_input" =~ ^[Yy]$ ]]; then
+        abort_install
     fi
 
     execute_hooks "${PRE_INSTALL_HOOKS[@]}" "pre-install"
@@ -372,6 +392,9 @@ configure_admin_account() {
     # If already configured and the --resume flag was specified, skip the rest
     if [[ -z "$ADMIN_USERNAME" || -z "$ADMIN_EMAIL" || -z "$ADMIN_PASSWORD" || -z "$ADMIN_DISPLAY_NAME" || "$RESUME" != "true" ]]; then
 
+        echo -e "The following user will be created and configured with ${Yellow}administrator privileges${COff} across all applications."
+        echo
+
         ADMIN_USERNAME=$(ask_value "Username" -d "$ADMIN_USERNAME")
         ADMIN_EMAIL=$(ask_value "Email address" -d "$ADMIN_EMAIL")
         while true; do
@@ -420,7 +443,7 @@ configure_admin_account() {
     write_file "$ADMIN_PASSWORD" "${SECRETS_PATH}server_admin_password"
 }
 
-cmd=( "$0" "$@" )
+cmd=( "$@" )
 
 build_resume_command() {
     # Check if --resume is already present in the arguments
@@ -437,16 +460,19 @@ build_resume_command() {
         cmd+=( "--resume" )
     fi
 
+    local resume="$PROJECT_ROOT/resume.sh"
+
     # Reconstruct the command as a string with proper quoting
-    printf "%q " "${cmd[@]}" > "$PROJECT_ROOT/resume.sh"
-    chmod +x "$PROJECT_ROOT/resume.sh"
-    echo -e "To resume, run: ${BIGreen}${PROJECT_ROOT}/resume.sh${COff}\n"
+    printf "%q" "$PROJECT_ROOT/setup.sh" > "$resume"
+    printf " %q" "${cmd[@]}" >> "$resume"
+    echo ' "$@"' >> "$resume"
+    chmod +x "$resume"
 }
 
 # Terminate program and print instructions on how to invoke again to resume
 abort_install() {
     log_warn "Setup aborted by user."
-    build_resume_command
+    echo -e "To resume, run: ${BIGreen}${PROJECT_ROOT}/resume.sh${COff}\n"
     exit 1
 }
 
@@ -464,10 +490,9 @@ print_usage() {
     echo "  --resume                        Skip any steps that have been previously completed."
     echo "  --unattended                    Automatically answer prompts with defaults (implies --resume)."
     echo "  --no-download                   Do not download appdata from GitHub. Only use if appdata was previously downloaded."
-    echo "  --override-compose              Override previously deployed docker-compose files. Use with caution!"
-    echo "  --override-versions             Override image versions with those specified in compose file. Use with caution!"
+    echo -e "  --keep-compose                  Do not override previously deployed docker-compose files. ${IRed}Use with caution!${COff}"
+    echo -e "  --override-versions             Override running versions with those specified in compose files. ${IRed}Use with caution!${COff}"
     echo "  --custom-smtp                   Do not use SMTP2GO for sending email (custom SMTP configuration required)."
-    echo "  --post-install                  Run post-install configuration of self-hosted apps."
     echo "  --dry-run                       Execute Docker Compose in dry run mode."
     echo "  -h, --help                      Display this help message."
 
@@ -545,8 +570,8 @@ while [ "$#" -gt 0 ]; do
         shift 1
         continue
         ;;
-    --override-compose)
-        OVERRIDE_COMPOSE=true
+    --keep-compose)
+        OVERRIDE_COMPOSE=false
         shift 1
         continue
         ;;
@@ -584,6 +609,8 @@ while [ "$#" -gt 0 ]; do
         ;;
     esac
 done
+
+build_resume_command
 
 load_modules
 

@@ -195,6 +195,7 @@ services:
     labels:
       selfhost.module.monitoring: 1
       dns.manage: true
+      dns.hostname: ${GRAFANA_SUBDOMAIN}.${CF_DOMAIN_NAME}
       dns.content: ${TAILSCALE_IP}
       traefik.enable: true
       traefik.docker.network: monitoring-proxy

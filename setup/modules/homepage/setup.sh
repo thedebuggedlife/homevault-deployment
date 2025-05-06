@@ -35,6 +35,12 @@ homepage_config_env() {
     ask_for_env HOMEPAGE_SUBDOMAIN "Subdomain under ${CF_DOMAIN_NAME} to use for Homepage"
 }
 
+homepage_compose_extra() {
+    echo "homepage:$(dirname "${BASH_SOURCE[0]}")/docker-compose.base.yml:base"
+    echo "homepage:$(dirname "${BASH_SOURCE[0]}")/docker-compose.monitoring.yml:monitoring"
+    echo "homepage:$(dirname "${BASH_SOURCE[0]}")/docker-compose.portainer.yml:portainer"
+}
+
 homepage_bootstrap() {
     # These steps require some of the work done during post-install, hence running as bootstrap
     log_header "Generating Homepage configuration"
@@ -46,6 +52,7 @@ homepage_bootstrap() {
 
 CONFIG_ENV_HOOKS+=("homepage_config_env")
 # CONFIG_SECRETS_HOOKS+=("")
+COMPOSE_EXTRA_HOOKS+=("homepage_compose_extra")
 # PRE_INSTALL_HOOKS+=("")
 # POST_INSTALL_HOOKS+=("")
 BOOTSTRAP_HOOKS+=("homepage_bootstrap")

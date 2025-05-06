@@ -63,6 +63,8 @@ services:
     labels:
       selfhost.module.immich: 1
       dns.manage: true
+      dns.hostname: ${IMMICH_SUBDOMAIN:-immich}.${CF_DOMAIN_NAME}
+      dns.content: ${CF_TUNNEL_ID}.cfargotunnel.com
       dns.cloudflare.proxied: true
       traefik.enable: true
       traefik.docker.network: immich-proxy

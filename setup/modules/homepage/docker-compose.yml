@@ -36,6 +36,7 @@ services:
     labels:
       selfhost.module.homepage: 1
       dns.manage: true
+      dns.hostname: ${HOMEPAGE_SUBDOMAIN}.${CF_DOMAIN_NAME}
       dns.content: ${TAILSCALE_IP}
       traefik.enable: true
       traefik.docker.network: homepage-proxy

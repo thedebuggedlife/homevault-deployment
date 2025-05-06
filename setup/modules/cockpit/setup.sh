@@ -59,7 +59,7 @@ cockpit_network_workaround() {
 
     if [ "$requires_restart" = true ]; then
         log_warn "The system must be rebooted before continuing with the installation."
-        build_resume_command
+        echo -e "After reboot, run: ${BIGreen}${PROJECT_ROOT}/resume.sh${COff}\n"
         if [ "$UNATTENDED" = true ]; then
             echo -e "\nThe system will reboot in 15 seconds..."
             sleep 15

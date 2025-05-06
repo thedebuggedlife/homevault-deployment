@@ -85,7 +85,9 @@ services:
     labels:
       selfhost.module.base: 1
       dns.manage: true
+      dns.hostname: traefik.${CF_DOMAIN_NAME}
       dns.content: ${TAILSCALE_IP}
+      dns.cloudflare.proxied: false
       traefik.enable: true
       traefik.http.routers.api.entryPoints: tailnet
       traefik.http.routers.api.service: api@internal
@@ -124,6 +126,7 @@ services:
     labels:
       selfhost.module.base: 1
       dns.manage: true
+      dns.hostname: lldap.${CF_DOMAIN_NAME}
       dns.content: ${TAILSCALE_IP}
       traefik.enable: true
       traefik.http.routers.lldap.entryPoints: tailnet
@@ -175,7 +178,9 @@ services:
     labels:
       selfhost.module.base: 1
       dns.manage: true
-      dns.cloudflare.proxied: true
+      dns.hostname: authelia.${CF_DOMAIN_NAME}
+      dns.content: ${CF_TUNNEL_ID}.cfargotunnel.com
+      dns.proxied: true
       traefik.enable: true
       traefik.http.routers.authelia.entryPoints: cloudflare
       traefik.http.routers.authelia.rule: Host(`authelia.${CF_DOMAIN_NAME}`)
@@ -200,10 +205,9 @@ services:
       DNS_PROVIDER: cloudflare
       DNS_DEFAULT_MANAGE: false
       DNS_DEFAULT_PROXIED: false
-      DNS_DEFAULT_CONTENT: ${CF_TUNNEL_ID}.cfargotunnel.com
       CLOUDFLARE_TOKEN_FILE: /run/secrets/cloudflare_dns_api_token
       CLOUDFLARE_ZONE: ${CF_DOMAIN_NAME}
-      TRAEFIK_API_URL: http://traefik:8080/api
+      OPERATION_MODE: direct
     labels:
       selfhost.module.base: 1
       wud.watch: true
@@ -238,6 +242,7 @@ services:
     labels:
       selfhost.module.base: 1
       dns.manage: true
+      dns.hostname: updates.${CF_DOMAIN_NAME}
       dns.content: ${TAILSCALE_IP}
       traefik.enable: true
       traefik.docker.network: proxy

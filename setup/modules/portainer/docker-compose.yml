@@ -34,6 +34,7 @@ services:
     labels:
       selfhost.module.portainer: 1
       dns.manage: true
+      dns.hostname: ${PORTAINER_SUBDOMAIN}.${CF_DOMAIN_NAME}
       dns.content: ${TAILSCALE_IP}
       traefik.enable: true
       traefik.http.routers.portainer.entryPoints: tailnet

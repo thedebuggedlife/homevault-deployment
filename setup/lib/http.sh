@@ -6,6 +6,7 @@ __LIB_HTTP=1
 source "$PROJECT_ROOT/lib/logging.sh"
 
 GH_IO_BASE_URL=https://thedebuggedlife.github.io/selfhost-bootstrap
+PUBLIC_IP=
 
 ################################################################################
 #                                   HTTP HELPERS
@@ -98,3 +99,111 @@ download_module_appdata() {
     }
 }
 
+###
+# Function to retrieve the public IP of the server. 
+# The value is cached globally so it only needs to be retrieved once per script run
+#
+# @return {string} The public IP address of this host
+###
+get_public_ip() {
+    if [ -n "$PUBLIC_IP" ]; then
+        echo "$PUBLIC_IP"
+    fi
+    # Try multiple services in case one is down
+    PUBLIC_IP=$(curl -s https://api.ipify.org || \
+                curl -s https://icanhazip.com || \
+                curl -s https://ipecho.net/plain || \
+                curl -s https://ifconfig.me)
+    
+    if [ -z "$PUBLIC_IP" ]; then
+        log_warn "Error: Could not determine public IP address"
+        return 1
+    fi
+
+    echo "$PUBLIC_IP"
+}
+
+
+###
+# Function to start a temporary HTTP server and return an arbitrary string
+#
+# @param    $1  Port to listen at
+# @param    $2  Test string to return from server
+#
+# @return   {string:list}
+#   [0] PID of the server
+#   [1] Temporary directory created for the server
+###
+start_temp_server() {
+    local port=$1
+    local test_string=$2
+
+    # Make sure Python3 is installed
+    check_python3 >&2 || return 1
+    
+    # Create a temporary directory
+    temp_dir=$(mktemp -d)
+    
+    # Create an index.html file with the test string
+    echo "$test_string" > "$temp_dir/index.html"
+    
+    # Start the HTTP server from the temporary directory
+    (cd "$temp_dir" && python3 -m http.server "$port" --bind 0.0.0.0) &> /dev/null &
+    server_pid=$!
+    
+    # Give the server time to start
+    sleep 2
+    
+    echo "$server_pid:$temp_dir"
+}
+
+###
+# Function to check if a given port is routed to this host and accessible
+#
+# @param    $1  Port to check for traffic
+# @param    $2  Timeout for the operation in seconds (default: 60)
+###
+check_port_routing() {
+    local port=$1
+    local timeout=${2:-60}
+
+    # shellcheck disable=SC2155
+    local start_time=$(date +%s)
+    # shellcheck disable=SC2155
+    local end_time=$((start_time + timeout))
+    # shellcheck disable=SC2155
+    local test_string="PORT_CHECK_$(date +%s)"
+
+    if (echo >"/dev/tcp/localhost/$port") 2>/dev/null; then
+        echo -e "\n${BIYellow}WARNING${COff}: Cannot check if port ${Cyan}$port${COff} is forwarded because it is already in use" >&2
+        return 1
+    fi
+
+    echo -e "Checking if port ${Cyan}$port${COff} on this host is accessible from the internet" >&2
+
+    local public_ip
+    public_ip=$(get_public_ip) || return 1
+
+    local server_info server_pid temp_dir
+    server_info=$(start_temp_server "$port" "$test_string") || return 1
+    IFS=':' read -r server_pid temp_dir <<< "$server_info"
+
+    while true; do
+        echo -n "." >&2
+        response=$(curl -s --connect-timeout 5 "http://${public_ip}:${port}/")
+        if echo "$response" | grep -q "$test_string"; then
+            echo -e "\n${BIGreen}SUCCESS${COff}: Port ${Cyan}$port${COff} is properly routed to this machine" >&2
+            kill "$server_pid" 2>/dev/null; rm -rf "$temp_dir" 2>/dev/null
+            return 0
+        else
+            # shellcheck disable=SC2155
+            local current_time=$(date +%s)
+            if [ "$current_time" -ge $end_time ]; then
+                echo -e "\n${BIYellow}WARNING${COff}: Port ${Cyan}$port${COff} is not accessible or not routed to this machine" >&2
+                kill "$server_pid" 2>/dev/null; rm -rf "$temp_dir" 2>/dev/null
+                return 1
+            fi
+            sleep 1
+        fi
+    done
+}
