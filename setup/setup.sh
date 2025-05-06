@@ -38,7 +38,7 @@ CF_DOMAIN_NAME=
 
 # Base module should always be first in the list
 declare -a ENABLED_MODULES=("base")
-declare -a INSTALLED_MODULES
+declare -a INSTALLED_MODULES=()
 
 ################################################################################
 #                           SETUP MODULES
@@ -64,6 +64,7 @@ dedup_modules() {
 }
 
 load_modules() {
+    log_header "Loading enabled modules"
     dedup_modules
     for module in "${ENABLED_MODULES[@]}"; do
         echo -e "Loading module ${Purple}$module${COff}"
@@ -166,11 +167,14 @@ find_modules() {
     done
 }
 
-find_missing_modules() {
+find_installed_modules() {
+    log_header "Looking for installed modules"
+
+    if [ "$_DOCKER_INSTALLED" != "true" ]; then return 0; fi
+
     local container_ids container_id container_labels module_name
     container_ids=$(docker ps -aq --filter "label=com.docker.compose.project=$COMPOSE_PROJECT_NAME")
 
-    INSTALLED_MODULES=()
     for container_id in $container_ids; do
         container_labels=$(docker inspect --format '{{range $k,$v := .Config.Labels}}{{$k}}={{$v}}{{printf "\n"}}{{end}}' "$container_id")
         
@@ -190,8 +194,16 @@ find_missing_modules() {
     # Remove duplicates from the array
     mapfile -t INSTALLED_MODULES < <(printf "%s\n" "${INSTALLED_MODULES[@]}" | sort -u)
 
+    local module
+    for module in "${INSTALLED_MODULES[@]}"; do
+        echo -e "Found installed module: ${Purple}$module${COff}"
+    done
+}
+
+find_missing_modules() {
     # Find modules that are installed but not enabled
     local -a missing_modules=()
+    local module
     for module in "${INSTALLED_MODULES[@]}"; do
         # shellcheck disable=SC2076
         if [[ ! " ${ENABLED_MODULES[*]} " =~ " ${module} " ]]; then
@@ -485,6 +497,8 @@ print_usage() {
     echo "  -p, --project <name>            Name to use for the Docker Compose project. [Default: 'self-host']"
     echo "  -e, --env <path>                Environment file to read variables from. [Default: './env']"
     echo "  -m, --module <module>           Includes the given module in the project. Can be specified multiple times."
+    echo "      --module all                Enables all available modules."
+    echo "      --module keep               Enables all modules currently deployed."
     echo "  -o, --override <var>=<value>    Application data for deployment. [Default: '/srv/appdata']"
     echo "  -u, --user <user>               User to apply for file permissions. [Default: '$USER']"
     echo "  --resume                        Skip any steps that have been previously completed."
@@ -502,6 +516,9 @@ print_usage() {
 
     exit 1
 }
+
+# Find installed modules - needed for option `-m keep`
+find_installed_modules
 
 ################################################################################
 #                           PARSE COMMAND LINE
@@ -530,7 +547,13 @@ while [ "$#" -gt 0 ]; do
         ;;
     --module | -m)
         if [ -n "$2" ]; then
-            if [ "$2" = "all" ]; then find_modules; else ENABLED_MODULES+=("$2"); fi
+            if [ "$2" = "all" ]; then 
+                find_modules
+            elif [ "$2" = "keep" ]; then
+                ENABLED_MODULES+=("${INSTALLED_MODULES[@]}")
+            else
+                ENABLED_MODULES+=("$2")
+            fi
             shift 2
             continue
         else
