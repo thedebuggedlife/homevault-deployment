@@ -31,6 +31,7 @@ while true; do
             }
         }
     }
-    echo "Sleeping until $(date -d "+${UPNP_SLEEP:-3600} seconds")"
+    date
+    echo "Sleeping for ${UPNP_SLEEP:-3600} seconds"
     sleep "${UPNP_SLEEP:-3600}"
 done
