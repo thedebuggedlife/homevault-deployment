@@ -143,7 +143,7 @@ configure_smtp_domain_records() {
 configure_smtp_domain() {
     if [ "$SMTP2GO_DOMAIN_VALIDATED" = "true" ]; then
         echo "Domain has been previously verified."
-        if [ "$RESUME" = "true" ]; then return 0; fi
+        if [ "$USE_DEFAULTS" = "true" ]; then return 0; fi
         local user_input=N
         if [ "$UNATTENDED" != "true" ]; then
             read -p "Do you want to revalidate the domain configuration? [y/N]" user_input </dev/tty
@@ -192,7 +192,7 @@ configure_smtp_domain() {
 configure_smtp_user() {
     if [ -n "$SMTP_PASSWORD" ]; then
         echo "SMTP2GO user appears to already be configured."
-        if [ "$RESUME" = "true" ]; then return 0; fi
+        if [ "$USE_DEFAULTS" = "true" ]; then return 0; fi
         local user_input=N
         if [ "$UNATTENDED" != "true" ]; then
             read -p "Do you want to validate or re-create the user with SMTP2GO? [y/N] " user_input </dev/tty

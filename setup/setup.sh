@@ -17,7 +17,7 @@ OVERRIDE_VERSIONS=false
 UNATTENDED=
 NO_DOWNLOAD=
 USE_SMTP2GO=true
-RESUME=false
+USE_DEFAULTS=false
 ENV_FILE=.env
 AS_USER="$USER"
 COMPOSE_PROJECT_NAME=self-host
@@ -402,7 +402,7 @@ configure_admin_account() {
     fi
 
     # If already configured and the --resume flag was specified, skip the rest
-    if [[ -z "$ADMIN_USERNAME" || -z "$ADMIN_EMAIL" || -z "$ADMIN_PASSWORD" || -z "$ADMIN_DISPLAY_NAME" || "$RESUME" != "true" ]]; then
+    if [[ -z "$ADMIN_USERNAME" || -z "$ADMIN_EMAIL" || -z "$ADMIN_PASSWORD" || -z "$ADMIN_DISPLAY_NAME" || "$USE_DEFAULTS" != "true" ]]; then
 
         echo -e "The following user will be created and configured with ${Yellow}administrator privileges${COff} across all applications."
         echo
@@ -461,34 +461,39 @@ build_resume_command() {
     # Check if --resume is already present in the arguments
     found_resume=false
     for arg in "${cmd[@]}"; do
-        if [[ "$arg" == "--resume" ]]; then
+        if [[ "$arg" == "--use-defaults" ]]; then
             found_resume=true
             break
         fi
     done
 
-    # Append --resume if it was not provided
+    # Append --use-defaults if it was not provided
     if ! $found_resume; then
-        cmd+=( "--resume" )
+        cmd+=( "--use-defaults" )
     fi
 
     local resume="$PROJECT_ROOT/resume.sh"
 
     # Reconstruct the command as a string with proper quoting
-    printf "%q" "$PROJECT_ROOT/setup.sh" > "$resume"
-    printf " %q" "${cmd[@]}" >> "$resume"
-    echo ' "$@"' >> "$resume"
+    {
+        # shellcheck disable=SC2016
+        echo 'rm ${BASH_SOURCE[0]}'
+        echo "cd '$PROJECT_ROOT'"
+        printf "%q" "./setup.sh"
+        printf " %q" "${cmd[@]}"
+    } > "$resume"
     chmod +x "$resume"
 }
 
-# Terminate program and print instructions on how to invoke again to resume
+# Terminate program
 abort_install() {
     log_warn "Setup aborted by user."
+    build_resume_command
     echo -e "To resume, run: ${BIGreen}${PROJECT_ROOT}/resume.sh${COff}\n"
     exit 1
 }
 
-# If the user aborts with CTRL+C, print instructions on how to resume installation
+# Catch the case when user aborts with CTRL+C
 trap "echo && abort_install" SIGINT
 
 print_usage() {
@@ -501,7 +506,7 @@ print_usage() {
     echo "      --module keep               Enables all modules currently deployed."
     echo "  -o, --override <var>=<value>    Application data for deployment. [Default: '/srv/appdata']"
     echo "  -u, --user <user>               User to apply for file permissions. [Default: '$USER']"
-    echo "  --resume                        Skip any steps that have been previously completed."
+    echo "  --use-defaults                  Use default values, or those that have been provided earlier."
     echo "  --unattended                    Automatically answer prompts with defaults (implies --resume)."
     echo "  --no-download                   Do not download appdata from GitHub. Only use if appdata was previously downloaded."
     echo -e "  --keep-compose                  Do not override previously deployed docker-compose files. ${IRed}Use with caution!${COff}"
@@ -589,7 +594,7 @@ while [ "$#" -gt 0 ]; do
         ;;
     --unattended)
         UNATTENDED=true
-        RESUME=true
+        USE_DEFAULTS=true
         shift 1
         continue
         ;;
@@ -608,8 +613,8 @@ while [ "$#" -gt 0 ]; do
         shift 1
         continue
         ;;
-    --resume)
-        RESUME=true
+    --use-defaults)
+        USE_DEFAULTS=true
         shift 1
         continue
         ;;
@@ -632,8 +637,6 @@ while [ "$#" -gt 0 ]; do
         ;;
     esac
 done
-
-build_resume_command
 
 load_modules
 

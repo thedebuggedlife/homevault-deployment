@@ -113,7 +113,7 @@ pam_write_sssd_config() {
             fi
         else
             echo -e "Configuration for ${Purple}$CF_DOMAIN_NAME${COff} already present in ${Cyan}$_SSSD_CONFIG_PATH${COff}"
-            if [ "$RESUME" = true ]; then return 0; fi
+            if [ "$USE_DEFAULTS" = true ]; then return 0; fi
             read -p "Do you want to override the existing configuration? [y/N] " user_input </dev/tty
             user_input=${user_input:-N}
             if [[ ! "$user_input" =~ ^[Yy]$ ]]; then

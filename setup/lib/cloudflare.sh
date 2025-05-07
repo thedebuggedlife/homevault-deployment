@@ -204,7 +204,7 @@ configure_cloudflare_tunnel() {
     local token_file=${SECRETS_PATH}cloudflare_tunnel_token
     if [ -n "$CF_TUNNEL_ID" ] && [ -f "$token_file" ]; then
         echo "Cloudflare tunnel appears to be already configured." >&2
-        if [ "$RESUME" = "true" ]; then return 0; fi
+        if [ "$USE_DEFAULTS" = "true" ]; then return 0; fi
         local user_input=N
         if [ "$UNATTENDED" != "true" ]; then
             read -p "Do you want to reconfigure the Cloudflare tunnel information? [y/N] " user_input </dev/tty

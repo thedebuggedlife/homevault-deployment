@@ -149,7 +149,7 @@ ask_for_env() {
     fi
 
     # If resuming a previous install and there is a value already set, dismiss
-    if [[ "$RESUME" = "true" && -n "${!env_variable}" && "$use_default" = "true" ]]; then 
+    if [[ "$USE_DEFAULTS" = "true" && -n "${!env_variable}" && "$use_default" = "true" ]]; then 
         return 0
     fi
 
