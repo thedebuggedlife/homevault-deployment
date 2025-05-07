@@ -56,17 +56,21 @@ nextcloud_pre_install() {
     # For NextCloud to respect X-Forwarded-* headers the CIDR that includes traefik and nextcloud should be
     # added to the trusted proxies. Otherwise, NextCloud will not receive original IP and protocol of the request.
     if [ -z "$NEXTCLOUD_TRUSTED_PROXIES" ]; then
-        echo "Creating Docker resources for NextCloud to extract network address..."
-        if ! sg docker -c "docker compose $COMPOSE_OPTIONS create -y --quiet-pull nextcloud-app"; then
-            log_error "Failed to create container resources for NextCloud"
+        echo "Creating Docker resources to extract network addresses..."
+        if ! sg docker -c "docker compose $COMPOSE_OPTIONS create -y --quiet-pull traefik nextcloud-app"; then
+            log_error "Failed to create container resources"
             exit 1
         fi
-        local trusted_proxies
-        if ! trusted_proxies=$(docker network inspect "nextcloud-proxy" -f '{{(index .IPAM.Config 0).Subnet}}'); then
+        local proxy_addr nextcloud_proxy_addr
+        if ! proxy_addr=$(docker network inspect "proxy" -f '{{(index .IPAM.Config 0).Subnet}}'); then
+            log_error "Could not extract network IP CIDR for 'proxy'"
+            exit 1
+        fi
+        if ! nextcloud_proxy_addr=$(docker network inspect "nextcloud-proxy" -f '{{(index .IPAM.Config 0).Subnet}}'); then
             log_error "Could not extract network IP CIDR for 'nextcloud-proxy'"
             exit 1
         fi
-        save_env NEXTCLOUD_TRUSTED_PROXIES "$trusted_proxies"
+        save_env NEXTCLOUD_TRUSTED_PROXIES "'$proxy_addr $nextcloud_proxy_addr'"
     fi
 }
 
