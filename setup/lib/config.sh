@@ -256,6 +256,28 @@ create_rsa_keypair() {
 #                           HELPER FUNCTIONS
 
 ###
+# Remove one (or more) items from an array
+#
+# @param $1 {string} Name of the array (passed by-ref)
+# @param $* {string} One or more items to remove from the array
+###
+remove_from_array() {
+  local -n arr="$1"
+  shift
+  
+  for remove_element in "$@"; do
+    local new_array=()
+    for item in "${arr[@]}"; do
+      if [[ "$item" != "$remove_element" ]]; then
+        new_array+=("$item")
+      fi
+    done
+    
+    arr=("${new_array[@]}")
+  done
+}
+
+###
 # Makes sure a given path exists, if not, it is created with $AS_USER:docker ownership
 #
 # Parameters:

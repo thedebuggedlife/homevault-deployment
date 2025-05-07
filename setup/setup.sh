@@ -17,7 +17,7 @@ OVERRIDE_VERSIONS=false
 UNATTENDED=
 NO_DOWNLOAD=
 USE_SMTP2GO=true
-USE_DEFAULTS=false
+USE_DEFAULTS=true
 ENV_FILE=.env
 AS_USER="$USER"
 COMPOSE_PROJECT_NAME=self-host
@@ -54,12 +54,18 @@ declare -A MODULE_OPTIONS
 dedup_modules() {
     local -A seen_modules
     local unique_modules=()
+
+    # First, ensure "base" is always present and in first position
+    unique_modules+=("base")
+    seen_modules["base"]=1
+
     for module in "${ENABLED_MODULES[@]}"; do
         if [[ -z "${seen_modules[$module]}" ]]; then
             unique_modules+=("$module")
             seen_modules[$module]=1
         fi
     done
+
     ENABLED_MODULES=("${unique_modules[@]}")
 }
 
@@ -93,7 +99,7 @@ execute_hooks() {
     local hook_name="${!#}"  # Get the last argument (hook name)
     local -a hooks=("${@:1:$#-1}")  # Get all arguments except the last one
     
-    echo -e "\n\nExecuting ${Purple}$hook_name${COff} hooks..." >&2
+    echo -e "\nExecuting ${Purple}$hook_name${COff} hooks...\n" >&2
     for hook in "${hooks[@]}"; do
         if ! $hook; then
             log_error "Hook '$hook' failed"
@@ -158,7 +164,7 @@ load_module_help() {
     done
 }
 
-find_modules() {
+find_all_modules() {
     for module_file in "$PROJECT_ROOT"/modules/*/setup.sh; do
         module_name=$(basename "$(dirname "$module_file")")
         if [ "$module_name" != "base" ]; then
@@ -198,6 +204,10 @@ find_installed_modules() {
     for module in "${INSTALLED_MODULES[@]}"; do
         echo -e "Found installed module: ${Purple}$module${COff}"
     done
+
+    # Automatically enable all installed modules
+    ENABLED_MODULES+=("${INSTALLED_MODULES[@]}")
+    dedup_modules
 }
 
 find_missing_modules() {
@@ -493,9 +503,6 @@ abort_install() {
     exit 1
 }
 
-# Catch the case when user aborts with CTRL+C
-trap "echo && abort_install" SIGINT
-
 print_usage() {
     echo -e "Usage: $0 [--appdata <path>] [--env <file>]\n"
     echo -e "Options:\n"
@@ -503,11 +510,11 @@ print_usage() {
     echo "  -e, --env <path>                Environment file to read variables from. [Default: './env']"
     echo "  -m, --module <module>           Includes the given module in the project. Can be specified multiple times."
     echo "      --module all                Enables all available modules."
-    echo "      --module keep               Enables all modules currently deployed."
+    echo -e "  --rm <module>                   Removes a module that had been previously installed. ${IRed}Use with caution!${COff}" 
     echo "  -o, --override <var>=<value>    Application data for deployment. [Default: '/srv/appdata']"
     echo "  -u, --user <user>               User to apply for file permissions. [Default: '$USER']"
-    echo "  --use-defaults                  Use default values, or those that have been provided earlier."
-    echo "  --unattended                    Automatically answer prompts with defaults (implies --resume)."
+    echo "  --always-ask                    Force interactive prompts for settings with a default or previously provided."
+    echo "  --unattended                    Do not stop for any prompt. Safe prompts will be auto-accepted. Other prompts will end in failure."
     echo "  --no-download                   Do not download appdata from GitHub. Only use if appdata was previously downloaded."
     echo -e "  --keep-compose                  Do not override previously deployed docker-compose files. ${IRed}Use with caution!${COff}"
     echo -e "  --override-versions             Override running versions with those specified in compose files. ${IRed}Use with caution!${COff}"
@@ -522,126 +529,137 @@ print_usage() {
     exit 1
 }
 
-# Find installed modules - needed for option `-m keep`
-find_installed_modules
-
-################################################################################
-#                           PARSE COMMAND LINE
-
-while [ "$#" -gt 0 ]; do
-    case "$(echo "$1" | tr '[:upper:]' '[:lower:]')" in
-    --project | -p)
-        if [ -n "$2" ]; then
-            COMPOSE_PROJECT_NAME="$2"
-            shift 2
-            continue
-        else
-            echo "Error: $1 requires a name."
-            exit 1
-        fi
-        ;;
-    --env | -e)
-        if [ -n "$2" ]; then
-            ENV_FILE="$2"
-            shift 2
-            continue
-        else
-            echo "Error: $1 requires a file path."
-            exit 1
-        fi
-        ;;
-    --module | -m)
-        if [ -n "$2" ]; then
-            if [ "$2" = "all" ]; then 
-                find_modules
-            elif [ "$2" = "keep" ]; then
-                ENABLED_MODULES+=("${INSTALLED_MODULES[@]}")
+parse_command_line() {
+    while [ "$#" -gt 0 ]; do
+        case "$(echo "$1" | tr '[:upper:]' '[:lower:]')" in
+        --project | -p)
+            if [ -n "$2" ]; then
+                COMPOSE_PROJECT_NAME="$2"
+                shift 2
+                continue
             else
-                ENABLED_MODULES+=("$2")
+                echo "Error: $1 requires a name."
+                exit 1
             fi
-            shift 2
-            continue
-        else
-            echo "Error: $1 requires a value."
-            exit 1
-        fi
-        ;;
-    --override | -o)
-        if [ -n "$2" ]; then
-            # Parse override in form of: VARIABLE_NAME=VALUE
-            if echo "$2" | grep -q '='; then
-                eval "$(echo "$2" | cut -d '=' -f 1)_OVERRIDE=\"$(echo "$2" | cut -d '=' -f 2-)\""
+            ;;
+        --env | -e)
+            if [ -n "$2" ]; then
+                ENV_FILE="$2"
+                shift 2
+                continue
+            else
+                echo "Error: $1 requires a file path."
+                exit 1
+            fi
+            ;;
+        --module | -m)
+            if [ -n "$2" ]; then
+                if [ "$2" = "all" ]; then 
+                    find_all_modules
+                else
+                    ENABLED_MODULES+=("$2")
+                fi
+                dedup_modules
+                shift 2
+                continue
+            else
+                echo "Error: $1 requires a value."
+                exit 1
+            fi
+            ;;
+        --rm)
+            if [ -n "$2" ]; then
+                remove_from_array ENABLED_MODULES "$2"
+                shift 2
+                continue
+            else
+                echo "Error: $1 requires a value."
+                exit 1
+            fi
+            ;;
+        --override | -o)
+            if [ -n "$2" ]; then
+                # Parse override in form of: VARIABLE_NAME=VALUE
+                if echo "$2" | grep -q '='; then
+                    eval "$(echo "$2" | cut -d '=' -f 1)_OVERRIDE=\"$(echo "$2" | cut -d '=' -f 2-)\""
+                else
+                    echo "Error: $1 requires an assignment in the form VARIABLE_NAME=VALUE."
+                    exit 1
+                fi
+                shift 2
+                continue
             else
                 echo "Error: $1 requires an assignment in the form VARIABLE_NAME=VALUE."
                 exit 1
             fi
-            shift 2
+            ;;
+        --user | -u)
+            if [ -n "$2" ]; then
+                AS_USER="$2"
+                shift 2
+                continue
+            else
+                echo "Error: $1 requires a value."
+                exit 1
+            fi
+            ;;
+        --unattended)
+            UNATTENDED=true
+            USE_DEFAULTS=true
+            shift 1
             continue
-        else
-            echo "Error: $1 requires an assignment in the form VARIABLE_NAME=VALUE."
-            exit 1
-        fi
-        ;;
-    --user | -u)
-        if [ -n "$2" ]; then
-            AS_USER="$2"
-            shift 2
+            ;;
+        --keep-compose)
+            OVERRIDE_COMPOSE=false
+            shift 1
             continue
-        else
-            echo "Error: $1 requires a value."
+            ;;
+        --override-versions)
+            OVERRIDE_VERSIONS=true
+            shift 1
+            continue
+            ;;
+        --custom-smtp)
+            USE_SMTP2GO=false
+            shift 1
+            continue
+            ;;
+        --always-ask)
+            USE_DEFAULTS=false
+            shift 1
+            continue
+            ;;
+        --no-download)
+            NO_DOWNLOAD=true
+            shift 1
+            continue
+            ;;
+        --dry-run)
+            COMPOSE_UP_OPTIONS="$COMPOSE_UP_OPTIONS --dry-run"
+            shift 1
+            continue
+            ;;
+        -h | --help)
+            print_usage
+            ;;
+        *)
+            echo "Unknown option: $1"
             exit 1
-        fi
-        ;;
-    --unattended)
-        UNATTENDED=true
-        USE_DEFAULTS=true
-        shift 1
-        continue
-        ;;
-    --keep-compose)
-        OVERRIDE_COMPOSE=false
-        shift 1
-        continue
-        ;;
-    --override-versions)
-        OVERRIDE_VERSIONS=true
-        shift 1
-        continue
-        ;;
-    --custom-smtp)
-        USE_SMTP2GO=false
-        shift 1
-        continue
-        ;;
-    --use-defaults)
-        USE_DEFAULTS=true
-        shift 1
-        continue
-        ;;
-    --no-download)
-        NO_DOWNLOAD=true
-        shift 1
-        continue
-        ;;
-    --dry-run)
-        COMPOSE_UP_OPTIONS="$COMPOSE_UP_OPTIONS --dry-run"
-        shift 1
-        continue
-        ;;
-    -h | --help)
-        print_usage
-        ;;
-    *)
-        echo "Unknown option: $1"
-        exit 1
-        ;;
-    esac
-done
-
-load_modules
+            ;;
+        esac
+    done
+}
 
 ################################################################################
 #                           MAIN PROGRAM LOGIC
+
+trap "echo && abort_install" SIGINT
+
+find_installed_modules
+
+parse_command_line "$@"
+
+load_modules
 
 log_header "Configuring Docker"
 configure_docker
