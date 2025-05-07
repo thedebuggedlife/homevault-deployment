@@ -1,5 +1,8 @@
 # Selfhost Bootstrap Project
 
+> [!NOTE]
+> The complete documentation for this project can be found at: https://thedebugged.life/bootstrap/bootstrap-project/
+
 This project will help you bootstrap a simple but powerful home-lab server that can replace services like Google Docs and Google Photos—giving you more control, privacy, and ownership over your data.
 
 - 📂 **Sync your documents across devices and collaborate with others** – using [Nextcloud](https://nextcloud.com/), a versatile platform that replaces Google Docs and Drive. It offers file storage, document editing, calendar sync, and other collaborative tools.
@@ -9,6 +12,23 @@ This project will help you bootstrap a simple but powerful home-lab server that 
 - 📊 **Monitor your server 24/7** - With pre-installed tools like [Prometheus](https://prometheus.io/), [Loki](https://grafana.com/oss/loki/), and [Grafana](https://grafana.com/oss/grafana/), get a glimpse of your server activity and configure automatic alarms to notify when abnormal conditions are detected.
 - 🔄 **Set up encrypted backups to AWS for peace of mind** – with automated, encrypted off-site backups to [AWS S3 Glacier](https://aws.amazon.com/s3/storage-classes/glacier/) storage, to ensure your data is protected in case of hardware failure.
 
-![](./services.drawio.png)
+## Design Principles
+The following principles guide the architectural decisions and implementation of this project. These core philosophies ensure the system remains secure, maintainable, and adaptable while making it easier for administrators to deploy and manage the server and its applications.
 
-Additional documentation: https://thedebugged.life/bootstrap/bootstrap-project/
+### 1. Open Source Software
+This project is built entirely on open source software components. This fundamental choice ensures transparency in how the system operates and processes data. By avoiding proprietary solutions, we eliminate vendor lock-in risks and enable community-driven improvements and security auditing. Open source also provides greater flexibility for customization to specific organizational needs without requiring expensive licensing or special permissions.
+
+### 2. Centralized User Management
+At the core of our architecture is an LLDAP server that centralizes all user identity and access management. This approach creates a single source of truth for user accounts, group memberships, and access privileges across the entire system. Administrators can efficiently manage the complete user lifecycle—from onboarding to role changes to offboarding—through a unified interface rather than configuring each application separately. This centralization significantly reduces administrative overhead while improving security by ensuring consistent access policies and immediate system-wide updates when privileges change.
+
+### 3. Single Sign-On (SSO)
+All applications hosted by the server integrate with Authelia, a self-hosted OpenID Connect provider, which securely authenticates users across all applications with the same login credentials. After logging in once, users can seamlessly navigate between different applications without reauthenticating. This creates a frictionless user experience while maintaining strong security through standardized authentication protocols. The SSO implementation also supports multi-factor authentication (MFA) that, once verified, applies across all integrated applications, balancing convenience with enhanced security posture.
+
+### 4. Docker-Based Deployment
+This project leverages Docker containers as the foundation of its deployment strategy, providing consistent, isolated environments for each application. Every service runs in its own container with precisely defined resource limits and access permissions following the principle of least privilege. Docker ensures immutable infrastructure, where configuration changes trigger new container builds rather than in-place modifications. Network communication between containers is strictly controlled through Docker's networking features, limiting each service's connectivity to only what is absolutely necessary. The containerized approach enables seamless migration between hosts, simplified backups, and rapid recovery in case of failures. By standardizing on Docker, the system achieves better security isolation, dependency management, and operational consistency compared to traditional installation methods.
+
+### 5. Infrastructure as Code
+All system components, configurations, and deployment processes are defined as code using tools like Docker Compose, shell scripts, and configuration files. This approach ensures consistency between environments and enables version-controlled, repeatable deployments. Infrastructure modifications are applied using the same automated deployment processes, reducing configuration drift and human error. By treating infrastructure as code, the entire system becomes self-documenting and can be recreated reliably on new hardware when needed, making disaster recovery more predictable and efficient.
+
+### 6. Monitoring and Automated Maintenance
+This project integrates powerful monitoring and automated maintenance tools to make it simple to inspect system performance and reliability. Prometheus, Loki, and Grafana work together to provide real-time visibility into system metrics, logs, and performance through intuitive dashboards that highlight potential issues even as soon as they start happening. Automated update mechanisms continuously monitor Docker containers for available security patches and improvements, with the option of applying those updates without manual intervention. This approach minimizes administrative overhead while maximizing system uptime and security through early detection and rapid remediation of potential problems.
