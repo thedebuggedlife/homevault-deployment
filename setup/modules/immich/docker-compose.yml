@@ -50,8 +50,10 @@ services:
       DB_PASSWORD_FILE: /run/secrets/immich_db_password
       REDIS_HOSTNAME: immich-redis
     depends_on:
-      - immich-redis
-      - immich-postgres
+      immich-redis:
+        condition: service_healthy
+      immich-postgres:
+        condition: service_healthy
     restart: always
     healthcheck:
       test: ["CMD-SHELL", "curl -s http://localhost:2283/api/server/ping | grep -q 'pong' || exit 1"]
