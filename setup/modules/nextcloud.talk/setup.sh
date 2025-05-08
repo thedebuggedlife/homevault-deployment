@@ -145,6 +145,7 @@ nextcloud_talk_config_env() {
         ask_for_env NEXTCLOUD_TURN_SUBDOMAIN "Subdomain under ${CF_DOMAIN_NAME} to use for Nextcloud Talk TURN server"
         ask_for_env NEXTCLOUD_TURN_HOST_PORT "Port in the host that will be mapped to the Nextcloud Talk TURN server container"
         ask_for_env NEXTCLOUD_TURN_ROUTER_PORT "Port in the router that will be forwarded to port ${NEXTCLOUD_TURN_HOST_PORT} on this host"
+        ask_for_env NEXTCLOUD_TURN_UPNP_SLEEP "How often to reconfigure port mapping on your home router, in seconds (0=disabled)"
     fi
 }
 
