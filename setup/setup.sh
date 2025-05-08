@@ -468,22 +468,7 @@ configure_admin_account() {
 cmd=( "$@" )
 
 build_resume_command() {
-    # Check if --resume is already present in the arguments
-    found_resume=false
-    for arg in "${cmd[@]}"; do
-        if [[ "$arg" == "--use-defaults" ]]; then
-            found_resume=true
-            break
-        fi
-    done
-
-    # Append --use-defaults if it was not provided
-    if ! $found_resume; then
-        cmd+=( "--use-defaults" )
-    fi
-
     local resume="$PROJECT_ROOT/resume.sh"
-
     # Reconstruct the command as a string with proper quoting
     {
         # shellcheck disable=SC2016
