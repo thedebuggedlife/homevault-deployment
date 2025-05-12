@@ -2,6 +2,7 @@
 
 set -o pipefail
 
+PROJECT_VERSION=0.1
 PROJECT_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 PROJECT_ROOT="${PROJECT_ROOT%/}"
 
@@ -9,7 +10,10 @@ source "$PROJECT_ROOT/lib/logging.sh"
 source "$PROJECT_ROOT/lib/config.sh"
 source "$PROJECT_ROOT/lib/smtp2go.sh"
 source "$PROJECT_ROOT/lib/docker.sh"
+source "$PROJECT_ROOT/lib/backup.sh"
 
+SELECTED_ACTION=
+SHOW_ALL=false
 COMPOSE_PATH=
 SECRETS_PATH=
 OVERRIDE_COMPOSE=true
@@ -20,7 +24,8 @@ USE_SMTP2GO=true
 USE_DEFAULTS=true
 ENV_FILE=.env
 AS_USER="$USER"
-COMPOSE_PROJECT_NAME=self-host
+REINSTALL_FROM=
+COMPOSE_PROJECT_NAME=homevault
 COMPOSE_OPTIONS=
 COMPOSE_UP_OPTIONS=
 
@@ -39,6 +44,7 @@ CF_DOMAIN_NAME=
 # Base module should always be first in the list
 declare -a ENABLED_MODULES=("base")
 declare -a INSTALLED_MODULES=()
+declare -a REMOVE_MODULES=()
 
 ################################################################################
 #                           SETUP MODULES
@@ -194,6 +200,7 @@ find_installed_modules() {
     done
 
     if [ ${#INSTALLED_MODULES[@]} -eq 0 ]; then
+        echo "There are no modules installed."
         return 0
     fi
 
@@ -203,10 +210,10 @@ find_installed_modules() {
     local module
     for module in "${INSTALLED_MODULES[@]}"; do
         echo -e "Found installed module: ${Purple}$module${COff}"
+        # Enable all installed modules except those marked for removal
+        array_contains "$module" "${REMOVE_MODULES[@]}" || ENABLED_MODULES+=("$module")
     done
 
-    # Automatically enable all installed modules
-    ENABLED_MODULES+=("${INSTALLED_MODULES[@]}")
     dedup_modules
 }
 
@@ -465,6 +472,42 @@ configure_admin_account() {
     write_file "$ADMIN_PASSWORD" "${SECRETS_PATH}server_admin_password"
 }
 
+configure_restore() {
+    log_header "Preparing to restore project"
+
+    if [[ "${#INSTALLED_MODULES[@]}" -gt 0 ]]; then
+        echo -e "${Yellow}There are ${Purple}${#INSTALLED_MODULES[@]}${Yellow} already installed.${COff}"
+        echo -e "${Yellow}This operation will destroy and recreate Docker resources for these modules.${COff}"
+        echo
+        if ! ask_confirmation; then abort_install; fi
+    fi
+
+    if [ -z "$APPDATA_LOCATION" ]; then
+        log_error "Missing appdata location to restore from."
+        exit 1;
+    fi
+
+    COMPOSE_PATH="${APPDATA_LOCATION%/}/compose/${COMPOSE_PROJECT_NAME}"
+
+    # When reinstalling, the following settings are implied
+    OVERRIDE_COMPOSE=false
+    OVERRIDE_VERSIONS=true
+    NO_DOWNLOAD=true
+
+    # Copy environment file
+    if [ -f "${COMPOSE_PATH%/}/.env" ]; then
+        cp "${COMPOSE_PATH%/}/.env" "${ENV_FILE}" || {
+            log_error "Failed to write file '${ENV_FILE}'"
+            exit 1
+        }
+    else
+        log_error "Missing file '${COMPOSE_PATH%/}/.env'"
+        exit 1
+    fi
+
+    load_restore_file "${COMPOSE_PATH%/}/.restore.json" || exit 1
+}
+
 cmd=( "$@" )
 
 build_resume_command() {
@@ -489,55 +532,141 @@ abort_install() {
 }
 
 print_usage() {
-    echo -e "Usage: $0 [--appdata <path>] [--env <file>]\n"
-    echo -e "Options:\n"
-    echo "  -p, --project <name>            Name to use for the Docker Compose project. [Default: 'self-host']"
-    echo "  -e, --env <path>                Environment file to read variables from. [Default: './env']"
-    echo "  -m, --module <module>           Includes the given module in the project. Can be specified multiple times."
-    echo "      --module all                Enables all available modules."
-    echo -e "  --rm <module>                   Removes a module that had been previously installed. ${IRed}Use with caution!${COff}" 
-    echo "  -o, --override <var>=<value>    Application data for deployment. [Default: '/srv/appdata']"
+    echo -e "\nUsage: $0 [global options] <action> [action options]"
+
+    if [ -z "$SELECTED_ACTION" ]; then
+        echo -e "\nActions:\n"
+        echo "  deploy      Installs and/or updates modules in the project."
+        echo "  backup      Creates a new snapshot with the current statue of the project."
+        echo "  restore     Recovers the state of the project from a previous snapshot."
+        echo "  modules     Shows information about installed or available modules."
+        echo -e "\nTo display help for an action:\n"
+        echo "  $0 <action> --help"
+
+    elif [ "$SELECTED_ACTION" = "deploy" ]; then
+        echo -e "\nDeploy options:\n"
+        echo "  -m, --module <module>           Includes the given module in the project. Can be specified multiple times."
+        echo "      --module all                Enables all available modules."
+        echo -e "  --rm <module>                   Removes a module that had been previously installed. ${IRed}Use with caution!${COff}" 
+        echo "  -o, --override <var>=<value>    Override environment variable. Can be specified multiple times."
+        echo "  --no-download                   Do not download appdata from GitHub. Only use if appdata was previously downloaded."
+        echo -e "  --keep-compose                  Do not override previously deployed docker-compose files. ${IRed}Use with caution!${COff}"
+        echo -e "  --override-versions             Override running versions with those specified in compose files. ${IRed}Use with caution!${COff}"
+        echo "  --custom-smtp                   Do not use SMTP2GO for sending email (custom SMTP configuration required)."
+        echo "  --dry-run                       Execute Docker Compose in dry run mode."
+
+    elif [ "$SELECTED_ACTION" = "restore" ]; then
+        echo -e "\nRestore options:\n"
+        echo "  --from <path>                   Look for existing appdata at this location."
+
+    elif [ "$SELECTED_ACTION" = "modules" ]; then
+        echo -e "\Modules options:\n"
+        echo "  --all                           Show information for all modules available. Otherwise only installed modules are shown."
+    fi
+
+    echo -e "\nGlobal options:\n"
+    echo "  -h, --help                      Display this help message."
     echo "  -u, --user <user>               User to apply for file permissions. [Default: '$USER']"
     echo "  --always-ask                    Force interactive prompts for settings with a default or previously provided."
     echo "  --unattended                    Do not stop for any prompt. Safe prompts will be auto-accepted. Other prompts will end in failure."
-    echo "  --no-download                   Do not download appdata from GitHub. Only use if appdata was previously downloaded."
-    echo -e "  --keep-compose                  Do not override previously deployed docker-compose files. ${IRed}Use with caution!${COff}"
-    echo -e "  --override-versions             Override running versions with those specified in compose files. ${IRed}Use with caution!${COff}"
-    echo "  --custom-smtp                   Do not use SMTP2GO for sending email (custom SMTP configuration required)."
-    echo "  --dry-run                       Execute Docker Compose in dry run mode."
-    echo "  -h, --help                      Display this help message."
-
-    load_module_help
-    echo -e "\nModules:\n"
-    log_options MODULE_OPTIONS
 
     exit 1
+}
+
+show_modules() {
+    if [ "$SHOW_ALL" = true ]; then
+        load_module_help
+        echo -e "\nAvailable modules:\n"
+        log_options MODULE_OPTIONS true
+    else
+        find_installed_modules
+        echo
+    fi
+
+    exit 0
+}
+
+check_action_for_option() {
+    local action=$1
+    local option=$2
+    if [ -z "$SELECTED_ACTION" ]; then
+        log_invalid "$option is not a global option"
+        print_usage
+    elif [ "$SELECTED_ACTION" != "$action" ]; then
+        log_invalid "$option is not supported for action: $SELECTED_ACTION"
+        print_usage
+    fi
 }
 
 parse_command_line() {
     while [ "$#" -gt 0 ]; do
         case "$(echo "$1" | tr '[:upper:]' '[:lower:]')" in
-        --project | -p)
+        ## ACTIONS
+        deploy)
+            if [ -n "$SELECTED_ACTION" ]; then log_invalid "Only 1 action can be selected at a time"; exit 1; fi
+            SELECTED_ACTION="deploy"
+            shift 1
+            ;;
+        backup)
+            if [ -n "$SELECTED_ACTION" ]; then log_invalid "Only 1 action can be selected at a time"; exit 1; fi
+            SELECTED_ACTION="backup"
+            shift 1
+            ;;
+        restore)
+            if [ -n "$SELECTED_ACTION" ]; then log_invalid "Only 1 action can be selected at a time"; exit 1; fi
+            SELECTED_ACTION="restore"
+            shift 1
+            ;;
+        modules)
+            if [ -n "$SELECTED_ACTION" ]; then log_invalid "Only 1 action can be selected at a time"; exit 1; fi
+            SELECTED_ACTION="modules"
+            shift 1
+            ;;
+        ## GLOBAL OPTIONS
+        --user | -u)
             if [ -n "$2" ]; then
-                COMPOSE_PROJECT_NAME="$2"
+                AS_USER="$2"
                 shift 2
                 continue
             else
-                echo "Error: $1 requires a name."
+                log_invalid "$1 requires a value."
                 exit 1
             fi
             ;;
-        --env | -e)
+        --unattended)
+            UNATTENDED=true
+            USE_DEFAULTS=true
+            shift 1
+            continue
+            ;;
+        --always-ask)
+            USE_DEFAULTS=false
+            shift 1
+            continue
+            ;;
+        -h | --help)
+            print_usage
+            ;;
+        ## DEPLOY OPTIONS
+        --override | -o)
+            check_action_for_option deploy "$1"
             if [ -n "$2" ]; then
-                ENV_FILE="$2"
+                # Parse override in form of: VARIABLE_NAME=VALUE
+                if echo "$2" | grep -q '='; then
+                    eval "$(echo "$2" | cut -d '=' -f 1)_OVERRIDE=\"$(echo "$2" | cut -d '=' -f 2-)\""
+                else
+                    log_invalid "$1 requires an assignment in the form VARIABLE_NAME=VALUE."
+                    exit 1
+                fi
                 shift 2
                 continue
             else
-                echo "Error: $1 requires a file path."
+                log_invalid "$1 requires an assignment in the form VARIABLE_NAME=VALUE."
                 exit 1
             fi
             ;;
         --module | -m)
+            check_action_for_option deploy "$1"
             if [ -n "$2" ]; then
                 if [ "$2" = "all" ]; then 
                     find_all_modules
@@ -548,91 +677,82 @@ parse_command_line() {
                 shift 2
                 continue
             else
-                echo "Error: $1 requires a value."
+                log_invalid "$1 requires a value."
                 exit 1
             fi
             ;;
         --rm)
+            check_action_for_option deploy "$1"
             if [ -n "$2" ]; then
-                remove_from_array ENABLED_MODULES "$2"
+                REMOVE_MODULES+=("$2")
                 shift 2
                 continue
             else
-                echo "Error: $1 requires a value."
+                log_invalid "$1 requires a value."
                 exit 1
             fi
-            ;;
-        --override | -o)
-            if [ -n "$2" ]; then
-                # Parse override in form of: VARIABLE_NAME=VALUE
-                if echo "$2" | grep -q '='; then
-                    eval "$(echo "$2" | cut -d '=' -f 1)_OVERRIDE=\"$(echo "$2" | cut -d '=' -f 2-)\""
-                else
-                    echo "Error: $1 requires an assignment in the form VARIABLE_NAME=VALUE."
-                    exit 1
-                fi
-                shift 2
-                continue
-            else
-                echo "Error: $1 requires an assignment in the form VARIABLE_NAME=VALUE."
-                exit 1
-            fi
-            ;;
-        --user | -u)
-            if [ -n "$2" ]; then
-                AS_USER="$2"
-                shift 2
-                continue
-            else
-                echo "Error: $1 requires a value."
-                exit 1
-            fi
-            ;;
-        --unattended)
-            UNATTENDED=true
-            USE_DEFAULTS=true
-            shift 1
-            continue
             ;;
         --keep-compose)
+            check_action_for_option deploy "$1"
             OVERRIDE_COMPOSE=false
             shift 1
             continue
             ;;
         --override-versions)
+            check_action_for_option deploy "$1"
             OVERRIDE_VERSIONS=true
             shift 1
             continue
             ;;
         --custom-smtp)
+            check_action_for_option deploy "$1"
             USE_SMTP2GO=false
             shift 1
             continue
             ;;
-        --always-ask)
-            USE_DEFAULTS=false
-            shift 1
-            continue
-            ;;
         --no-download)
+            check_action_for_option deploy "$1"
             NO_DOWNLOAD=true
             shift 1
             continue
             ;;
         --dry-run)
+            check_action_for_option deploy "$1"
             COMPOSE_UP_OPTIONS="$COMPOSE_UP_OPTIONS --dry-run"
             shift 1
             continue
             ;;
-        -h | --help)
-            print_usage
+        ## BACKUP OPTIONS
+        ## RESTORE OPTIONS
+        --from)
+            check_action_for_option restore "$1"
+            if [ -n "$2" ]; then
+                APPDATA_LOCATION="$2"
+                shift 2
+                continue
+            else
+                log_invalid "$1 requires a value."
+                exit 1
+            fi
+            ;;
+        ## MODULE OPTIONS
+        --all)
+            check_action_for_option modules "$1"
+            SHOW_ALL=true
+            shift 1
+            continue
             ;;
         *)
-            echo "Unknown option: $1"
-            exit 1
+            log_invalid "Unknown option: $1"
+            print_usage
             ;;
         esac
     done
+
+    if [ -z "$SELECTED_ACTION" ]; then
+        log_invalid "Missing action parameter"
+        print_usage
+    fi
 }
 
 ################################################################################
@@ -640,9 +760,17 @@ parse_command_line() {
 
 trap "echo && abort_install" SIGINT
 
+parse_command_line "$@"
+
+if [ "$SELECTED_ACTION" = "modules" ]; then
+    show_modules
+fi
+
 find_installed_modules
 
-parse_command_line "$@"
+if [ "$SELECTED_ACTION" = "restore" ]; then
+    configure_restore
+fi
 
 load_modules
 
@@ -675,25 +803,9 @@ configure_tailscale
 log_header "Configuring CloudFlare Tunnel"
 configure_cloudflare_tunnel
 
-if [ "$USE_SMTP2GO" = "true" ]; then
-
+if [[ "$USE_SMTP2GO" = "true" ]]; then
     log_header "Configuring SMTP2GO Account"
-
-    configure_smtp_domain
-    if [ $? -ne 0 ]; then
-        log_error "SMTP domain configuration failed."
-        exit 1
-    fi
-
-    configure_smtp_user
-    if [ $? -ne 0 ]; then
-        log_error "SMTP user configuration failed."
-        exit 1
-    fi
-
-    save_env SMTP_SERVER mail.smtp2go.com
-    save_env SMTP_PORT "587"
-    save_env SMTP_SECURE "tls"
+    configure_smtp2go
 fi
 
 log_header "Preparing secret files"
@@ -705,5 +817,9 @@ find_missing_modules
 deploy_project
 
 execute_hooks "${BOOTSTRAP_HOOKS[@]}" "bootstrap"
+
+log_header "Finalizing deployment"
+
+save_restore_file "${COMPOSE_PATH%/}/.restore.json" || exit 1
 
 log_done

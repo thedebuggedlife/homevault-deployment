@@ -1,4 +1,4 @@
 This module combines Prometheus, Loki and Grafana to provide real-time monitoring of your server through a visually rich web-based dashboards. By default, this module will provide visibility into your server CPU, Memory, Network and Disk utilization. It will also give you the ability to explore logs from all other services running on the server.
-More information:
-- Grafana:  https://grafana.com/
-- Prometheus: https://prometheus.io/
+
+Grafana:  https://grafana.com/
+Prometheus: https://prometheus.io/

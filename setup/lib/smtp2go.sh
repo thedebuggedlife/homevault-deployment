@@ -219,3 +219,21 @@ configure_smtp_user() {
     password=$(echo "$user" | jq -r '.email_password')
     save_env SMTP_PASSWORD "${password}"
 }
+
+configure_smtp2go() {
+    configure_smtp_domain
+    if [ $? -ne 0 ]; then
+        log_error "SMTP domain configuration failed."
+        exit 1
+    fi
+
+    configure_smtp_user
+    if [ $? -ne 0 ]; then
+        log_error "SMTP user configuration failed."
+        exit 1
+    fi
+
+    save_env SMTP_SERVER mail.smtp2go.com
+    save_env SMTP_PORT "587"
+    save_env SMTP_SECURE "tls"
+}

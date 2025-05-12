@@ -69,6 +69,37 @@ ask_value() {
 }
 
 ###
+# Asks a yes/no question.
+#
+# @option   -y              Answer defaults to "Y" (yes), otherwise defaults to "N" (no)
+# @option   -p {prompt}     The prompt to display. Defaults to: "Do you want to continue?"
+#
+# @return   The function exits with 0 if the answer is yes, otherwise it exits with 1.
+#
+# @example:
+#   if ask_confirmation -y -p "Do you want to install Tailscale?"; then
+#       install_tailscale
+#   fi
+###
+ask_confirmation() {
+    local prompt="Do you want to continue?"
+    local default=N
+    local options="y/N"
+    OPTIND=1
+    while getopts "yp:" opt; do
+        case $opt in
+            y) default=Y; options="Y/n" ;;
+            p) prompt="$OPTARG" ;;
+            *) log_warn "Invalid option: -$OPTARG" ;;
+        esac
+    done
+    local user_input
+    read -p "$prompt [$options] " user_input </dev/tty
+    user_input=${user_input:-$default}
+    if [[ ! "$user_input" =~ ^[Yy]$ ]]; then return 1; fi
+}
+
+###
 # Save a kvp to $ENV_FILE
 # Params:   $1 Variable name
 #           $2 Variable value
@@ -254,6 +285,34 @@ create_rsa_keypair() {
 
 ################################################################################
 #                           HELPER FUNCTIONS
+
+###
+# Check if an element is in an array
+#
+# @param $1     {list}      Item(s) to search for (separated by ':')
+# @param $*     {array}     Array to search
+#
+# @return   0 if found, 1 otherwise
+###
+array_contains() {
+    local seeking="$1"
+    shift
+    local -a array=("$@")
+    local found=1
+
+    IFS=':' read -ra search_items <<< "$seeking"
+
+    for search_item in "${search_items[@]}"; do
+        for element in "${array[@]}"; do
+            if [[ "$element" == "$search_item" ]]; then
+                found=0
+                break 2
+            fi
+        done
+    done
+
+    return $found
+}
 
 ###
 # Remove one (or more) items from an array

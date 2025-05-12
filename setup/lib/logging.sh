@@ -86,12 +86,17 @@ log_error() {
     echo -en "\n🔴 ${BIRed}ERROR:${IRed} $1${COff}\n\n$(stack_trace)\n\n" >&2
 }
 
+log_invalid() {
+    echo -en "\n${Red}$1${COff}\n" >&2
+}
+
 log_done() {
     echo -en "\n🎉 ${BWhite}All operations completed successfully${COff}\n\n"
 }
 
 log_options() {
     local -n flags_map="$1"    # Create a reference to the passed associative array
+    local dividers=${2:-false}
     local indent=2             # Initial indent reduced to 1 space
     local extra_padding=5      # Extra padding between option and description
     local terminal_width
@@ -116,6 +121,8 @@ log_options() {
         local padding=$((display_width - ${#option}))
         local desc_indent=$((indent + display_width + 1))  # +1 for space after option
         
+        if [ "$dividers" = true ]; then printf '%*s' "$terminal_width" | tr ' ' '-'; fi
+
         # Print option with padding to align all descriptions
         printf "%${indent}s%s%${padding}s" "" "$option" ""
         

@@ -1,2 +1,3 @@
 See your server in a web browser and perform system tasks with a mouse. It’s easy to start containers, administer storage, configure networks, and inspect logs. Basically, you can think of Cockpit like a graphical “desktop interface”, but for individual servers.
+
 More: https://cockpit-project.org/
