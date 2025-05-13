@@ -1,6 +1,7 @@
 networks:
   proxy:
     name: proxy
+  authelia_data:
 
 secrets:
   authelia_session_secret:
@@ -139,12 +140,27 @@ services:
       wud.watch.digest: true
       wud.link.template: https://github.com/lldap/lldap/releases
 
+  authelia-redis:
+    container_name: authelia_redis
+    image: docker.io/redis:6.2-alpine@sha256:148bb5411c184abd288d9aaed139c98123eeb8824c5d3fce03cf721db58066d8
+    restart: always
+    networks:
+      - authelia_data
+    healthcheck:
+      test: redis-cli ping || exit 1
+    labels:
+      selfhost.module.base: 1
+
   authelia:
     container_name: authelia
     image: ghcr.io/authelia/authelia:4.39.1
     restart: unless-stopped
     networks:
       - proxy
+      - authelia_data
+    depends_on:
+      authelia-redis:
+        condition: service_healthy
     volumes: 
       - ${APPDATA_LOCATION:-/srv/appdata}/authelia:/config
     secrets:
@@ -182,6 +198,7 @@ services:
       dns.content: ${CF_TUNNEL_ID}.cfargotunnel.com
       dns.proxied: true
       traefik.enable: true
+      traefik.docker.network: proxy
       traefik.http.routers.authelia.entryPoints: cloudflare
       traefik.http.routers.authelia.rule: Host(`authelia.${CF_DOMAIN_NAME}`)
       traefik.http.services.authelia.loadbalancer.server.port: 9091

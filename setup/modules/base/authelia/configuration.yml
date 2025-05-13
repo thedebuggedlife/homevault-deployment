@@ -67,6 +67,12 @@ session:
   cookies:
     - domain: '{{ env "CF_DOMAIN_NAME" }}'
       authelia_url: '{{ expandenv "https://authelia.$CF_DOMAIN_NAME" }}'
+  redis:
+    host: authelia-redis
+    port: 6379
+    database_index: 1
+    maximum_active_connections: 10
+    minimum_idle_connections: 0
 
 regulation:
   max_retries: 3
