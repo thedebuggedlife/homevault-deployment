@@ -197,6 +197,8 @@ cloudflare_get_tunnel_token() {
 # @return void
 ###
 configure_cloudflare_tunnel() {
+    log_header "Configuring CloudFlare Tunnel"
+
     if [ -z "$CF_TUNNEL_NAME" ]; then
         log_error "Please specify a value for 'CF_TUNNEL_NAME' in the '$ENV_FILE' file."
         exit 1

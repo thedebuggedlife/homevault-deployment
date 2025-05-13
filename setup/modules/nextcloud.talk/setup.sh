@@ -156,9 +156,9 @@ nextcloud_talk_compose_extra() {
 }
 
 nextcloud_talk_config_secrets() {
-    save_env_id NEXTCLOUD_TALK_TURN_SECRET 64
-    save_env_id NEXTCLOUD_TALK_SIGNALING_SECRET 64
-    save_env_id NEXTCLOUD_TALK_INTERNAL_SECRET 64
+    save_env_id NEXTCLOUD_TALK_TURN_SECRET -l 64
+    save_env_id NEXTCLOUD_TALK_SIGNALING_SECRET -l 64
+    save_env_id NEXTCLOUD_TALK_INTERNAL_SECRET -l 64
 }
 
 nextcloud_talk_pre_install() {

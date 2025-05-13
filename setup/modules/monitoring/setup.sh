@@ -42,3 +42,21 @@ CONFIG_SECRETS_HOOKS+=("monitoring_config_secrets")
 PRE_INSTALL_HOOKS+=("monitoring_pre_install")
 # POST_INSTALL_HOOKS+=("")
 # BOOTSTRAP_HOOKS+=("")
+
+BACKUP_SERVICES+=(
+    "grafana"
+)
+# shellcheck disable=SC2016
+BACKUP_FILTER_INCLUDE+=(
+    '${APPDATA_LOCATION}/alloy'
+    '${APPDATA_LOCATION}/grafana'
+    '${APPDATA_LOCATION}/loki'
+    '${APPDATA_LOCATION}/process-exporter'
+    '${APPDATA_LOCATION}/prometheus'
+)
+# shellcheck disable=SC2016
+BACKUP_FILTER_EXCLUDE+=(
+    '${APPDATA_LOCATION}/alloy/data'
+    '${APPDATA_LOCATION}/loki/data'
+    '${APPDATA_LOCATION}/prometheus/data'
+)

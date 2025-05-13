@@ -100,26 +100,28 @@ ask_confirmation() {
 }
 
 ###
-# Save a kvp to $ENV_FILE
-# Params:   $1 Variable name
-#           $2 Variable value
+# Save a kvp to the env file
+# @param    $1 {string} Variable name
+# @param    $2 {string} Variable value
+# @param    $3 {string} Target file [default=$ENV_FILE]
 ###
 save_env() {
     local env_variable=$1
     local env_value=$2
-    echo -e "Saving ${Purple}$env_variable${COff} in ${Cyan}$ENV_FILE${COff}"
+    local env_file=${3:-$ENV_FILE}
+    echo -e "Saving ${Purple}$env_variable${COff} in ${Cyan}$env_file${COff}"
     
     # Check if the variable exists in the file
-    if grep -q "^${env_variable}=" "$ENV_FILE"; then
+    if grep -q "^${env_variable}=" "$env_file"; then
         # Update existing variable
-        sed -i -E "s|^($env_variable)=.*|\1=${env_value}|" "$ENV_FILE" || {
-            log_error "Failed to update '$env_variable' in '$ENV_FILE'"
+        sed -i -E "s|^($env_variable)=.*|\1=${env_value}|" "$env_file" || {
+            log_error "Failed to update '$env_variable' in '$env_file'"
             exit 1
         }
     else
         # Append new variable at the end of the file
-        echo "${env_variable}=${env_value}" >> "$ENV_FILE" || {
-            log_error "Failed to append '$env_variable' to '$ENV_FILE'"
+        echo "${env_variable}=${env_value}" >> "$env_file" || {
+            log_error "Failed to append '$env_variable' to '$env_file'"
             exit 1
         }
     fi
@@ -129,18 +131,29 @@ save_env() {
 }
 
 ###
-# Generate a random id and save to $ENV_FILE
-# Params:   $1 Variable name
-#           $2 Length (#chars) of value [default=20]
+# Generate a random id and save it to the env file
+# @param    $1 {string} Variable name
+# @option   -l {number} Length (in chars) of value [default=20]
+# @option   -f {path}   Path to the env file [default=$ENV_FILE]
 ###
 save_env_id() {
     local env_variable=$1
-    local id_length=${2:-20}
+    shift
+    local env_file=${ENV_FILE}
+    local id_length=20
+    OPTIND=1
+    while getopts ":l:f:" opt; do
+        case $opt in
+        l) id_length="$OPTARG" ;;
+        f) env_file="$OPTARG" ;;
+        \?) log_warn "Invalid option: -$OPTARG" ;;
+        esac
+    done
     local env_value="${!env_variable}"
     if [ -z "$env_value" ]; then
         env_value=$(tr -cd '[:alnum:]' </dev/urandom | fold -w "${id_length}" | head -n 1 | tr -d '\n')
     fi
-    save_env "$env_variable" "$env_value"
+    save_env "$env_variable" "$env_value" "$env_file"
 }
 
 ###
@@ -173,8 +186,7 @@ ask_for_env() {
     done
 
     # If an override is specified in command line, that takes priority
-    local name_override="${env_variable}_OVERRIDE"
-    local value_override="${!name_override}"
+    local value_override="${ENV_OVERRIDES["$env_variable"]}"
     if [ -n "$value_override" ]; then
         save_env "$env_variable" "$value_override"
     fi
@@ -281,6 +293,67 @@ create_rsa_keypair() {
             exit 1
         fi
     fi
+}
+
+################################################################################
+#                           DEPLOYMENT FILE
+
+save_deployment_file() {
+    local deployment_file="${COMPOSE_PATH%/}/deployment.json"
+
+    # Substitute any environment variables specified in the following array items
+    local backup_services backup_include backup_exclude
+    readarray -t backup_services < <(env_subst "${BACKUP_SERVICES[@]}")
+    readarray -t backup_include < <(env_subst "${BACKUP_FILTER_INCLUDE[@]}")
+    readarray -t backup_exclude < <(env_subst "${BACKUP_FILTER_EXCLUDE[@]}")
+
+    echo -e "\nSaving deployment settings to ${Cyan}$deployment_file${COff}" >&2
+    jq -n \
+        --arg version "$PROJECT_VERSION" \
+        --arg project "$COMPOSE_PROJECT_NAME" \
+        --argjson modules "$(jq -n --args '$ARGS.positional' "${ENABLED_MODULES[@]}")" \
+        --arg smtp_type "$(if [ "$USE_SMTP2GO" = false ]; then echo "custom"; else echo "smtp2go"; fi)" \
+        --argjson backup_services "$(jq -n --args '$ARGS.positional' "${backup_services[@]}")" \
+        --argjson backup_include "$(jq -n --args '$ARGS.positional' "${backup_include[@]}")" \
+        --argjson backup_exclude "$(jq -n --args '$ARGS.positional' "${backup_exclude[@]}")" '
+        {
+            version: $version,
+            project: $project,
+            modules: $modules,
+            smtp: $smtp_type,
+            backup: {
+                services: $backup_services,
+                filters: {
+                    include: $backup_include,
+                    exclude: $backup_exclude,
+                }
+            }
+        }
+    ' > "$deployment_file" && chmod 600 "$deployment_file" || {
+        log_error "Failed to save file '$deployment_file'"
+        return 1
+    }
+}
+
+load_deployment_file() {
+    local deployment_file="${COMPOSE_PATH%/}/deployment.json"
+
+    if [ ! -f "$deployment_file" ]; then
+        log_error "File not found: '$deployment_file'"
+        return 1
+    fi
+
+    echo -e "Loading deployment settings from ${Cyan}$deployment_file${COff}" >&2
+    # shellcheck disable=SC2015
+    COMPOSE_PROJECT_NAME=$(jq -r '.project' "$deployment_file") &&
+    readarray -t ENABLED_MODULES < <(jq -r '.modules[]' "$deployment_file") &&
+    USE_SMTP2GO=$(jq -r '.smtp == "smtp2go"' "$deployment_file") &&
+    readarray -t BACKUP_SERVICES < <(jq -r '.backup.services[]' "$deployment_file") &&
+    readarray -t BACKUP_FILTER_INCLUDE < <(jq -r '.backup.filters.include[]' "$deployment_file") &&
+    readarray -t BACKUP_FILTER_EXCLUDE < <(jq -r '.backup.filters.exclude[]' "$deployment_file") || {
+        log_error "Failed to parse '$deployment_file'"
+        return 1
+    }
 }
 
 ################################################################################
@@ -567,7 +640,14 @@ ensure_packages_installed() {
 
 env_subst() {
     # shellcheck source=/dev/null
-    (set -a; source "$ENV_FILE"; set +a; echo "$1" | envsubst)
+    (
+        set -a
+        source "$ENV_FILE"
+        set +a
+        for item in "$@"; do
+            echo "$item" | envsubst
+        done
+    )
 }
 
 check_python3() {

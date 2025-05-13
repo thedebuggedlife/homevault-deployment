@@ -197,6 +197,8 @@ tailscale_configure_device() {
 # @return void
 ###
 configure_tailscale() {
+    log_header "Configuring Tailscale"
+
     tailscale_check_installed || return 1
     tailscale_connect || return 1
     tailscale_save_ip || return 1

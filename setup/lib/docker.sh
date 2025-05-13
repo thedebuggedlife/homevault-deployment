@@ -7,6 +7,8 @@ source "$PROJECT_ROOT/lib/logging.sh"
 
 _DOCKER_INSTALLED=$(if ! command -v docker >/dev/null 2>&1; then echo "false"; else echo "true"; fi)
 
+YQ_VERSION=4.45.1
+
 ###
 # Runs the YQ utility using a docker container rather than requiring installing it
 #
@@ -17,12 +19,14 @@ _DOCKER_INSTALLED=$(if ! command -v docker >/dev/null 2>&1; then echo "false"; e
 yq() {
     local cmd result workdir=$1
     shift
-    cmd="docker run -q --rm -v '$workdir':/workdir mikefarah/yq:4.45.1 -M"
+    cmd="docker run -q --rm -v '$workdir':/workdir mikefarah/yq:$YQ_VERSION -M"
     for arg in "$@"; do
         cmd+=$(printf " '%s'" "$arg")
     done
-    if ! result=$(sg docker -c "$cmd" | tr -d '\r'); then return 1; fi
+    result=$(sg docker -c "$cmd" | tr -d '\r')
+    local exit_code=$?
     echo "$result"
+    return $exit_code
 }
 
 ###
@@ -37,8 +41,10 @@ docker() {
     for arg in "$@"; do
         cmd+=$(printf " '%s'" "$arg")
     done
-    if ! result=$(sg docker -c "$cmd" | tr -d '\r'); then return 1; fi
+    result=$(sg docker -c "$cmd" | tr -d '\r')
+    local exit_code=$?
     echo "$result"
+    return $exit_code
 }
 
 ###
@@ -47,6 +53,8 @@ docker() {
 # @return void
 ###
 configure_docker() {
+    log_header "Configuring Docker"
+
     if [ "$_DOCKER_INSTALLED" != "true" ]; then
         echo -e "\n${Yellow}Docker is not installed.${COff}"
         local user_input=Y

@@ -56,3 +56,12 @@ COMPOSE_EXTRA_HOOKS+=("homepage_compose_extra")
 # PRE_INSTALL_HOOKS+=("")
 # POST_INSTALL_HOOKS+=("")
 BOOTSTRAP_HOOKS+=("homepage_bootstrap")
+
+# shellcheck disable=SC2016
+BACKUP_FILTER_INCLUDE+=(
+    '${APPDATA_LOCATION}/homepage'
+)
+# shellcheck disable=SC2016
+BACKUP_FILTER_EXCLUDE+=(
+    '${APPDATA_LOCATION}/homepage/logs'
+)

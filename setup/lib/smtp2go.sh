@@ -221,6 +221,8 @@ configure_smtp_user() {
 }
 
 configure_smtp2go() {
+    if [ "$USE_SMTP2GO" != "true" ]; then return 0; fi
+    log_header "Configuring SMTP2GO Account"
     configure_smtp_domain
     if [ $? -ne 0 ]; then
         log_error "SMTP domain configuration failed."

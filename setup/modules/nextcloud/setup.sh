@@ -79,3 +79,18 @@ CONFIG_SECRETS_HOOKS+=("nextcloud_config_secrets")
 PRE_INSTALL_HOOKS+=("nextcloud_pre_install")
 # POST_INSTALL_HOOKS+=(...)
 # BOOTSTRAP_HOOKS+=(...)
+
+BACKUP_SERVICES+=(
+    "nextcloud-app"
+    "nextcloud-cron"
+    "nextcloud-db"
+)
+# shellcheck disable=SC2016
+BACKUP_FILTER_INCLUDE+=(
+    '${APPDATA_LOCATION}/nextcloud'
+    '${NEXTCLOUD_DATA_LOCATION}'
+)
+# shellcheck disable=SC2016
+BACKUP_FILTER_EXCLUDE+=(
+    '${APPDATA_LOCATION}/nextcloud/search'
+)

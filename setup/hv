@@ -12,50 +12,54 @@ source "$PROJECT_ROOT/lib/smtp2go.sh"
 source "$PROJECT_ROOT/lib/docker.sh"
 source "$PROJECT_ROOT/lib/backup.sh"
 
-SELECTED_ACTION=
-SHOW_ALL=false
-COMPOSE_PATH=
-SECRETS_PATH=
-OVERRIDE_COMPOSE=true
-OVERRIDE_VERSIONS=false
-UNATTENDED=
-NO_DOWNLOAD=
-USE_SMTP2GO=true
-USE_DEFAULTS=true
-ENV_FILE=.env
-AS_USER="$USER"
-REINSTALL_FROM=
-COMPOSE_PROJECT_NAME=homevault
-COMPOSE_OPTIONS=
-COMPOSE_UP_OPTIONS=
+declare -g SELECTED_ACTION=
+declare -g SHOW_ALL=false
+declare -g COMPOSE_PATH=
+declare -g SECRETS_PATH=
+declare -g OVERRIDE_COMPOSE=true
+declare -g OVERRIDE_VERSIONS=false
+declare -g UNATTENDED=
+declare -g NO_DOWNLOAD=
+declare -g USE_SMTP2GO=true
+declare -g USE_DEFAULTS=true
+declare -g ENV_FILE=.env
+declare -g AS_USER="$USER"
+declare -g COMPOSE_PROJECT_NAME=homevault
+declare -g COMPOSE_OPTIONS=
+declare -g COMPOSE_UP_OPTIONS=
+declare -g DRY_RUN=false
+declare -gA ENV_OVERRIDES
 
 # Administrator account
-ADMIN_USERNAME=
-ADMIN_PASSWORD=
-ADMIN_EMAIL=
-ADMIN_DISPLAY_NAME=
+declare -g ADMIN_USERNAME=
+declare -g ADMIN_PASSWORD=
+declare -g ADMIN_EMAIL=
+declare -g ADMIN_DISPLAY_NAME=
 
 # Global ENV variables
-APPDATA_LOCATION=
+declare -g APPDATA_LOCATION=
 # shellcheck disable=SC2034
-TAILSCALE_IP=
-CF_DOMAIN_NAME=
+declare -g TAILSCALE_IP=
+declare -g CF_DOMAIN_NAME=
 
 # Base module should always be first in the list
-declare -a ENABLED_MODULES=("base")
-declare -a INSTALLED_MODULES=()
-declare -a REMOVE_MODULES=()
+declare -ga ENABLED_MODULES=("base")
+declare -ga INSTALLED_MODULES=()
+declare -ga REMOVE_MODULES=()
 
 ################################################################################
 #                           SETUP MODULES
 
-declare -a CONFIG_ENV_HOOKS=()
-declare -a CONFIG_SECRETS_HOOKS=()
-declare -a COMPOSE_EXTRA_HOOKS=()
-declare -a PRE_INSTALL_HOOKS=()
-declare -a POST_INSTALL_HOOKS=()
-declare -a BOOTSTRAP_HOOKS=()
-declare -A MODULE_OPTIONS
+declare -ga CONFIG_ENV_HOOKS=()
+declare -ga CONFIG_SECRETS_HOOKS=()
+declare -ga COMPOSE_EXTRA_HOOKS=()
+declare -ga PRE_INSTALL_HOOKS=()
+declare -ga POST_INSTALL_HOOKS=()
+declare -ga BOOTSTRAP_HOOKS=()
+declare -ga BACKUP_SERVICES=()
+declare -ga BACKUP_FILTER_INCLUDE=()
+declare -ga BACKUP_FILTER_EXCLUDE=()
+declare -gA MODULE_OPTIONS
 
 dedup_modules() {
     local -A seen_modules
@@ -120,10 +124,16 @@ execute_hooks() {
 # @return void
 ###
 prepare_env_file() {
+    log_header "Preparing environment files"
+
     local env_exists
     env_exists=$([ -f "$ENV_FILE" ] && echo true || echo false)
     if [ "$env_exists" != "true" ]; then
         echo -e "Creating environment file ${Cyan}$ENV_FILE${COff}"
+        touch "$ENV_FILE" && chmod 600 "$ENV_FILE" || {
+            log_error "Failed to create environment file: '$ENV_FILE'"
+            exit 1
+        }
     fi
     for module in "${ENABLED_MODULES[@]}"; do
         local module_env="$PROJECT_ROOT/modules/$module/.env"
@@ -157,6 +167,7 @@ prepare_env_file() {
 # @return void
 ###
 download_appdata() {
+    if [ "$NO_DOWNLOAD" != true ]; then return 0; fi
     for module in "${ENABLED_MODULES[@]}"; do
         download_module_appdata "$module"
     done
@@ -180,6 +191,9 @@ find_all_modules() {
 }
 
 find_installed_modules() {
+    # Do not run twice, if install modules have already been detected
+    if [[ ${#INSTALLED_MODULES[@]} -gt 0 ]]; then return 0; fi
+
     log_header "Looking for installed modules"
 
     if [ "$_DOCKER_INSTALLED" != "true" ]; then return 0; fi
@@ -199,7 +213,7 @@ find_installed_modules() {
         done <<< "$container_labels"
     done
 
-    if [ ${#INSTALLED_MODULES[@]} -eq 0 ]; then
+    if [[ ${#INSTALLED_MODULES[@]} -eq 0 ]]; then
         echo "There are no modules installed."
         return 0
     fi
@@ -252,6 +266,8 @@ find_missing_modules() {
 # @return void
 ###
 create_data_locations() {
+    log_header "Preparing application data folder"
+
     ensure_path_exists "$APPDATA_LOCATION"
     ensure_path_exists "$SECRETS_PATH"
 }
@@ -273,6 +289,7 @@ ask_for_variables() {
 # @return void
 ###
 save_secrets() {
+    log_header "Preparing secret files"
     execute_hooks "${CONFIG_SECRETS_HOOKS[@]}" "config-secrets"
     if ! chmod 644 "${SECRETS_PATH}"*; then
         return 1
@@ -287,6 +304,8 @@ save_secrets() {
 deploy_project() {
     COMPOSE_OPTIONS="-p '$COMPOSE_PROJECT_NAME' --env-file '$ENV_FILE' $COMPOSE_OPTIONS"
     COMPOSE_UP_OPTIONS="-d -y --remove-orphans --quiet-pull --wait $COMPOSE_UP_OPTIONS"
+    if [ "$DRY_RUN" = true ]; then COMPOSE_UP_OPTIONS+=" --dry-run"; fi
+
 
     ensure_path_exists "${COMPOSE_PATH%/}/"
     if [ "$OVERRIDE_COMPOSE" = true ]; then
@@ -376,7 +395,13 @@ deploy_project() {
         exit 1
     fi
 
+    log_header "Finalizing deployment"
+
     execute_hooks "${POST_INSTALL_HOOKS[@]}" "post-install"
+
+    execute_hooks "${BOOTSTRAP_HOOKS[@]}" "bootstrap"
+
+    save_deployment_file "${COMPOSE_PATH%/}/deployment.json" || exit 1
 }
 
 ###
@@ -389,6 +414,8 @@ deploy_project() {
 # @return void
 ###
 configure_admin_account() {
+    log_header "Configuring administrator account"
+
     local config_file="${APPDATA_LOCATION%/}/lldap/bootstrap/user-configs/admin.json"
     local load_only=false
     OPTIND=1
@@ -400,10 +427,10 @@ configure_admin_account() {
     done
 
     # Apply any overrides passed via -o flag
-    ADMIN_USERNAME="${ADMIN_USERNAME_OVERRIDE}"
-    ADMIN_EMAIL="${ADMIN_EMAIL_OVERRIDE}"
-    ADMIN_PASSWORD="${ADMIN_PASSWORD_OVERRIDE}"
-    ADMIN_DISPLAY_NAME="${ADMIN_DISPLAY_NAME_OVERRIDE}"
+    ADMIN_USERNAME="${ENV_OVERRIDES[ADMIN_USERNAME]}"
+    ADMIN_EMAIL="${ENV_OVERRIDES[ADMIN_EMAIL]}"
+    ADMIN_PASSWORD="${ENV_OVERRIDES[ADMIN_PASSWORD]}"
+    ADMIN_DISPLAY_NAME="${ENV_OVERRIDES[ADMIN_DISPLAY_NAME]}"
 
     local save_file=false
     if [[ -n "$ADMIN_USERNAME" || -n "$ADMIN_EMAIL" || -n "$ADMIN_PASSWORD" || -n "$ADMIN_DISPLAY_NAME" ]]; then
@@ -472,42 +499,6 @@ configure_admin_account() {
     write_file "$ADMIN_PASSWORD" "${SECRETS_PATH}server_admin_password"
 }
 
-configure_restore() {
-    log_header "Preparing to restore project"
-
-    if [[ "${#INSTALLED_MODULES[@]}" -gt 0 ]]; then
-        echo -e "${Yellow}There are ${Purple}${#INSTALLED_MODULES[@]}${Yellow} already installed.${COff}"
-        echo -e "${Yellow}This operation will destroy and recreate Docker resources for these modules.${COff}"
-        echo
-        if ! ask_confirmation; then abort_install; fi
-    fi
-
-    if [ -z "$APPDATA_LOCATION" ]; then
-        log_error "Missing appdata location to restore from."
-        exit 1;
-    fi
-
-    COMPOSE_PATH="${APPDATA_LOCATION%/}/compose/${COMPOSE_PROJECT_NAME}"
-
-    # When reinstalling, the following settings are implied
-    OVERRIDE_COMPOSE=false
-    OVERRIDE_VERSIONS=true
-    NO_DOWNLOAD=true
-
-    # Copy environment file
-    if [ -f "${COMPOSE_PATH%/}/.env" ]; then
-        cp "${COMPOSE_PATH%/}/.env" "${ENV_FILE}" || {
-            log_error "Failed to write file '${ENV_FILE}'"
-            exit 1
-        }
-    else
-        log_error "Missing file '${COMPOSE_PATH%/}/.env'"
-        exit 1
-    fi
-
-    load_restore_file "${COMPOSE_PATH%/}/.restore.json" || exit 1
-}
-
 cmd=( "$@" )
 
 build_resume_command() {
@@ -553,11 +544,18 @@ print_usage() {
         echo -e "  --keep-compose                  Do not override previously deployed docker-compose files. ${IRed}Use with caution!${COff}"
         echo -e "  --override-versions             Override running versions with those specified in compose files. ${IRed}Use with caution!${COff}"
         echo "  --custom-smtp                   Do not use SMTP2GO for sending email (custom SMTP configuration required)."
-        echo "  --dry-run                       Execute Docker Compose in dry run mode."
+        echo "  --dry-run                       Execute docker compose in dry run mode."
+
+    elif [ "$SELECTED_ACTION" = "backup" ]; then
+        echo -e "\nBackup options:\n"
+        echo "  --init                          Initialize the backup configuration. Must be run at least once."
+        echo "  -o, --override <var>=<value>    Override environment variable. Can be specified multiple times."
+        echo "  --dry-run                       Execute restic in dry run mode."
 
     elif [ "$SELECTED_ACTION" = "restore" ]; then
         echo -e "\nRestore options:\n"
         echo "  --from <path>                   Look for existing appdata at this location."
+        echo "  --dry-run                       Execute restic and docker compose in dry run mode."
 
     elif [ "$SELECTED_ACTION" = "modules" ]; then
         echo -e "\Modules options:\n"
@@ -587,12 +585,13 @@ show_modules() {
 }
 
 check_action_for_option() {
-    local action=$1
     local option=$2
+    local valid_actions
+    IFS=':' read -ra valid_actions <<< "$1"
     if [ -z "$SELECTED_ACTION" ]; then
         log_invalid "$option is not a global option"
         print_usage
-    elif [ "$SELECTED_ACTION" != "$action" ]; then
+    elif ! array_contains "$SELECTED_ACTION" "${valid_actions[@]}"; then
         log_invalid "$option is not supported for action: $SELECTED_ACTION"
         print_usage
     fi
@@ -627,7 +626,6 @@ parse_command_line() {
             if [ -n "$2" ]; then
                 AS_USER="$2"
                 shift 2
-                continue
             else
                 log_invalid "$1 requires a value."
                 exit 1
@@ -637,34 +635,15 @@ parse_command_line() {
             UNATTENDED=true
             USE_DEFAULTS=true
             shift 1
-            continue
             ;;
         --always-ask)
             USE_DEFAULTS=false
             shift 1
-            continue
             ;;
         -h | --help)
             print_usage
             ;;
         ## DEPLOY OPTIONS
-        --override | -o)
-            check_action_for_option deploy "$1"
-            if [ -n "$2" ]; then
-                # Parse override in form of: VARIABLE_NAME=VALUE
-                if echo "$2" | grep -q '='; then
-                    eval "$(echo "$2" | cut -d '=' -f 1)_OVERRIDE=\"$(echo "$2" | cut -d '=' -f 2-)\""
-                else
-                    log_invalid "$1 requires an assignment in the form VARIABLE_NAME=VALUE."
-                    exit 1
-                fi
-                shift 2
-                continue
-            else
-                log_invalid "$1 requires an assignment in the form VARIABLE_NAME=VALUE."
-                exit 1
-            fi
-            ;;
         --module | -m)
             check_action_for_option deploy "$1"
             if [ -n "$2" ]; then
@@ -675,7 +654,6 @@ parse_command_line() {
                 fi
                 dedup_modules
                 shift 2
-                continue
             else
                 log_invalid "$1 requires a value."
                 exit 1
@@ -686,7 +664,6 @@ parse_command_line() {
             if [ -n "$2" ]; then
                 REMOVE_MODULES+=("$2")
                 shift 2
-                continue
             else
                 log_invalid "$1 requires a value."
                 exit 1
@@ -696,40 +673,34 @@ parse_command_line() {
             check_action_for_option deploy "$1"
             OVERRIDE_COMPOSE=false
             shift 1
-            continue
             ;;
         --override-versions)
             check_action_for_option deploy "$1"
             OVERRIDE_VERSIONS=true
             shift 1
-            continue
             ;;
         --custom-smtp)
             check_action_for_option deploy "$1"
             USE_SMTP2GO=false
             shift 1
-            continue
             ;;
         --no-download)
             check_action_for_option deploy "$1"
             NO_DOWNLOAD=true
             shift 1
-            continue
-            ;;
-        --dry-run)
-            check_action_for_option deploy "$1"
-            COMPOSE_UP_OPTIONS="$COMPOSE_UP_OPTIONS --dry-run"
-            shift 1
-            continue
             ;;
         ## BACKUP OPTIONS
+        --init)
+            check_action_for_option backup "$1"
+            BACKUP_ACTION=init
+            shift 1
+            ;;
         ## RESTORE OPTIONS
         --from)
             check_action_for_option restore "$1"
             if [ -n "$2" ]; then
                 APPDATA_LOCATION="$2"
                 shift 2
-                continue
             else
                 log_invalid "$1 requires a value."
                 exit 1
@@ -740,7 +711,28 @@ parse_command_line() {
             check_action_for_option modules "$1"
             SHOW_ALL=true
             shift 1
-            continue
+            ;;
+        ## SHARED OPTIONS
+        --override | -o)
+            check_action_for_option deploy:backup "$1"
+            if [ -n "$2" ]; then
+                # Parse override in form of: VARIABLE_NAME=VALUE
+                if echo "$2" | grep -q '='; then
+                    ENV_OVERRIDES["$(echo "$2" | cut -d '=' -f 1)"]="$(echo "$2" | cut -d '=' -f 2-)"
+                else
+                    log_invalid "$1 requires an assignment in the form VARIABLE_NAME=VALUE."
+                    exit 1
+                fi
+                shift 2
+            else
+                log_invalid "$1 requires an assignment in the form VARIABLE_NAME=VALUE."
+                exit 1
+            fi
+            ;;
+        --dry-run)
+            check_action_for_option deploy:backup:restore "$1"
+            DRY_RUN=true
+            shift 1
             ;;
         *)
             log_invalid "Unknown option: $1"
@@ -755,6 +747,40 @@ parse_command_line() {
     fi
 }
 
+run_deploy() {
+    find_installed_modules
+    load_modules
+    configure_docker
+    prepare_env_file
+    ask_for_variables
+    create_data_locations
+    download_appdata
+    configure_admin_account
+    configure_tailscale
+    configure_cloudflare_tunnel
+    configure_smtp2go
+    save_secrets
+    find_missing_modules
+    deploy_project
+}
+
+run_backup() {
+    find_installed_modules
+    load_modules
+    prepare_env_file
+    configure_backup
+}
+
+run_restore() {
+    find_installed_modules
+    configure_restore
+    run_deploy
+}
+
+run_modules() {
+    show_modules
+}
+
 ################################################################################
 #                           MAIN PROGRAM LOGIC
 
@@ -762,64 +788,6 @@ trap "echo && abort_install" SIGINT
 
 parse_command_line "$@"
 
-if [ "$SELECTED_ACTION" = "modules" ]; then
-    show_modules
-fi
-
-find_installed_modules
-
-if [ "$SELECTED_ACTION" = "restore" ]; then
-    configure_restore
-fi
-
-load_modules
-
-log_header "Configuring Docker"
-configure_docker
-
-log_header "Preparing environment files"
-
-if ! prepare_env_file; then
-    log_error "Failed to prepare '$ENV_FILE'."
-    exit 1
-fi
-
-ask_for_variables
-
-log_header "Preparing application data folder"
-create_data_locations
-
-if [ "$NO_DOWNLOAD" != true ]; then
-    download_appdata
-fi
-
-log_header "Server administrator account"
-configure_admin_account
-
-log_header "Configuring Tailscale"
-configure_tailscale
-
-# Configuring CF tunnel requires that $SECRETS_LOCATION has already been created
-log_header "Configuring CloudFlare Tunnel"
-configure_cloudflare_tunnel
-
-if [[ "$USE_SMTP2GO" = "true" ]]; then
-    log_header "Configuring SMTP2GO Account"
-    configure_smtp2go
-fi
-
-log_header "Preparing secret files"
-
-save_secrets
-
-find_missing_modules
-
-deploy_project
-
-execute_hooks "${BOOTSTRAP_HOOKS[@]}" "bootstrap"
-
-log_header "Finalizing deployment"
-
-save_restore_file "${COMPOSE_PATH%/}/.restore.json" || exit 1
+run_${SELECTED_ACTION}
 
 log_done
