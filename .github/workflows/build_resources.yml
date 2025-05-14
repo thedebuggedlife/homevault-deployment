@@ -4,9 +4,15 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'appdata/**'
+      - 'setup/**'
   pull_request:
     branches:
       - main
+    paths:
+      - 'appdata/**'
+      - 'setup/**'
   workflow_dispatch: # Allows manual trigger
 
 permissions:
