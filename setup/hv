@@ -20,7 +20,7 @@ declare -g OVERRIDE_COMPOSE=true
 declare -g OVERRIDE_VERSIONS=false
 declare -g UNATTENDED=
 declare -g NO_DOWNLOAD=
-declare -g USE_SMTP2GO=true
+declare -g USE_SMTP2GO
 declare -g USE_DEFAULTS=true
 declare -g ENV_FILE=.env
 declare -g AS_USER="$USER"
@@ -321,9 +321,6 @@ deploy_project() {
         }
     fi
 
-    # Copy the ENV file to include in backup/restore - always override existing file
-    cp -f "$ENV_FILE" "${COMPOSE_PATH%/}/.env"
-
     # Grab the default "docker-compose.yml" file for each module
     local -a original_files=()
     local -a project_files=()
@@ -407,7 +404,7 @@ deploy_project() {
 
     execute_hooks "${BOOTSTRAP_HOOKS[@]}" "bootstrap"
 
-    save_deployment_file "${COMPOSE_PATH%/}/deployment.json" || exit 1
+    save_deployment_file || exit 1
 }
 
 ###
@@ -550,7 +547,6 @@ print_usage() {
         echo "  --no-download                   Do not download appdata from GitHub. Only use if appdata was previously downloaded."
         echo -e "  --keep-compose                  Do not override previously deployed docker-compose files. ${IRed}Use with caution!${COff}"
         echo -e "  --override-versions             Override running versions with those specified in compose files. ${IRed}Use with caution!${COff}"
-        echo "  --custom-smtp                   Do not use SMTP2GO for sending email (custom SMTP configuration required)."
         echo "  --dry-run                       Execute docker compose in dry run mode."
 
     elif [ "$SELECTED_ACTION" = "backup" ]; then
@@ -729,11 +725,6 @@ parse_command_line() {
         --override-versions)
             check_action_for_option deploy "$1"
             OVERRIDE_VERSIONS=true
-            shift 1
-            ;;
-        --custom-smtp)
-            check_action_for_option deploy "$1"
-            USE_SMTP2GO=false
             shift 1
             ;;
         --no-download)

@@ -94,7 +94,9 @@ ask_confirmation() {
         esac
     done
     local user_input
-    read -p "$prompt [$options] " user_input </dev/tty
+    if [ "$UNATTENDED" != true ]; then
+        read -p "$prompt [$options] " user_input </dev/tty
+    fi
     user_input=${user_input:-$default}
     if [[ ! "$user_input" =~ ^[Yy]$ ]]; then return 1; fi
 }
@@ -312,7 +314,6 @@ save_deployment_file() {
         --arg version "$PROJECT_VERSION" \
         --arg project "$COMPOSE_PROJECT_NAME" \
         --argjson modules "$(jq -n --args '$ARGS.positional' "${ENABLED_MODULES[@]}")" \
-        --arg smtp_type "$(if [ "$USE_SMTP2GO" = false ]; then echo "custom"; else echo "smtp2go"; fi)" \
         --arg appdata "$APPDATA_LOCATION" \
         --argjson backup_services "$(jq -n --args '$ARGS.positional' "${backup_services[@]}")" \
         --argjson backup_include "$(jq -n --args '$ARGS.positional' "${backup_include[@]}")" \
@@ -321,7 +322,6 @@ save_deployment_file() {
             version: $version,
             project: $project,
             modules: $modules,
-            smtp: $smtp_type,
             appdata: $appdata,
             backup: {
                 services: $backup_services,
@@ -333,6 +333,13 @@ save_deployment_file() {
         }
     ' > "$deployment_file" && chmod 600 "$deployment_file" || {
         log_error "Failed to save file '$deployment_file'"
+        return 1
+    }
+
+    # Copy the ENV file to include in backup/restore
+    echo -e "\nSaving deployment environment to ${Cyan}${COMPOSE_PATH%/}/.env${COff}"
+    cp -f "$ENV_FILE" "${COMPOSE_PATH%/}/.env" || {
+        log_error "Failed to save file '${COMPOSE_PATH%/}/.env'"
         return 1
     }
 }
@@ -349,7 +356,6 @@ load_deployment_file() {
     # shellcheck disable=SC2015
     COMPOSE_PROJECT_NAME=$(jq -r '.project' "$deployment_file") &&
     readarray -t ENABLED_MODULES < <(jq -r '.modules[]' "$deployment_file") &&
-    USE_SMTP2GO=$(jq -r '.smtp == "smtp2go"' "$deployment_file") &&
     APPDATA_LOCATION=$(jq -r '.appdata' "$deployment_file") &&
     readarray -t BACKUP_SERVICES < <(jq -r '.backup.services[]' "$deployment_file") &&
     readarray -t BACKUP_FILTER_INCLUDE < <(jq -r '.backup.filters.include[]' "$deployment_file") &&

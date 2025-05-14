@@ -326,6 +326,14 @@ base_config_env() {
     ask_for_env CF_TUNNEL_NAME "Cloudflare Tunnel Name"
 
     # SMTP Server Settings
+    if [ -z "$USE_SMTP2GO" ]; then
+        echo
+        if ask_confirmation -p "Do you want to configure SMTP2GO for outgoing email?" -y; then
+            save_env USE_SMTP2GO true
+        else
+            save_env USE_SMTP2GO false
+        fi
+    fi
     ask_for_env SMTP2GO_API_KEY "SMTP2GO API Key"
     ask_for_env SMTP_SENDER "SMTP Email From (username only)"
     if [ "$USE_SMTP2GO" != "true" ]; then
