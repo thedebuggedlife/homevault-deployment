@@ -313,6 +313,7 @@ save_deployment_file() {
         --arg project "$COMPOSE_PROJECT_NAME" \
         --argjson modules "$(jq -n --args '$ARGS.positional' "${ENABLED_MODULES[@]}")" \
         --arg smtp_type "$(if [ "$USE_SMTP2GO" = false ]; then echo "custom"; else echo "smtp2go"; fi)" \
+        --arg appdata "$APPDATA_LOCATION" \
         --argjson backup_services "$(jq -n --args '$ARGS.positional' "${backup_services[@]}")" \
         --argjson backup_include "$(jq -n --args '$ARGS.positional' "${backup_include[@]}")" \
         --argjson backup_exclude "$(jq -n --args '$ARGS.positional' "${backup_exclude[@]}")" '
@@ -321,6 +322,7 @@ save_deployment_file() {
             project: $project,
             modules: $modules,
             smtp: $smtp_type,
+            appdata: $appdata,
             backup: {
                 services: $backup_services,
                 filters: {
@@ -336,7 +338,7 @@ save_deployment_file() {
 }
 
 load_deployment_file() {
-    local deployment_file="${COMPOSE_PATH%/}/deployment.json"
+    local deployment_file="${1:-"${COMPOSE_PATH%/}/deployment.json"}"
 
     if [ ! -f "$deployment_file" ]; then
         log_error "File not found: '$deployment_file'"
@@ -348,6 +350,7 @@ load_deployment_file() {
     COMPOSE_PROJECT_NAME=$(jq -r '.project' "$deployment_file") &&
     readarray -t ENABLED_MODULES < <(jq -r '.modules[]' "$deployment_file") &&
     USE_SMTP2GO=$(jq -r '.smtp == "smtp2go"' "$deployment_file") &&
+    APPDATA_LOCATION=$(jq -r '.appdata' "$deployment_file") &&
     readarray -t BACKUP_SERVICES < <(jq -r '.backup.services[]' "$deployment_file") &&
     readarray -t BACKUP_FILTER_INCLUDE < <(jq -r '.backup.filters.include[]' "$deployment_file") &&
     readarray -t BACKUP_FILTER_EXCLUDE < <(jq -r '.backup.filters.exclude[]' "$deployment_file") || {

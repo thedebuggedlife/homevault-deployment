@@ -173,7 +173,8 @@ prepare_env_file() {
 # @return void
 ###
 download_appdata() {
-    if [ "$NO_DOWNLOAD" != true ]; then return 0; fi
+    if [ "$NO_DOWNLOAD" = true ]; then return 0; fi
+    log_header "Downloading application data for modules"
     for module in "${ENABLED_MODULES[@]}"; do
         download_module_appdata "$module"
     done
@@ -555,7 +556,7 @@ print_usage() {
     elif [ "$SELECTED_ACTION" = "backup" ]; then
         echo -e "\nBackup options:\n"
         echo "  --init                          Initialize the backup configuration. Must be run once before creating a snapshot."
-        echo "  --init-restic <var>=<value>     Specify a restic variable value. Can be specified multiple times."
+        echo "  --restic-var <var>=<value>      Specify a restic variable value. Can be specified multiple times."
         echo "  --keep                          Exclude the new snapshot from the automatic retention policy."
         echo "  --dry-run                       Execute restic in dry run mode."
 
@@ -574,9 +575,10 @@ print_usage() {
         echo -e "\nRestore options:\n"
         echo "  --local [appdata path]          Restore from a local appdata (default behavior). Cannot be used with --snapshot"
         echo "                                    If a path is not specified, it defaults to the configuration in project .env file."
-        echo "  --snapshot <id>                 Restore from a remote snapshot. Cannot be used with --local"
-        echo "                                    You may specify 'latest' or a valid snapshot ID."
-        echo "  --restic-env <path to .env>     Use the values in the specified .env file to locate the restic repository."
+        echo "  --snapshot [id]                 Restore from a remote snapshot. Cannot be used with --local"
+        echo "                                    If a snapshot ID is not specified, it defaults to the latest snapshot taken."
+        echo "  --restic-env <path_to_env>      Use the values in the specified .env file to locate the restic repository."
+        echo "  --restic-var <var>=<value>      Specify a restic variable value. Can be specified multiple times."
         echo "  --dry-run                       Execute restic and docker compose in dry run mode."
 
     elif [ "$SELECTED_ACTION" = "modules" ]; then
@@ -745,11 +747,6 @@ parse_command_line() {
             BACKUP_ACTION=init
             shift 1
             ;;
-        --init-override)
-            check_action_for_option backup "$1"
-            parse_env_override "$1" "$2" RESTIC_OVERRIDES || exit 1
-            shift 2
-            ;;
         --keep)
             check_action_for_option backup "$1"
             if [ "$BACKUP_ACTION" != "run" ]; then
@@ -811,17 +808,23 @@ parse_command_line() {
                 exit 1
             fi
             RESTORE_ACTION=snapshot
-            if [ -n "$2" ]; then
-                SNAPSHOT_ID="$2"
-                shift 2
-            else
-                log_invalid "$1 requires a value."
-                exit 1
+            shift 1
+            if [[ "$1" != -* ]]; then
+                SNAPSHOT_ID="$1"
+                shift 1
             fi
             ;;
         --restic-env)
             check_action_for_option restore "$1"
+            if [ -n "$RESTIC_ENV" ]; then
+                log_error "$1 can only be specified once"
+                exit 1
+            fi
             if [ -n "$2" ]; then
+                if [ ! -f "$2" ]; then
+                    log_error "$1: File '$2' does not exist"
+                    exit 1
+                fi
                 RESTIC_ENV="$2"
                 shift 2
             else
@@ -836,8 +839,13 @@ parse_command_line() {
             shift 1
             ;;
         ## SHARED OPTIONS
+        --restic-var)
+            check_action_for_option backup:restore "$1"
+            parse_env_override "$1" "$2" RESTIC_OVERRIDES || exit 1
+            shift 2
+            ;;
         --dry-run)
-            check_action_for_option deploy:backup:restore "$1"
+            check_action_for_option deploy:backup:snapshots:restore "$1"
             DRY_RUN=true
             shift 1
             ;;
@@ -923,7 +931,10 @@ restore_action_local() {
 
 restore_action_snapshot() {
     log_header "Performing remote restore operation"
-    ## TBD
+    restore_configure_remote || exit 1
+    restore_snapshot || exit 1
+    restore_configure_local || exit 1
+    run_deploy
 }
 
 run_restore() {

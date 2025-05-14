@@ -21,7 +21,7 @@ BACKUP_ACTION=run
 BACKUP_KEEP=false
 
 SNAPSHOT_ACTION=list
-SNAPSHOT_ID=
+SNAPSHOT_ID=latest
 SNAPSHOT_RETENTION=
 
 RESTORE_ACTION=
@@ -33,15 +33,17 @@ RESTORE_ACTION=
 # Runs the Restic utility using a docker container rather than requiring installing it
 #
 # @option   -v  {list}      Colon-separated list of directories to map
+# @option   -m  {manifest}  Manifest JSON file (for backup operations only)
 # @param    $@              Any additional parameters are passed down to restic
 # @return   {string}        Any output from restic
 ###
 restic() {
-    local data_paths repo_path exit_code
+    local data_paths manifest_file exit_code
     OPTIND=1
-    while getopts ":v:" opt; do
+    while getopts ":v:m:" opt; do
         case $opt in
             v) data_paths="$OPTARG" ;;
+            m) manifest_file="$OPTARG" ;;
             \?) log_warn "Invalid option: -$OPTARG" ;;
             :) log_warn "Option -$OPTARG requires an argument" ;;
         esac
@@ -57,6 +59,9 @@ restic() {
                 cmd+=" -v '$path:/source/${path#/}' "
             fi
         done
+    fi
+    if [ -n "$manifest_file" ]; then
+        cmd+=" -v '$manifest_file':/source/manifest.json"
     fi
     if [ -n "$RESTIC_ENV" ]; then
         cmd+=" --env-file '$RESTIC_ENV' "
@@ -177,7 +182,9 @@ restic_run_backup() {
         if [ "$BACKUP_KEEP" = true ]; then var_args+=(--tag keep); fi
 
         echo -e "Using repository: ${Cyan}${RESTIC_REPOSITORY}${COff}\n"
-        restic -v "$mappings" backup \
+        restic -v "$mappings" \
+            -m "${COMPOSE_PATH%/}/deployment.json" \
+            backup \
             --tag "$COMPOSE_PROJECT_NAME" \
             --exclude /config/file_exclude.txt \
             "${var_args[@]}" \
@@ -219,6 +226,41 @@ restic_forget_snapshots() {
                 return 1
             }
 
+        echo
+    ) || return 1
+}
+
+restic_dump_file() {
+    # Using a subshell to isolate code with access to restic ENV values
+    (
+        restic_load_env || return 1
+
+        echo -e "Using repository: ${Cyan}${RESTIC_REPOSITORY}${COff}\n" >&2
+        restic dump "$SNAPSHOT_ID" "/source/${1#/}" || {
+            log_error "Forget operation failed"
+            return 1
+        }
+
+        echo
+    ) || return 1
+}
+
+restic_run_restore() {
+    # Using a subshell to isolate code with access to restic ENV values
+    (
+        local mappings
+
+        restic_load_env || return 1
+
+        mappings=$(IFS=":"; echo "${BACKUP_FILTER_INCLUDE[*]}")
+
+        echo -e "Using repository: ${Cyan}${RESTIC_REPOSITORY}${COff}\n"
+        restic -v "$mappings" \
+            restore "$SNAPSHOT_ID" \
+            --target / || {
+                log_error "Backup operation failed"
+                return 1
+            }
         echo
     ) || return 1
 }
@@ -299,4 +341,53 @@ restore_configure_local() {
     OVERRIDE_COMPOSE=false
     OVERRIDE_VERSIONS=true
     NO_DOWNLOAD=true
+}
+
+restore_configure_remote() {
+    RESTIC_CONFIG=$(mktemp -d)
+
+    local temp_env="$RESTIC_CONFIG/.env"
+    if [ -f "$RESTIC_ENV" ]; then
+        cp "$RESTIC_ENV" "$temp_env" && chmod 600 "$temp_env" || {
+            log_error "Failed to copy env file to '$temp_env'"
+            return 1
+        }
+    else
+        touch "$temp_env" && chmod 600 "$temp_env" || {
+            log_error "Failed to create env file at '$temp_env'"
+            return 1
+        }
+    fi
+
+    RESTIC_ENV="$temp_env"
+
+    local key
+    for key in "${!RESTIC_OVERRIDES[@]}"; do
+        echo "$key=${RESTIC_OVERRIDES[$key]}" >> "$RESTIC_ENV"
+    done
+}
+
+restore_snapshot() {
+    local deployment_file="$RESTIC_CONFIG/deployment.json"
+    echo -e "Extracting snapshot manifest to ${Cyan}$deployment_file${COff}"
+    restic_dump_file "/manifest.json" > "$deployment_file" || {
+        log_error "Failed to load remote deployment file"
+        return 1
+    }
+
+    echo "Loading snapshot manifest"
+    load_deployment_file "$deployment_file" || return 1
+    echo
+
+    ensure_path_exists "$APPDATA_LOCATION"
+
+    local target_folder
+    for target_folder in "${BACKUP_FILTER_INCLUDE[@]}"; do
+        ensure_path_exists "$target_folder"
+    done
+    echo
+
+    echo "Running restic restore operation"
+    restic_run_restore || return 1
+    echo
 }
