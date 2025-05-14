@@ -53,9 +53,8 @@ docker() {
 # @return void
 ###
 configure_docker() {
-    log_header "Configuring Docker"
-
     if [ "$_DOCKER_INSTALLED" != "true" ]; then
+        log_header "Configuring Docker"
         echo -e "\n${Yellow}Docker is not installed.${COff}"
         local user_input=Y
         if [ "$UNATTENDED" != "true" ]; then

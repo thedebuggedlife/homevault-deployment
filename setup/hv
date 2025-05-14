@@ -118,6 +118,11 @@ execute_hooks() {
     done
 }
 
+implicit_env_vars() {
+    SECRETS_PATH="${APPDATA_LOCATION%/}/secrets/"
+    COMPOSE_PATH="${APPDATA_LOCATION%/}/compose/$COMPOSE_PROJECT_NAME/"
+}
+
 ###
 # Combine environment files from enabled modules
 #
@@ -159,6 +164,7 @@ prepare_env_file() {
     done
     # shellcheck source=/dev/null
     source "$ENV_FILE"
+    implicit_env_vars
 }
 
 ###
@@ -279,8 +285,7 @@ create_data_locations() {
 ###
 ask_for_variables() {
     execute_hooks "${CONFIG_ENV_HOOKS[@]}" "config-env"
-    SECRETS_PATH="${APPDATA_LOCATION%/}/secrets/"
-    COMPOSE_PATH="${APPDATA_LOCATION%/}/compose/$COMPOSE_PROJECT_NAME/"
+    implicit_env_vars
 }
 
 ###
@@ -292,7 +297,7 @@ save_secrets() {
     log_header "Preparing secret files"
     execute_hooks "${CONFIG_SECRETS_HOOKS[@]}" "config-secrets"
     if ! chmod 644 "${SECRETS_PATH}"*; then
-        return 1
+        exit 1
     fi
 }
 
@@ -528,7 +533,8 @@ print_usage() {
     if [ -z "$SELECTED_ACTION" ]; then
         echo -e "\nActions:\n"
         echo "  deploy      Installs and/or updates modules in the project."
-        echo "  backup      Creates a new snapshot with the current statue of the project."
+        echo "  backup      Creates a new recovery snapshot with the current statue of the project."
+        echo "  snapshots   List and/or manage existing recovery snapshots."
         echo "  restore     Recovers the state of the project from a previous snapshot."
         echo "  modules     Shows information about installed or available modules."
         echo -e "\nTo display help for an action:\n"
@@ -548,13 +554,29 @@ print_usage() {
 
     elif [ "$SELECTED_ACTION" = "backup" ]; then
         echo -e "\nBackup options:\n"
-        echo "  --init                          Initialize the backup configuration. Must be run at least once."
-        echo "  -o, --override <var>=<value>    Override environment variable. Can be specified multiple times."
+        echo "  --init                          Initialize the backup configuration. Must be run once before creating a snapshot."
+        echo "  --init-restic <var>=<value>     Specify a restic variable value. Can be specified multiple times."
+        echo "  --keep                          Exclude the new snapshot from the automatic retention policy."
+        echo "  --dry-run                       Execute restic in dry run mode."
+
+    elif [ "$SELECTED_ACTION" = "snapshots" ]; then
+        echo -e "\nSnapshot options:\n"
+        echo "  --forget <id>                   Delete the snapshot referenced by ID. You may specify 'latest'."
+        echo "  --retention [policy]            Configure the retention policy for automatic snapshots."
+        echo "                                    Format: [#h][#d][#w][#m][#y] Where: h=hour,d=day,w=week,m=month,y=hear"
+        echo "                                    Default: 30d12m10y"
+        echo "                                    Examples:"
+        echo "                                      --retention 24h7d (keep last 24 hourly and last 7 daily snapshots)"
+        echo "                                      --retention 4w6m  (keep last 4 weekly and last 6 monthly snapshots)"
         echo "  --dry-run                       Execute restic in dry run mode."
 
     elif [ "$SELECTED_ACTION" = "restore" ]; then
         echo -e "\nRestore options:\n"
-        echo "  --from <path>                   Look for existing appdata at this location."
+        echo "  --local [appdata path]          Restore from a local appdata (default behavior). Cannot be used with --snapshot"
+        echo "                                    If a path is not specified, it defaults to the configuration in project .env file."
+        echo "  --snapshot <id>                 Restore from a remote snapshot. Cannot be used with --local"
+        echo "                                    You may specify 'latest' or a valid snapshot ID."
+        echo "  --restic-env <path to .env>     Use the values in the specified .env file to locate the restic repository."
         echo "  --dry-run                       Execute restic and docker compose in dry run mode."
 
     elif [ "$SELECTED_ACTION" = "modules" ]; then
@@ -566,7 +588,8 @@ print_usage() {
     echo "  -h, --help                      Display this help message."
     echo "  -u, --user <user>               User to apply for file permissions. [Default: '$USER']"
     echo "  --always-ask                    Force interactive prompts for settings with a default or previously provided."
-    echo "  --unattended                    Do not stop for any prompt. Safe prompts will be auto-accepted. Other prompts will end in failure."
+    echo "  --unattended                    Do not stop for any prompt. Safe prompts will be auto-accepted."
+    echo "                                    Prompts that cannot be auto-accepted will cause the script to exit with a failure code."
 
     exit 1
 }
@@ -597,6 +620,23 @@ check_action_for_option() {
     fi
 }
 
+parse_env_override() {
+    local -n overrides=$3
+    if [ -n "$2" ]; then
+        # Parse override in form of: VARIABLE_NAME=VALUE
+        if echo "$2" | grep -q '='; then
+            # shellcheck disable=SC2034
+            overrides["$(echo "$2" | cut -d '=' -f 1)"]="$(echo "$2" | cut -d '=' -f 2-)"
+        else
+            log_invalid "$1 requires an assignment in the form VARIABLE_NAME=VALUE."
+            return 1
+        fi
+    else
+        log_invalid "$1 requires an assignment in the form VARIABLE_NAME=VALUE."
+        return 1
+    fi
+}
+
 parse_command_line() {
     while [ "$#" -gt 0 ]; do
         case "$(echo "$1" | tr '[:upper:]' '[:lower:]')" in
@@ -609,6 +649,11 @@ parse_command_line() {
         backup)
             if [ -n "$SELECTED_ACTION" ]; then log_invalid "Only 1 action can be selected at a time"; exit 1; fi
             SELECTED_ACTION="backup"
+            shift 1
+            ;;
+        snapshots)
+            if [ -n "$SELECTED_ACTION" ]; then log_invalid "Only 1 action can be selected at a time"; exit 1; fi
+            SELECTED_ACTION="snapshots"
             shift 1
             ;;
         restore)
@@ -674,6 +719,11 @@ parse_command_line() {
             OVERRIDE_COMPOSE=false
             shift 1
             ;;
+        --override | -o)
+            check_action_for_option deploy "$1"
+            parse_env_override "$1" "$2" ENV_OVERRIDES || exit 1
+            shift 2
+            ;;
         --override-versions)
             check_action_for_option deploy "$1"
             OVERRIDE_VERSIONS=true
@@ -695,11 +745,84 @@ parse_command_line() {
             BACKUP_ACTION=init
             shift 1
             ;;
+        --init-override)
+            check_action_for_option backup "$1"
+            parse_env_override "$1" "$2" RESTIC_OVERRIDES || exit 1
+            shift 2
+            ;;
+        --keep)
+            check_action_for_option backup "$1"
+            if [ "$BACKUP_ACTION" != "run" ]; then
+                log_error "$1 cannot be used in combination with --$BACKUP_ACTION"
+                exit 1
+            fi
+            BACKUP_KEEP=true
+            shift 1
+            ;;
+        ## SNAPSHOT OPTIONS
+        --forget)
+            check_action_for_option snapshots "$1"
+            if [ "$SNAPSHOT_ACTION" != "list" ]; then
+                log_error "$1 cannot be used in combination with --$SNAPSHOT_ACTION"
+                exit 1
+            fi
+            if [ -n "$2" ]; then
+                SNAPSHOT_ACTION=forget
+                SNAPSHOT_ID="$2"
+                shift 2
+            else
+                log_invalid "$1 requires a value."
+                exit 1
+            fi
+            ;;
+        --retention)
+            check_action_for_option snapshots "$1"
+            if [ "$SNAPSHOT_ACTION" != "list" ]; then
+                log_error "$1 cannot be used in combination with --$SNAPSHOT_ACTION"
+                exit 1
+            fi
+            if [ -n "$2" ]; then
+                SNAPSHOT_ACTION=retention
+                SNAPSHOT_RETENTION="$2"
+                shift 2
+            else
+                log_invalid "$1 requires a value."
+                exit 1
+            fi
+            ;;
         ## RESTORE OPTIONS
-        --from)
+        --local)
+            check_action_for_option restore "$1"
+            if [ -n "$RESTORE_ACTION" ]; then
+                log_error "$1 cannot be used in combination with --$RESTORE_ACTION"
+                exit 1
+            fi
+            RESTORE_ACTION=local
+            shift 1
+            if [[ "$1" != -* ]]; then
+                APPDATA_LOCATION="$1"
+                shift 1
+            fi
+            ;;
+        --snapshot)
+            check_action_for_option restore "$1"
+            if [ -n "$RESTORE_ACTION" ]; then
+                log_error "$1 cannot be used in combination with --$RESTORE_ACTION"
+                exit 1
+            fi
+            RESTORE_ACTION=snapshot
+            if [ -n "$2" ]; then
+                SNAPSHOT_ID="$2"
+                shift 2
+            else
+                log_invalid "$1 requires a value."
+                exit 1
+            fi
+            ;;
+        --restic-env)
             check_action_for_option restore "$1"
             if [ -n "$2" ]; then
-                APPDATA_LOCATION="$2"
+                RESTIC_ENV="$2"
                 shift 2
             else
                 log_invalid "$1 requires a value."
@@ -713,22 +836,6 @@ parse_command_line() {
             shift 1
             ;;
         ## SHARED OPTIONS
-        --override | -o)
-            check_action_for_option deploy:backup "$1"
-            if [ -n "$2" ]; then
-                # Parse override in form of: VARIABLE_NAME=VALUE
-                if echo "$2" | grep -q '='; then
-                    ENV_OVERRIDES["$(echo "$2" | cut -d '=' -f 1)"]="$(echo "$2" | cut -d '=' -f 2-)"
-                else
-                    log_invalid "$1 requires an assignment in the form VARIABLE_NAME=VALUE."
-                    exit 1
-                fi
-                shift 2
-            else
-                log_invalid "$1 requires an assignment in the form VARIABLE_NAME=VALUE."
-                exit 1
-            fi
-            ;;
         --dry-run)
             check_action_for_option deploy:backup:restore "$1"
             DRY_RUN=true
@@ -756,7 +863,7 @@ run_deploy() {
     create_data_locations
     download_appdata
     configure_admin_account
-    configure_tailscale
+    configure_tailscale || exit 1
     configure_cloudflare_tunnel
     configure_smtp2go
     save_secrets
@@ -764,17 +871,66 @@ run_deploy() {
     deploy_project
 }
 
+backup_action_init() {
+    log_header "Initializing backup repository"
+    backup_check_requisites || exit 1
+    restic_init_env || exit 1
+    load_deployment_file || exit 1
+    restic_init_repository || exit 1
+}
+
+backup_action_run() {
+    local exit_code
+    log_header "Creating a new recovery snapshot"
+    backup_check_requisites || exit 1
+    load_deployment_file || exit 1
+    backup_stop_services || exit 1
+    restic_run_backup; exit_code=$?
+    backup_start_services
+    if [ $exit_code -ne 0 ]; then return $exit_code; fi
+}
+
 run_backup() {
+    configure_docker
     find_installed_modules
-    load_modules
     prepare_env_file
-    configure_backup
+    backup_action_"${BACKUP_ACTION}"
+}
+
+snapshots_action_list() {
+    log_header "Enumerating existing recovery snapshots"
+    restic_list_snapshots || exit 1
+}
+
+snapshots_action_forget() {
+    log_header "Removing an existing recovery snapshot"
+    restic_forget_snapshots || exit 1
+    restic_list_snapshots || exit 1
+}
+
+run_snapshots() {
+    configure_docker
+    prepare_env_file
+    snapshots_action_"${SNAPSHOT_ACTION}"
+}
+
+restore_action_local() {
+    log_header "Performing local restore operation"
+    restore_configure_local || exit 1
+    load_deployment_file || exit 1
+    run_deploy
+}
+
+restore_action_snapshot() {
+    log_header "Performing remote restore operation"
+    ## TBD
 }
 
 run_restore() {
+    configure_docker
     find_installed_modules
-    configure_restore
-    run_deploy
+    restore_check_installed || abort_install
+    restore_action_"${RESTORE_ACTION}"
 }
 
 run_modules() {

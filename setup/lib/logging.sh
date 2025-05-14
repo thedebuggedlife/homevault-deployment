@@ -121,6 +121,7 @@ log_options() {
         local padding=$((display_width - ${#option}))
         local desc_indent=$((indent + display_width + 1))  # +1 for space after option
         
+        # shellcheck disable=SC2183
         if [ "$dividers" = true ]; then printf '%*s' "$terminal_width" | tr ' ' '-'; fi
 
         # Print option with padding to align all descriptions
