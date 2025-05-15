@@ -984,6 +984,10 @@ restore_action_snapshot() {
 }
 
 run_restore() {
+    if [ -z "$RESTORE_ACTION" ]; then
+        log_error "You must specify either option: '--local' or '--snapshot'"
+        exit 1
+    fi
     configure_docker
     find_installed_modules
     restore_check_installed || abort_install
