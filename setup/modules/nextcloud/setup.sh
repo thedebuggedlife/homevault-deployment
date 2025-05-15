@@ -59,7 +59,7 @@ nextcloud_pre_install() {
 
     # For NextCloud to respect X-Forwarded-* headers the CIDR that includes traefik and nextcloud should be
     # added to the trusted proxies. Otherwise, NextCloud will not receive original IP and protocol of the request.
-    if [ -z "$NEXTCLOUD_TRUSTED_PROXIES" ]; then
+    if [[ "$SELECTED_ACTION" = "restore" || -z "$NEXTCLOUD_TRUSTED_PROXIES" ]]; then
         echo "Creating Docker resources to extract network addresses..."
         if ! sg docker -c "docker compose $COMPOSE_OPTIONS create -y --quiet-pull traefik nextcloud-app"; then
             log_error "Failed to create container resources"
@@ -98,10 +98,12 @@ nextcloud_backup_config() {
 nextcloud_post_restore() {
     # We do not backup the ElasticSearch cluster data during backup
     # Rebuild the index after restoring the service
-    echo "Rebuilding full-text search index for Nextcloud"
-    nextcloud_run_occ fulltextsearch:index -q || {
-        log_warn "Failed to rebuild Nextcloud's Full-text Search index"
-    }
+    echo "Rebuilding full-text search index for Nextcloud. This can take a few minutes."
+    echo -e "y\nreset ALL ALL\n" | 
+        nextcloud_run_occ fulltextsearch:reset > /dev/null 2>&1 &&
+        nextcloud_run_occ fulltextsearch:index -q || {
+            log_warn "Failed to rebuild Nextcloud's Full-text Search index"
+        }
 }
 
 CONFIG_ENV_HOOKS+=("nextcloud_config_env")
