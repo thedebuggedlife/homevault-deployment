@@ -14,6 +14,7 @@ RESTIC_ENV=
 RESTIC_INIT_ENV=
 RESTIC_REPOSITORY=
 RESTIC_CONFIG=
+RESTIC_DATA_ROOT=/data
 
 declare -A RESTIC_OVERRIDES
 
@@ -58,12 +59,12 @@ restic() {
         IFS=':' read -ra path_array <<< "$data_paths"
         for path in "${path_array[@]}"; do
             if [ -n "$path" ]; then
-                cmd+=" -v '$path:/source/${path#/}' "
+                cmd+=" -v '$path:$RESTIC_DATA_ROOT/${path#/}' "
             fi
         done
     fi
     if [ -n "$manifest_file" ]; then
-        cmd+=" -v '$manifest_file':/source/manifest.json"
+        cmd+=" -v '$manifest_file':$RESTIC_DATA_ROOT/manifest.json"
     fi
     if [ -n "$RESTIC_ENV" ]; then
         cmd+=" --env-file '$RESTIC_ENV' "
@@ -190,7 +191,7 @@ restic_run_backup() {
         restic_load_env || return 1
 
         mappings=$(IFS=":"; echo "${BACKUP_FILTER_INCLUDE[*]}")
-        printf '/source/%s\n' "${BACKUP_FILTER_EXCLUDE[@]/#\//}" > "$RESTIC_CONFIG/file_exclude.txt"
+        printf "$RESTIC_DATA_ROOT"'/%s\n' "${BACKUP_FILTER_EXCLUDE[@]/#\//}" > "$RESTIC_CONFIG/file_exclude.txt"
 
         if [ "$BACKUP_KEEP" = true ]; then var_args+=(--tag keep); fi
 
@@ -201,7 +202,7 @@ restic_run_backup() {
             --tag "$COMPOSE_PROJECT_NAME" \
             --exclude-file /config/file_exclude.txt \
             "${var_args[@]}" \
-            /source || {
+            "$RESTIC_DATA_ROOT" || {
                 log_error "Backup operation failed"
                 return 1
             }
@@ -268,7 +269,7 @@ restic_dump_file() {
         restic_load_env || return 1
 
         echo -e "Retrieving file ${Purple}$1${COff} from repository: ${Cyan}${RESTIC_REPOSITORY}${COff}\n" >&2
-        restic dump "$SNAPSHOT_ID" "/source/${1#/}" || {
+        restic dump "$SNAPSHOT_ID" "$RESTIC_DATA_ROOT/${1#/}" || {
             log_error "Forget operation failed"
             return 1
         }

@@ -536,9 +536,8 @@ abort_install() {
 }
 
 print_usage() {
-    echo -e "\nUsage: $0 [global options] <action> [action options]"
-
     if [ -z "$SELECTED_ACTION" ]; then
+        echo -e "\nUsage: $0 [global options] <action> [action options]"
         echo -e "\nActions:\n"
         echo "  deploy      Installs and/or updates modules in the project."
         echo "  backup      Creates a new recovery snapshot with the current statue of the project."
@@ -549,6 +548,7 @@ print_usage() {
         echo "  $0 <action> --help"
 
     elif [ "$SELECTED_ACTION" = "deploy" ]; then
+        echo -e "\nUsage: $0 [global options] deploy [deploy options]"
         echo -e "\nDeploy options:\n"
         echo "  -m, --module <module>           Includes the given module in the project. Can be specified multiple times."
         echo "      --module all                Enables all available modules."
@@ -560,28 +560,44 @@ print_usage() {
         echo "  --dry-run                       Execute docker compose in dry run mode."
 
     elif [ "$SELECTED_ACTION" = "backup" ]; then
-        echo -e "\nBackup options:\n"
-        echo "  --init [env_file]               Initialize the backup configuration. Must be run once before creating a snapshot."
-        echo "                                    If [env_file] is provided, it is used to initialize restic environment variables."
+        echo -e "\nUsage: $0 [global options] backup <action> [backup options]"
+        echo -e "\nBackup actions:\n"
+        echo "  init                            Initialize the backup configuration. Must be run once before creating a snapshot."
+        echo "  run                             Create a new recovery snapshot."
+        echo "  schedule                        Configure (or disable) the schedule for background backup operations."
+        echo -e "\nBackup 'init' options:\n"
+        echo "  --restic-env <env_file>         Use the specified file to initialize restic environment variables."
         echo "  --restic-var <var>=<value>      Specify a restic variable value. Can be specified multiple times."
+        echo -e "\nBackup 'run' options:\n"
         echo "  --keep                          Exclude the new snapshot from the automatic retention policy."
+        echo -e "\nBackup 'schedule' options:\n"
+        echo "  --cron '<expression>'           Set the background schedule to the given expression. Expression MUST be wrapped in quotes."
+        echo "                                  Help: https://www.uptimia.com/cron-expression-generator"
+        echo "                                  Examples:"
+        echo "                                    --cron '0 2 * * *'    (every day at 2AM)"
+        echo "                                    --cron '0 0 * * 0'    (every Sunday at midnight)"
+        echo "                                    --cron off            (disable background schedule)"
+        echo "  --retention [policy]            Configure the retention policy for automatic snapshots."
+        echo "                                  Format: '[#h][#d][#w][#m][#y]' Where: h=hour,d=day,w=week,m=month,y=year"
+        echo "                                  Default: 30d12m10y"
+        echo "                                  Examples:"
+        echo "                                    --retention 24h7d (keep last 24 hourly and last 7 daily snapshots)"
+        echo "                                    --retention 4w6m  (keep last 4 weekly and last 6 monthly snapshots)"
+        echo "                                    --retention off   (disable policy, i.e. keep all snapshots)"
+        echo -e "\nGlobal backup options:\n"
         echo "  --dry-run                       Execute restic in dry run mode."
 
     elif [ "$SELECTED_ACTION" = "snapshots" ]; then
+        echo -e "\nUsage: $0 [global options] snapshot [snapshot options]"
         echo -e "\nSnapshot options:\n"
         echo "  --browse <id> [dir]             Show contents of a snapshot by ID. You may specify: 'latest'."
         echo "                                    If [dir] is specified, only files under the specified directory are listed."
         echo "  --recursive                     Include all files and folders recursively. Valid only when --browse is used."
         echo "  --forget <id>                   Delete the snapshot referenced by ID. You may specify: 'latest'."
-        echo "  --retention [policy]            Configure the retention policy for automatic snapshots."
-        echo "                                    Format: [#h][#d][#w][#m][#y] Where: h=hour,d=day,w=week,m=month,y=hear"
-        echo "                                    Default: 30d12m10y"
-        echo "                                    Examples:"
-        echo "                                      --retention 24h7d (keep last 24 hourly and last 7 daily snapshots)"
-        echo "                                      --retention 4w6m  (keep last 4 weekly and last 6 monthly snapshots)"
         echo "  --dry-run                       Execute restic in dry run mode."
 
     elif [ "$SELECTED_ACTION" = "restore" ]; then
+        echo -e "\nUsage: $0 [global options] restore [restore options]"
         echo -e "\nRestore options:\n"
         echo "  --local [appdata path]          Restore from a local appdata (default behavior). Cannot be used with --snapshot"
         echo "                                    If a path is not specified, it defaults to the configuration in project .env file."
@@ -592,6 +608,7 @@ print_usage() {
         echo "  --dry-run                       Execute restic and docker compose in dry run mode."
 
     elif [ "$SELECTED_ACTION" = "modules" ]; then
+        echo -e "\nUsage: $0 [global options] modules [modules options]"
         echo -e "\Modules options:\n"
         echo "  --all                           Show information for all modules available. Otherwise only installed modules are shown."
     fi
