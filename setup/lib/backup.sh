@@ -419,7 +419,7 @@ restore_snapshot() {
     done
     echo
 
-    echo "Running restic restore operation"
+    echo "Running restic restore operation. This operation could take several minutes..."
     restic_run_restore || return 1
     echo
 }

@@ -934,6 +934,7 @@ backup_action_run() {
     backup_check_requisites || exit 1
     load_deployment_file || exit 1
     backup_stop_services || exit 1
+    echo "Running restic backup operation. This operation could take several minutes..."
     restic_run_backup; exit_code=$?
     backup_start_services
     if [ $exit_code -ne 0 ]; then return $exit_code; fi
