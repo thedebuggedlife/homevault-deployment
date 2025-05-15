@@ -50,18 +50,21 @@ homepage_bootstrap() {
     homepage_merge_config "widgets.yaml" arrays || return 1
 }
 
+homepage_backup_config() {
+    # shellcheck disable=SC2016
+    BACKUP_FILTER_INCLUDE+=(
+        '${APPDATA_LOCATION}/homepage'
+    )
+    # shellcheck disable=SC2016
+    BACKUP_FILTER_EXCLUDE+=(
+        '${APPDATA_LOCATION}/homepage/logs'
+    )
+}
+
 CONFIG_ENV_HOOKS+=("homepage_config_env")
 # CONFIG_SECRETS_HOOKS+=("")
 COMPOSE_EXTRA_HOOKS+=("homepage_compose_extra")
 # PRE_INSTALL_HOOKS+=("")
 # POST_INSTALL_HOOKS+=("")
 BOOTSTRAP_HOOKS+=("homepage_bootstrap")
-
-# shellcheck disable=SC2016
-BACKUP_FILTER_INCLUDE+=(
-    '${APPDATA_LOCATION}/homepage'
-)
-# shellcheck disable=SC2016
-BACKUP_FILTER_EXCLUDE+=(
-    '${APPDATA_LOCATION}/homepage/logs'
-)
+BACKUP_CONFIG_HOOKS+=("homepage_backup_config")

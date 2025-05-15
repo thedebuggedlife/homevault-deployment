@@ -181,7 +181,7 @@ restic_run_backup() {
 
         if [ "$BACKUP_KEEP" = true ]; then var_args+=(--tag keep); fi
 
-        echo -e "Using repository: ${Cyan}${RESTIC_REPOSITORY}${COff}\n"
+        echo -e "Creating new snapshot in repository: ${Cyan}${RESTIC_REPOSITORY}${COff}\n"
         restic -v "$mappings" \
             -m "${COMPOSE_PATH%/}/deployment.json" \
             backup \
@@ -204,10 +204,25 @@ restic_list_snapshots() {
     (
         restic_load_env || return 1
 
-        echo -e "Using repository: ${Cyan}${RESTIC_REPOSITORY}${COff}\n"
+        echo -e "Listing snapshots in repository: ${Cyan}${RESTIC_REPOSITORY}${COff}\n"
         restic snapshots \
             --tag "$COMPOSE_PROJECT_NAME" || {
                 log_error "Snapshots operation failed"
+                return 1
+            }
+
+        echo
+    ) || return 1
+}
+
+restic_browse_snapshot() {
+    # Using a subshell to isolate code with access to restic ENV values
+    (
+        restic_load_env || return 1
+
+        echo -e "Browsing snapshot ${Purple}$SNAPSHOT_ID${COff} in repository: ${Cyan}${RESTIC_REPOSITORY}${COff}\n"
+        restic ls "$SNAPSHOT_ID" || {
+                log_error "Browse operation failed"
                 return 1
             }
 
@@ -220,7 +235,7 @@ restic_forget_snapshots() {
     (
         restic_load_env || return 1
 
-        echo -e "Using repository: ${Cyan}${RESTIC_REPOSITORY}${COff}\n"
+        echo -e "Deleting snapshot ${Purple}$SNAPSHOT_ID${COff} from repository: ${Cyan}${RESTIC_REPOSITORY}${COff}\n"
         restic forget "$SNAPSHOT_ID" || {
                 log_error "Forget operation failed"
                 return 1
@@ -235,7 +250,7 @@ restic_dump_file() {
     (
         restic_load_env || return 1
 
-        echo -e "Using repository: ${Cyan}${RESTIC_REPOSITORY}${COff}\n" >&2
+        echo -e "Retrieving file ${Purple}$1${COff} from repository: ${Cyan}${RESTIC_REPOSITORY}${COff}\n" >&2
         restic dump "$SNAPSHOT_ID" "/source/${1#/}" || {
             log_error "Forget operation failed"
             return 1
@@ -254,7 +269,7 @@ restic_run_restore() {
 
         mappings=$(IFS=":"; echo "${BACKUP_FILTER_INCLUDE[*]}")
 
-        echo -e "Using repository: ${Cyan}${RESTIC_REPOSITORY}${COff}\n"
+        echo -e "Restoring snapshot ${Purple}$SNAPSHOT_ID${COff} from repository: ${Cyan}${RESTIC_REPOSITORY}${COff}\n"
         restic -v "$mappings" \
             restore "$SNAPSHOT_ID" \
             --target / || {

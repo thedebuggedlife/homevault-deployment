@@ -269,16 +269,19 @@ portainer_post_install() {
     portainer_configure_oauth || return 1
 }
 
+portainer_backup_config() {
+    BACKUP_SERVICES+=(
+        "portainer"
+    )
+    # shellcheck disable=SC2016
+    BACKUP_FILTER_INCLUDE+=(
+        '${APPDATA_LOCATION}/portainer'
+    )
+}
+
 CONFIG_ENV_HOOKS+=("portainer_config_env")
 CONFIG_SECRETS_HOOKS+=("portainer_config_secrets")
 # PRE_INSTALL_HOOKS+=("")
 POST_INSTALL_HOOKS+=("portainer_post_install")
 # BOOTSTRAP_HOOKS+=("")
-
-BACKUP_SERVICES+=(
-    "portainer"
-)
-# shellcheck disable=SC2016
-BACKUP_FILTER_INCLUDE+=(
-    '${APPDATA_LOCATION}/portainer'
-)
+BACKUP_CONFIG_HOOKS+=("portainer_backup_config")

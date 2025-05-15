@@ -9,6 +9,13 @@ source "$PROJECT_ROOT/lib/config.sh"
 #shellcheck source=../../lib/docker.sh
 source "$PROJECT_ROOT/lib/docker.sh"
 
+## Check dependencies
+
+if ! array_contains nextcloud "${ENABLED_MODULES[@]}"; then
+    log_error "Module nextcloud.talk depends on nextcloud. You need to include it with '-m nextcloud'"
+    return 1
+fi
+
 ## Environment variables
 
 NEXTCLOUD_TALK_SUBDOMAIN=
@@ -72,7 +79,7 @@ nextcloud_talk_configure_turn() {
 
 nextcloud_talk_install_app() {
     local existing
-    existing=$(docker exec -it nextcloud_app ./occ app:list --enabled) || {
+    existing=$(nextcloud_run_occ app:list --enabled) || {
         log_error "Failed to enumerate installed Nextcloud apps"
         return 1
     }
@@ -82,7 +89,7 @@ nextcloud_talk_install_app() {
         return 0
     fi
 
-    docker exec -it nextcloud_app ./occ app:install spreed || {
+    nextcloud_run_occ app:install spreed || {
         log_error "Failed to install Nextcloud Talk app"
         return 1
     }
@@ -94,7 +101,7 @@ nextcloud_talk_add_turn_server() {
     local secret=${NEXTCLOUD_TALK_TURN_SECRET}
 
     local existing
-    existing=$(docker exec -it nextcloud_app ./occ talk:turn:list) || {
+    existing=$(nextcloud_run_occ talk:turn:list) || {
         log_error "Failed to enumerate TURN servers in Nextcloud"
         return 1
     }
@@ -104,7 +111,7 @@ nextcloud_talk_add_turn_server() {
         return 0
     fi
 
-    docker exec -it nextcloud_app ./occ talk:turn:add --secret "$secret" turn "$server:$port" udp,tcp || {
+    nextcloud_run_occ talk:turn:add --secret "$secret" turn "$server:$port" udp,tcp || {
         log_error "Failed to add TURN server $server to Nextcloud"
         return 1
     }
@@ -117,7 +124,7 @@ nextcloud_talk_add_signaling_server() {
     local secret="${NEXTCLOUD_TALK_SIGNALING_SECRET}"
 
     local existing
-    existing=$(docker exec -it nextcloud_app ./occ talk:signaling:list) || {
+    existing=$(nextcloud_run_occ talk:signaling:list) || {
         log_error "Failed to enumerate signaling servers in Nextcloud"
         return 1
     }
@@ -127,7 +134,7 @@ nextcloud_talk_add_signaling_server() {
         return 0
     fi
 
-    docker exec -it nextcloud_app ./occ talk:signaling:add "$server" "$secret" || {
+    nextcloud_run_occ talk:signaling:add "$server" "$secret" || {
         log_error "Failed to add signaling server $server to Nextcloud"
         return 1
     }

@@ -301,7 +301,13 @@ create_rsa_keypair() {
 #                           DEPLOYMENT FILE
 
 save_deployment_file() {
+    log_header "Saving deployment manifest"
     local deployment_file="${COMPOSE_PATH%/}/deployment.json"
+
+    BACKUP_SERVICES=()
+    BACKUP_FILTER_INCLUDE=()
+    BACKUP_FILTER_EXCLUDE=()
+    execute_hooks "${BACKUP_CONFIG_HOOKS[@]}" "backup-config"
 
     # Substitute any environment variables specified in the following array items
     local backup_services backup_include backup_exclude

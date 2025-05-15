@@ -389,24 +389,27 @@ base_post_install() {
     pam_post_install || return 1
 }
 
+base_backup_config() {
+    BACKUP_SERVICES+=(
+        "authelia"
+        "lldap"
+        "traefik"
+        "trafego"
+    )
+    # shellcheck disable=SC2016
+    BACKUP_FILTER_INCLUDE+=(
+        '${APPDATA_LOCATION}/authelia'
+        '${APPDATA_LOCATION}/compose'
+        '${APPDATA_LOCATION}/lldap'
+        '${APPDATA_LOCATION}/secrets'
+        '${APPDATA_LOCATION}/traefik'
+        '${APPDATA_LOCATION}/trafego'
+    )
+}
+
 CONFIG_ENV_HOOKS+=("base_config_env")
 CONFIG_SECRETS_HOOKS+=("base_config_secrets")
 PRE_INSTALL_HOOKS+=("base_pre_install")
 POST_INSTALL_HOOKS+=("base_post_install")
+BACKUP_CONFIG_HOOKS+=("base_backup_config")
 # BOOTSTRAP_HOOKS+=("...")
-
-BACKUP_SERVICES+=(
-    "authelia"
-    "lldap"
-    "traefik"
-    "trafego"
-)
-# shellcheck disable=SC2016
-BACKUP_FILTER_INCLUDE+=(
-    '${APPDATA_LOCATION}/authelia'
-    '${APPDATA_LOCATION}/compose'
-    '${APPDATA_LOCATION}/lldap'
-    '${APPDATA_LOCATION}/secrets'
-    '${APPDATA_LOCATION}/traefik'
-    '${APPDATA_LOCATION}/trafego'
-)

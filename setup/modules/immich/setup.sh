@@ -230,18 +230,21 @@ immich_post_install() {
     immich_configure_oauth || return 1
 }
 
+immich_backup_config() {
+    BACKUP_SERVICES+=(
+        "immich-server"
+        "immich-postgres"
+    )
+    # shellcheck disable=SC2016
+    BACKUP_FILTER_INCLUDE+=(
+        '${APPDATA_LOCATION}/immich'
+        '${IMMICH_UPLOAD_LOCATION}'
+    )
+}
+
 CONFIG_ENV_HOOKS+=("immich_config_env")
 CONFIG_SECRETS_HOOKS+=("immich_config_secrets")
 PRE_INSTALL_HOOKS+=("immich_pre_install")
 POST_INSTALL_HOOKS+=("immich_post_install")
 # BOOTSTRAP_HOOKS+=("immich_bootstrap")
-
-BACKUP_SERVICES+=(
-    "immich-server"
-    "immich-postgres"
-)
-# shellcheck disable=SC2016
-BACKUP_FILTER_INCLUDE+=(
-    '${APPDATA_LOCATION}/immich'
-    '${IMMICH_UPLOAD_LOCATION}'
-)
+BACKUP_CONFIG_HOOKS+=("immich_backup_config")

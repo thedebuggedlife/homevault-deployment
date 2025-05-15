@@ -7,6 +7,10 @@ source "$PROJECT_ROOT/lib/logging.sh"
 #shellcheck source=../../lib/config.sh
 source "$PROJECT_ROOT/lib/config.sh"
 
+nextcloud_run_occ() {
+    docker compose -p "$COMPOSE_PROJECT_NAME" exec nextcloud-app ./occ "$@"
+}
+
 ################################################################################
 #                         NEXTCLOUD SETUP HOOKS
 
@@ -74,23 +78,36 @@ nextcloud_pre_install() {
     fi
 }
 
+nextcloud_backup_config() {
+    BACKUP_SERVICES+=(
+        "nextcloud-app"
+        "nextcloud-cron"
+        "nextcloud-db"
+    )
+    # shellcheck disable=SC2016
+    BACKUP_FILTER_INCLUDE+=(
+        '${APPDATA_LOCATION}/nextcloud'
+        '${NEXTCLOUD_DATA_LOCATION}'
+    )
+    # shellcheck disable=SC2016
+    BACKUP_FILTER_EXCLUDE+=(
+        '${APPDATA_LOCATION}/nextcloud/search'
+    )
+}
+
+nextcloud_post_restore() {
+    # We do not backup the ElasticSearch cluster data during backup
+    # Rebuild the index after restoring the service
+    echo "Rebuilding full-text search index for Nextcloud"
+    nextcloud_run_occ fulltextsearch:index -q || {
+        log_warn "Failed to rebuild Nextcloud's Full-text Search index"
+    }
+}
+
 CONFIG_ENV_HOOKS+=("nextcloud_config_env")
 CONFIG_SECRETS_HOOKS+=("nextcloud_config_secrets")
 PRE_INSTALL_HOOKS+=("nextcloud_pre_install")
 # POST_INSTALL_HOOKS+=(...)
 # BOOTSTRAP_HOOKS+=(...)
-
-BACKUP_SERVICES+=(
-    "nextcloud-app"
-    "nextcloud-cron"
-    "nextcloud-db"
-)
-# shellcheck disable=SC2016
-BACKUP_FILTER_INCLUDE+=(
-    '${APPDATA_LOCATION}/nextcloud'
-    '${NEXTCLOUD_DATA_LOCATION}'
-)
-# shellcheck disable=SC2016
-BACKUP_FILTER_EXCLUDE+=(
-    '${APPDATA_LOCATION}/nextcloud/search'
-)
+BACKUP_CONFIG_HOOKS+=("nextcloud_backup_config")
+POST_RESTORE_HOOKS+=("nextcloud_post_restore")

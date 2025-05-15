@@ -56,6 +56,8 @@ declare -ga COMPOSE_EXTRA_HOOKS=()
 declare -ga PRE_INSTALL_HOOKS=()
 declare -ga POST_INSTALL_HOOKS=()
 declare -ga BOOTSTRAP_HOOKS=()
+declare -ga POST_RESTORE_HOOKS=()
+declare -ga BACKUP_CONFIG_HOOKS=()
 declare -ga BACKUP_SERVICES=()
 declare -ga BACKUP_FILTER_INCLUDE=()
 declare -ga BACKUP_FILTER_EXCLUDE=()
@@ -558,7 +560,8 @@ print_usage() {
 
     elif [ "$SELECTED_ACTION" = "snapshots" ]; then
         echo -e "\nSnapshot options:\n"
-        echo "  --forget <id>                   Delete the snapshot referenced by ID. You may specify 'latest'."
+        echo "  --browse <id>                   Show contents of a snapshot by ID. You may specify: 'latest'."
+        echo "  --forget <id>                   Delete the snapshot referenced by ID. You may specify: 'latest'."
         echo "  --retention [policy]            Configure the retention policy for automatic snapshots."
         echo "                                    Format: [#h][#d][#w][#m][#y] Where: h=hour,d=day,w=week,m=month,y=hear"
         echo "                                    Default: 30d12m10y"
@@ -748,6 +751,21 @@ parse_command_line() {
             shift 1
             ;;
         ## SNAPSHOT OPTIONS
+        --browse)
+            check_action_for_option snapshots "$1"
+            if [ "$SNAPSHOT_ACTION" != "list" ]; then
+                log_error "$1 cannot be used in combination with --$SNAPSHOT_ACTION"
+                exit 1
+            fi
+            if [ -n "$2" ]; then
+                SNAPSHOT_ACTION=browse
+                SNAPSHOT_ID="$2"
+                shift 2
+            else
+                log_invalid "$1 requires a value."
+                exit 1
+            fi
+            ;;
         --forget)
             check_action_for_option snapshots "$1"
             if [ "$SNAPSHOT_ACTION" != "list" ]; then
@@ -901,6 +919,11 @@ snapshots_action_list() {
     restic_list_snapshots || exit 1
 }
 
+snapshots_action_browse() {
+    log_header "Browsing snapshot contents"
+    restic_browse_snapshot || exit 1
+}
+
 snapshots_action_forget() {
     log_header "Removing an existing recovery snapshot"
     restic_forget_snapshots || exit 1
@@ -933,6 +956,7 @@ run_restore() {
     find_installed_modules
     restore_check_installed || abort_install
     restore_action_"${RESTORE_ACTION}"
+    execute_hooks "${POST_RESTORE_HOOKS[@]}" "post-restore"
 }
 
 run_modules() {
