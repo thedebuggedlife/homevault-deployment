@@ -302,7 +302,7 @@ create_rsa_keypair() {
 
 save_deployment_file() {
     log_header "Saving deployment manifest"
-    local deployment_file="${COMPOSE_PATH%/}/deployment.json"
+    local deployment_file="${PROJECT_PATH%/}/deployment.json"
 
     BACKUP_SERVICES=()
     BACKUP_FILTER_INCLUDE=()
@@ -343,15 +343,15 @@ save_deployment_file() {
     }
 
     # Copy the ENV file to include in backup/restore
-    echo -e "\nSaving deployment environment to ${Cyan}${COMPOSE_PATH%/}/.env${COff}"
-    cp -f "$ENV_FILE" "${COMPOSE_PATH%/}/.env" || {
-        log_error "Failed to save file '${COMPOSE_PATH%/}/.env'"
+    echo -e "\nSaving deployment environment to ${Cyan}${PROJECT_PATH%/}/.env${COff}"
+    cp -f "$ENV_FILE" "${PROJECT_PATH%/}/.env" || {
+        log_error "Failed to save file '${PROJECT_PATH%/}/.env'"
         return 1
     }
 }
 
 load_deployment_file() {
-    local deployment_file="${1:-"${COMPOSE_PATH%/}/deployment.json"}"
+    local deployment_file="${1:-"${PROJECT_PATH%/}/deployment.json"}"
 
     if [ ! -f "$deployment_file" ]; then
         log_error "File not found: '$deployment_file'"

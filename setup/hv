@@ -15,6 +15,7 @@ source "$PROJECT_ROOT/lib/backup.sh"
 declare -g SELECTED_ACTION=
 declare -g SHOW_ALL=false
 declare -g COMPOSE_PATH=
+declare -g PROJECT_PATH=
 declare -g SECRETS_PATH=
 declare -g OVERRIDE_COMPOSE=true
 declare -g OVERRIDE_VERSIONS=false
@@ -122,7 +123,8 @@ execute_hooks() {
 
 implicit_env_vars() {
     SECRETS_PATH="${APPDATA_LOCATION%/}/secrets/"
-    COMPOSE_PATH="${APPDATA_LOCATION%/}/compose/$COMPOSE_PROJECT_NAME/"
+    PROJECT_PATH="${APPDATA_LOCATION%/}/project/$COMPOSE_PROJECT_NAME"
+    COMPOSE_PATH="${APPDATA_LOCATION%/}/project/$COMPOSE_PROJECT_NAME/compose"
 }
 
 ###
@@ -338,7 +340,7 @@ deploy_project() {
     original_files+=("${extra_files[@]}")
 
     # Copy the files to match the following file layout: 
-    # "{APPDATA_LOCATION}/compose/{PROJECT}/{module}/docker-compose[.{extra}].yml"
+    # "{APPDATA_LOCATION}/project/{PROJECT}/compose/{module}/docker-compose[.{extra}].yml"
     for original_file in "${original_files[@]}"; do
         local project_file target_project inner
         # Original file format "<source_module>:<full_path>[:<target_module>]"
@@ -560,7 +562,9 @@ print_usage() {
 
     elif [ "$SELECTED_ACTION" = "snapshots" ]; then
         echo -e "\nSnapshot options:\n"
-        echo "  --browse <id>                   Show contents of a snapshot by ID. You may specify: 'latest'."
+        echo "  --browse <id> [dir]             Show contents of a snapshot by ID. You may specify: 'latest'."
+        echo "                                    If [dir] is specified, only files under the specified directory are listed."
+        echo "  --recursive                     Include all files and folders recursively. Valid only when --browse is used."
         echo "  --forget <id>                   Delete the snapshot referenced by ID. You may specify: 'latest'."
         echo "  --retention [policy]            Configure the retention policy for automatic snapshots."
         echo "                                    Format: [#h][#d][#w][#m][#y] Where: h=hour,d=day,w=week,m=month,y=hear"
@@ -761,10 +765,23 @@ parse_command_line() {
                 SNAPSHOT_ACTION=browse
                 SNAPSHOT_ID="$2"
                 shift 2
+                if [[ -n "$1" && "$1" != -* ]]; then
+                    SNAPSHOT_BROWSE_FLAGS+=("$1")
+                    shift
+                fi
             else
-                log_invalid "$1 requires a value."
+                log_invalid "$1 requires a value for snapshot ID."
                 exit 1
             fi
+            ;;
+        --recursive)
+            check_action_for_option snapshots "$1"
+            if [ "$SNAPSHOT_ACTION" != "browse" ]; then
+                log_error "$1 is only valid when used with --browse"
+                exit 1
+            fi
+            SNAPSHOT_BROWSE_FLAGS+=("--recursive")
+            shift
             ;;
         --forget)
             check_action_for_option snapshots "$1"
@@ -818,7 +835,7 @@ parse_command_line() {
             fi
             RESTORE_ACTION=snapshot
             shift 1
-            if [[ "$1" != -* ]]; then
+            if [[ -n "$1" && "$1" != -* ]]; then
                 SNAPSHOT_ID="$1"
                 shift 1
             fi

@@ -23,6 +23,7 @@ BACKUP_KEEP=false
 SNAPSHOT_ACTION=list
 SNAPSHOT_ID=latest
 SNAPSHOT_RETENTION=
+declare -a SNAPSHOT_BROWSE_FLAGS=()
 
 RESTORE_ACTION=
 
@@ -94,7 +95,7 @@ restic() {
 #                            RESTIC ACTIONS
 
 restic_load_env() {
-    RESTIC_ENV="${RESTIC_ENV:-${COMPOSE_PATH%/}/restic.env}"
+    RESTIC_ENV="${RESTIC_ENV:-${PROJECT_PATH%/}/restic.env}"
 
     if [ ! -f "$RESTIC_ENV" ]; then
         log_error "Restic configuration file is missing: '$RESTIC_ENV'"
@@ -106,32 +107,35 @@ restic_load_env() {
 }
 
 restic_init_env() {
-    RESTIC_ENV="${RESTIC_ENV:-${COMPOSE_PATH%/}/restic.env}"
+    RESTIC_ENV="${RESTIC_ENV:-${PROJECT_PATH%/}/restic.env}"
 
     if [ -f "$RESTIC_ENV" ]; then
         log_warn "A previous backup configuration exists at '$RESTIC_ENV'"
-        ask_confirmation -p "Do you want to overwrite this file?" || abort_install
+        ask_confirmation -p "Do you want to recreate the file?" && {
+            local bak_file
+            bak_file="$RESTIC_ENV.$(date +%s).bak"
+            if mv "$RESTIC_ENV" "$bak_file"; then
+                echo -e "Previous configuration file moved to: ${Cyan}$bak_file${COff}"
+            else
+                log_error "Failed to move previous backup configuration file to: '$bak_file'"
+                return 1
+            fi
+        }
         echo
-        local bak_file
-        bak_file="$RESTIC_ENV.$(date +%s).bak"
-        if mv "$RESTIC_ENV" "$bak_file"; then
-            echo -e "Previous configuration file moved to: ${Cyan}$bak_file${COff}"
-        else
-            log_error "Failed to move previous backup configuration file to: '$bak_file'"
-            return 1
-        fi
     fi
 
-    echo -e "Creating backup configuration file: ${Cyan}$RESTIC_ENV${COff}"
-    touch "$RESTIC_ENV" && chmod 600 "$RESTIC_ENV" || {
-        log_error "Failed to create backup configuration file: '$RESTIC_ENV'"
-        return 1
-    }
+    if [ ! -f "$RESTIC_ENV" ]; then
+        echo -e "Creating backup configuration file: ${Cyan}$RESTIC_ENV${COff}"
+        touch "$RESTIC_ENV" && chmod 600 "$RESTIC_ENV" || {
+            log_error "Failed to create backup configuration file: '$RESTIC_ENV'"
+            return 1
+        }
+    fi
 
     ## TODO: Support assisted initialization of restic for different repository types
     local key
     for key in "${!RESTIC_OVERRIDES[@]}"; do
-        echo "$key=${RESTIC_OVERRIDES[$key]}" >> "$RESTIC_ENV"
+        save_env "$key" "${RESTIC_OVERRIDES[$key]}" "$RESTIC_ENV"
     done
 }
 
@@ -177,16 +181,16 @@ restic_run_backup() {
         restic_load_env || return 1
 
         mappings=$(IFS=":"; echo "${BACKUP_FILTER_INCLUDE[*]}")
-        printf '/source/%s\n' "${BACKUP_FILTER_EXCLUDE[@]/%\//}" > "$RESTIC_CONFIG/file_exclude.txt"
+        printf '/source/%s\n' "${BACKUP_FILTER_EXCLUDE[@]/#\//}" > "$RESTIC_CONFIG/file_exclude.txt"
 
         if [ "$BACKUP_KEEP" = true ]; then var_args+=(--tag keep); fi
 
         echo -e "Creating new snapshot in repository: ${Cyan}${RESTIC_REPOSITORY}${COff}\n"
         restic -v "$mappings" \
-            -m "${COMPOSE_PATH%/}/deployment.json" \
+            -m "${PROJECT_PATH%/}/deployment.json" \
             backup \
             --tag "$COMPOSE_PROJECT_NAME" \
-            --exclude /config/file_exclude.txt \
+            --exclude-file /config/file_exclude.txt \
             "${var_args[@]}" \
             /source || {
                 log_error "Backup operation failed"
@@ -221,10 +225,14 @@ restic_browse_snapshot() {
         restic_load_env || return 1
 
         echo -e "Browsing snapshot ${Purple}$SNAPSHOT_ID${COff} in repository: ${Cyan}${RESTIC_REPOSITORY}${COff}\n"
-        restic ls "$SNAPSHOT_ID" || {
-                log_error "Browse operation failed"
-                return 1
-            }
+        local recursive=""
+        if [ "$SNAPSHOT_BROWSE_RECURSIVE" = true ]; then 
+            recursive="--recursive"
+        fi
+        restic ls "$SNAPSHOT_ID" "${SNAPSHOT_BROWSE_FLAGS[@]}" || {
+            log_error "Browse operation failed"
+            return 1
+        }
 
         echo
     ) || return 1
@@ -331,7 +339,7 @@ restore_check_installed() {
 restore_configure_local() {
     if [ -n "$APPDATA_LOCATION" ]; then
         # Copy the .env file used on last deployment
-        local restore_env="${APPDATA_LOCATION%/}/compose/${COMPOSE_PROJECT_NAME}/.env"
+        local restore_env="${APPDATA_LOCATION%/}/project/${COMPOSE_PROJECT_NAME}/.env"
         echo -e "Restoring environment from file ${Cyan}$restore_env${COff}"
         if [ ! -f "$restore_env" ]; then
             log_error "Missing file '$restore_env'"

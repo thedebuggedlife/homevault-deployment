@@ -241,7 +241,6 @@ services:
       - proxy
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - ${APPDATA_LOCATION:-/srv/appdata}/compose/${COMPOSE_PROJECT_NAME}:/wud/compose
     environment:
       - TZ=${TZ}
       - WUD_WATCHER_LOCAL_CRON=0 8 * * *
