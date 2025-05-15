@@ -399,8 +399,8 @@ base_backup_config() {
     # shellcheck disable=SC2016
     BACKUP_FILTER_INCLUDE+=(
         '${APPDATA_LOCATION}/authelia'
-        '${APPDATA_LOCATION}/compose'
         '${APPDATA_LOCATION}/lldap'
+        '${APPDATA_LOCATION}/project'
         '${APPDATA_LOCATION}/secrets'
         '${APPDATA_LOCATION}/traefik'
         '${APPDATA_LOCATION}/trafego'

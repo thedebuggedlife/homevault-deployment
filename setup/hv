@@ -281,6 +281,8 @@ create_data_locations() {
 
     ensure_path_exists "$APPDATA_LOCATION"
     ensure_path_exists "$SECRETS_PATH"
+    ensure_path_exists "$PROJECT_PATH"
+    ensure_path_exists "$COMPOSE_PATH"
 }
 
 ###
@@ -555,7 +557,8 @@ print_usage() {
 
     elif [ "$SELECTED_ACTION" = "backup" ]; then
         echo -e "\nBackup options:\n"
-        echo "  --init                          Initialize the backup configuration. Must be run once before creating a snapshot."
+        echo "  --init [env_file]               Initialize the backup configuration. Must be run once before creating a snapshot."
+        echo "                                    If [env_file] is provided, it is used to initialize restic environment variables."
         echo "  --restic-var <var>=<value>      Specify a restic variable value. Can be specified multiple times."
         echo "  --keep                          Exclude the new snapshot from the automatic retention policy."
         echo "  --dry-run                       Execute restic in dry run mode."
@@ -580,7 +583,7 @@ print_usage() {
         echo "                                    If a path is not specified, it defaults to the configuration in project .env file."
         echo "  --snapshot [id]                 Restore from a remote snapshot. Cannot be used with --local"
         echo "                                    If a snapshot ID is not specified, it defaults to the latest snapshot taken."
-        echo "  --restic-env <path_to_env>      Use the values in the specified .env file to locate the restic repository."
+        echo "  --restic-env <env_file>         Use the values in the specified .env file to locate the restic repository."
         echo "  --restic-var <var>=<value>      Specify a restic variable value. Can be specified multiple times."
         echo "  --dry-run                       Execute restic and docker compose in dry run mode."
 
@@ -744,6 +747,14 @@ parse_command_line() {
             check_action_for_option backup "$1"
             BACKUP_ACTION=init
             shift 1
+            if [[ -n "$1" && "$1" != -* ]]; then
+                if [ ! -f "$1" ]; then
+                    log_error "--init: File not found: '$1'"
+                    exit 1
+                fi
+                RESTIC_INIT_ENV="$1"
+                shift 1
+            fi
             ;;
         --keep)
             check_action_for_option backup "$1"
@@ -767,7 +778,7 @@ parse_command_line() {
                 shift 2
                 if [[ -n "$1" && "$1" != -* ]]; then
                     SNAPSHOT_BROWSE_FLAGS+=("$1")
-                    shift
+                    shift 1
                 fi
             else
                 log_invalid "$1 requires a value for snapshot ID."

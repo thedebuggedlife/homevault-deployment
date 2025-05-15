@@ -11,6 +11,7 @@ source "$PROJECT_ROOT/lib/config.sh"
 
 RESTIC_VERSION=0.18
 RESTIC_ENV=
+RESTIC_INIT_ENV=
 RESTIC_REPOSITORY=
 RESTIC_CONFIG=
 
@@ -110,14 +111,14 @@ restic_init_env() {
     RESTIC_ENV="${RESTIC_ENV:-${PROJECT_PATH%/}/restic.env}"
 
     if [ -f "$RESTIC_ENV" ]; then
-        log_warn "A previous backup configuration exists at '$RESTIC_ENV'"
+        log_warn "A previous backup environment exists at '$RESTIC_ENV'"
         ask_confirmation -p "Do you want to recreate the file?" && {
             local bak_file
             bak_file="$RESTIC_ENV.$(date +%s).bak"
             if mv "$RESTIC_ENV" "$bak_file"; then
-                echo -e "Previous configuration file moved to: ${Cyan}$bak_file${COff}"
+                echo -e "Previous environment file moved to: ${Cyan}$bak_file${COff}"
             else
-                log_error "Failed to move previous backup configuration file to: '$bak_file'"
+                log_error "Failed to move previous backup environment file to: '$bak_file'"
                 return 1
             fi
         }
@@ -125,11 +126,19 @@ restic_init_env() {
     fi
 
     if [ ! -f "$RESTIC_ENV" ]; then
-        echo -e "Creating backup configuration file: ${Cyan}$RESTIC_ENV${COff}"
-        touch "$RESTIC_ENV" && chmod 600 "$RESTIC_ENV" || {
-            log_error "Failed to create backup configuration file: '$RESTIC_ENV'"
-            return 1
-        }
+        if [ -n "$RESTIC_INIT_ENV" ]; then  
+            echo -e "Copying backup environment file to: ${Cyan}$RESTIC_ENV${COff}"
+            cp -f "$RESTIC_INIT_ENV" "$RESTIC_ENV" && chmod 600 "$RESTIC_ENV" || {
+                log_error "Failed to create backup environment file: '$RESTIC_ENV'"
+                return 1
+            }
+        else
+            echo -e "Creating backup environment file: ${Cyan}$RESTIC_ENV${COff}"
+            touch "$RESTIC_ENV" && chmod 600 "$RESTIC_ENV" || {
+                log_error "Failed to create backup environment file: '$RESTIC_ENV'"
+                return 1
+            }
+        fi
     fi
 
     ## TODO: Support assisted initialization of restic for different repository types
