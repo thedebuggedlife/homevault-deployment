@@ -170,25 +170,41 @@ tailscale_save_ip() {
 ###
 tailscale_configure_device() {
     local device device_id device_name expiry_disabled
-    if ! device=$(tailscale_find_device "$TAILSCALE_IP") || [ -z "$device" ]; then
-        log_error "Failed to find tailscale device with address: $TAILSCALE_IP"
-        exit 1
-    fi
-    device_name=$(echo "$device" | jq -r '.name')
-    echo -e "Tailscale device name: ${Purple}$device_name${COff}"
-    expiry_disabled=$(echo "$device" | jq -r '.keyExpiryDisabled')
-    if [ "$expiry_disabled" = true ]; then
-        echo "Key expiration is already disabled"
-        return 0
-    fi
-    if ! device_id=$(echo "$device" | jq -r '.id'); then
-        log_error "Could not extract id for tailscale device $device"
-        exit 1
-    fi
-    if ! tailscale_disable_key_expiration "$device_id" >/dev/null; then
-        exit 1
-    fi
-    echo -e "Key expiration disabled for this device."
+    local max_attempts=12  # 12 attempts with 5 seconds between = 1 minute
+    local attempt=1
+    
+    while [ $attempt -le $max_attempts ]; do
+        if device=$(tailscale_find_device "$TAILSCALE_IP") && [ -n "$device" ]; then
+            device_name=$(echo "$device" | jq -r '.name')
+            echo -e "Tailscale device name: ${Purple}$device_name${COff}"
+            expiry_disabled=$(echo "$device" | jq -r '.keyExpiryDisabled')
+            if [ "$expiry_disabled" = true ]; then
+                echo "Key expiration is already disabled"
+                return 0
+            fi
+            if ! device_id=$(echo "$device" | jq -r '.id'); then
+                log_error "Could not extract id for tailscale device $device"
+                exit 1
+            fi
+            if ! tailscale_disable_key_expiration "$device_id" >/dev/null; then
+                exit 1
+            fi
+            echo -e "Key expiration disabled for this device."
+            return 0
+        fi
+        
+        # Device not found yet
+        if [ $attempt -lt $max_attempts ]; then
+            echo -e "Device with IP ${Purple}$TAILSCALE_IP${COff} not found yet, retrying in 5 seconds... (attempt $attempt/$max_attempts)"
+            sleep 5
+        fi
+        
+        ((attempt++))
+    done
+    
+    # If we get here, we've exhausted all retry attempts
+    log_error "Failed to find tailscale device with address: $TAILSCALE_IP"
+    exit 1
 }
 
 ###
