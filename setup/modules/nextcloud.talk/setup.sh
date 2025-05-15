@@ -29,7 +29,7 @@ nextcloud_talk_map_router_port() {
     local router_port=$1
     local host_port=$2
 
-    local upnpc_args=(-e "Self-host Bootstrap" -r "${host_port}" "${router_port}" tcp "${host_port}" "${router_port}" udp)
+    local upnpc_args=(-e "HomeVault" -r "${host_port}" "${router_port}" tcp "${host_port}" "${router_port}" udp)
 
     # upnpc can be flaky - try 3 times before giving up
     upnpc "${upnpc_args[@]}" >/dev/null || {

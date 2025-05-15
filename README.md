@@ -1,7 +1,7 @@
-# Selfhost Bootstrap Project
+# HomeVault Project
 
 > [!NOTE]
-> The complete documentation for this project can be found at: https://thedebugged.life/bootstrap/bootstrap-project/
+> The complete documentation for this project can be found at: https://thedebugged.life/homevault/introduction/
 
 This project will help you bootstrap a simple but powerful home-lab server that can replace services like Google Docs and Google Photos—giving you more control, privacy, and ownership over your data.
 
