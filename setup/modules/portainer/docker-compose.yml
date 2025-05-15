@@ -25,7 +25,7 @@ services:
   portainer:
     container_name: portainer
     image: portainer/portainer-ce:lts
-    restart: unless-stopped
+    restart: ${RESTART_POLICY}
     networks:
       - portainer-proxy
     volumes:

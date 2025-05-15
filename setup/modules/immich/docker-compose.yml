@@ -33,6 +33,7 @@ services:
   immich-server:
     container_name: immich_server
     image: ghcr.io/immich-app/immich-server:v1.132.3
+    restart: ${RESTART_POLICY}
     # extends:
     #   file: hwaccel.transcoding.yml
     #   service: cpu # set to one of [nvenc, quicksync, rkmpp, vaapi, vaapi-wsl] for accelerated transcoding
@@ -54,7 +55,6 @@ services:
         condition: service_healthy
       immich-postgres:
         condition: service_healthy
-    restart: always
     healthcheck:
       test: ["CMD-SHELL", "curl -s http://localhost:2283/api/server/ping | grep -q 'pong' || exit 1"]
       interval: 30s
@@ -84,6 +84,7 @@ services:
     # For hardware acceleration, add one of -[armnn, cuda, rocm, openvino, rknn] to the image tag.
     # Example tag: ${IMMICH_VERSION:-release}-cuda
     image: ghcr.io/immich-app/immich-machine-learning:v1.132.3
+    restart: ${RESTART_POLICY}
     # extends: # uncomment this section for hardware acceleration - see https://immich.app/docs/features/ml-hardware-acceleration
     #   file: hwaccel.ml.yml
     #   service: cpu # set to one of [armnn, cuda, rocm, openvino, openvino-wsl, rknn] for accelerated inference - use the `-wsl` version for WSL2 where applicable
@@ -91,7 +92,6 @@ services:
       - immich
     volumes:
       - model-cache:/cache
-    restart: always
     healthcheck:
       disable: false
     labels:
@@ -105,17 +105,18 @@ services:
   immich-redis:
     container_name: immich_redis
     image: docker.io/redis:6.2-alpine@sha256:148bb5411c184abd288d9aaed139c98123eeb8824c5d3fce03cf721db58066d8
+    restart: ${RESTART_POLICY}
     networks:
       - immich
     healthcheck:
       test: redis-cli ping || exit 1
-    restart: always
     labels:
       selfhost.module.immich: 1
 
   immich-postgres:
     container_name: immich_postgres
     image: docker.io/tensorchord/pgvecto-rs:pg14-v0.2.0@sha256:739cdd626151ff1f796dc95a6591b55a714f341c737e27f045019ceabf8e8c52
+    restart: ${RESTART_POLICY}
     networks:
       - immich
     secrets:
@@ -135,6 +136,5 @@ services:
       start_period: 5m
     command: >-
       postgres -c shared_preload_libraries=vectors.so -c 'search_path="$$user", public, vectors' -c logging_collector=on -c max_wal_size=2GB -c shared_buffers=512MB -c wal_compression=on
-    restart: always
     labels:
       selfhost.module.immich: 1

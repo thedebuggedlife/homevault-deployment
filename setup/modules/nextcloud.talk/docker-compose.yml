@@ -9,7 +9,7 @@ services:
     container_name: nextcloud_talk
     image: ghcr.io/nextcloud-releases/aio-talk:latest
     init: true
-    restart: always
+    restart: ${RESTART_POLICY}
     networks:
       - nextcloud-proxy
     environment:

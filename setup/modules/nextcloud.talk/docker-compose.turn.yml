@@ -8,6 +8,7 @@ services:
   nextcloud-turn:
     container_name: nextcloud_turn
     image: bash:4.4.23
+    restart: ${RESTART_POLICY}
     command: /scripts/turn-upnpc.sh
     network_mode: host
     healthcheck:

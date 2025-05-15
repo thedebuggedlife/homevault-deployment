@@ -35,7 +35,7 @@ services:
   cloudflared:
     container_name: cloudflared
     image: cloudflare/cloudflared:latest
-    restart: unless-stopped
+    restart: ${RESTART_POLICY}
     networks: 
       - proxy
     command: ['tunnel', 'run', '${CF_TUNNEL_ID}']
@@ -56,7 +56,7 @@ services:
   traefik:
     container_name: traefik
     image: traefik:v3.3.4
-    restart: unless-stopped
+    restart: ${RESTART_POLICY}
     networks:
       - proxy
     extra_hosts:
@@ -102,7 +102,7 @@ services:
   lldap:
     container_name: lldap
     image: ghcr.io/lldap/lldap:stable
-    restart: unless-stopped
+    restart: ${RESTART_POLICY}
     networks:
       - proxy
     ports:
@@ -143,7 +143,7 @@ services:
   authelia-redis:
     container_name: authelia_redis
     image: docker.io/redis:6.2-alpine@sha256:148bb5411c184abd288d9aaed139c98123eeb8824c5d3fce03cf721db58066d8
-    restart: always
+    restart: ${RESTART_POLICY}
     networks:
       - authelia_data
     healthcheck:
@@ -154,7 +154,7 @@ services:
   authelia:
     container_name: authelia
     image: ghcr.io/authelia/authelia:4.39.1
-    restart: unless-stopped
+    restart: ${RESTART_POLICY}
     networks:
       - proxy
       - authelia_data
@@ -210,7 +210,7 @@ services:
   trafego:
     container_name: trafego
     image: ghcr.io/elmerfds/trafegodns:1.9.1
-    restart: unless-stopped
+    restart: ${RESTART_POLICY}
     networks:
       - proxy
     volumes: 
@@ -236,7 +236,7 @@ services:
   wud:
     container_name: wud
     image: ghcr.io/getwud/wud:8.0.1
-    restart: unless-stopped
+    restart: ${RESTART_POLICY}
     networks:
       - proxy
     volumes:

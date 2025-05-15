@@ -46,7 +46,7 @@ services:
   nextcloud-db:
     container_name: nextcloud_db
     image: mariadb:10.6
-    restart: always
+    restart: ${RESTART_POLICY}
     command: --transaction-isolation=READ-COMMITTED --log-bin=binlog --binlog-format=ROW
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--su-mysql", "--connect", "--innodb_initialized"]
@@ -73,7 +73,7 @@ services:
   nextcloud-app:
     container_name: nextcloud_app
     image: nextcloud:31.0.2
-    restart: always
+    restart: ${RESTART_POLICY}
     depends_on:
       nextcloud-db:
         condition: service_healthy
@@ -159,7 +159,7 @@ services:
   collabora:
     container_name: collabora
     image: collabora/code:24.04.13.2.1
-    restart: always
+    restart: ${RESTART_POLICY}
     networks:
       - nextcloud-proxy
     healthcheck:
@@ -193,7 +193,7 @@ services:
   nextcloud-elastic:
     container_name: nextcloud_elastic
     image: elasticsearch:8.16.2
-    restart: always
+    restart: ${RESTART_POLICY}
     healthcheck:
       # If properly secured, the ES API should return 401 once fully initialized
       test: ["CMD-SHELL", "status_code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:9200 -k) && [ \"$$status_code\" = \"401\" ]"]

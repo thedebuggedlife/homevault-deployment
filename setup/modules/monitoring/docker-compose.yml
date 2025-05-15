@@ -30,7 +30,7 @@ services:
   node-exporter:
     container_name: node-exporter
     image: quay.io/prometheus/node-exporter:v1.9.1
-    restart: unless-stopped
+    restart: ${RESTART_POLICY}
     network_mode: host
     pid: host
     command: ['--path.rootfs=/host']
@@ -47,7 +47,7 @@ services:
   process-exporter:
     container_name: process-exporter
     image: ncabatoff/process-exporter:0.8.7
-    restart: unless-stopped
+    restart: ${RESTART_POLICY}
     privileged: true
     command: ['--procfs', /host/proc, '-config.path', /config/config.yml]
     networks:
@@ -64,7 +64,7 @@ services:
   smartctl-exporter:
     container_name: smartctl-exporter
     image: prometheuscommunity/smartctl-exporter:v0.14.0
-    restart: unless-stopped
+    restart: ${RESTART_POLICY}
     command: ['--smartctl.interval=${SMARTCTL_INTERVAL:-30s}']
     privileged: true
     user: root
@@ -79,7 +79,7 @@ services:
   cadvisor:
     container_name: cadvisor
     image: gcr.io/cadvisor/cadvisor:v0.52.0
-    restart: unless-stopped
+    restart: ${RESTART_POLICY}
     privileged: true
     command:
       - --store_container_labels=false 
@@ -104,7 +104,7 @@ services:
   prometheus:
     container_name: prometheus
     image: quay.io/prometheus/prometheus:v3.3.0
-    restart: unless-stopped
+    restart: ${RESTART_POLICY}
     user: ${INSTALLER_UID}:${DOCKER_GID}
     command:
       - --storage.tsdb.path=/prometheus/data
@@ -125,7 +125,7 @@ services:
   alloy:
     container_name: alloy
     image: grafana/alloy:v1.8.2
-    restart: unless-stopped
+    restart: ${RESTART_POLICY}
     user: ${INSTALLER_UID}:${DOCKER_GID}
     command:
       - run 
@@ -148,7 +148,7 @@ services:
   loki:
     container_name: loki
     image: grafana/loki:3.4.3
-    restart: unless-stopped
+    restart: ${RESTART_POLICY}
     user: ${INSTALLER_UID}:${DOCKER_GID}
     command: 
       - -config.file=/mnt/loki/config.yaml
@@ -170,7 +170,7 @@ services:
   grafana:
     container_name: grafana
     image: grafana/grafana-oss:11.6.0
-    restart: unless-stopped
+    restart: ${RESTART_POLICY}
     user: ${INSTALLER_UID}:${DOCKER_GID}
     networks:
       - monitoring
