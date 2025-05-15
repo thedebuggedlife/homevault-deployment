@@ -29,6 +29,7 @@ declare -g COMPOSE_PROJECT_NAME=homevault
 declare -g COMPOSE_OPTIONS=
 declare -g COMPOSE_UP_OPTIONS=
 declare -g DRY_RUN=false
+declare -g REQUIRES_RESTART=false
 declare -gA ENV_OVERRIDES
 
 # Administrator account
@@ -508,26 +509,29 @@ configure_admin_account() {
     write_file "$ADMIN_PASSWORD" "${SECRETS_PATH}server_admin_password"
 }
 
-cmd=( "$@" )
-
-build_resume_command() {
-    local resume="$PROJECT_ROOT/resume.sh"
-    # Reconstruct the command as a string with proper quoting
-    {
-        # shellcheck disable=SC2016
-        echo 'rm ${BASH_SOURCE[0]}'
-        echo "cd '$PROJECT_ROOT'"
-        printf "%q" "./setup.sh"
-        printf " %q" "${cmd[@]}"
-    } > "$resume"
-    chmod +x "$resume"
+check_reboot_needed() {
+    if [ "$REQUIRES_RESTART" = true ]; then
+        log_warn "The system must be rebooted to complete the requested operation."
+        if [ "$UNATTENDED" = true ]; then
+            echo -e "\nThe system will reboot in 15 seconds..."
+            sleep 15
+            sudo shutdown -r now
+            exit
+        else
+            echo ""
+            read -p "Do you want to reboot now? [Y/n] " user_input </dev/tty
+            user_input=${user_input:-Y}
+            if [[ "$user_input" =~ ^[Yy]$ ]]; then
+                sudo shutdown -r now
+                exit
+            fi
+        fi
+    fi
 }
 
 # Terminate program
 abort_install() {
     log_warn "Setup aborted by user."
-    build_resume_command
-    echo -e "To resume, run: ${BIGreen}${PROJECT_ROOT}/resume.sh${COff}\n"
     exit 1
 }
 
@@ -1001,3 +1005,5 @@ parse_command_line "$@"
 run_${SELECTED_ACTION}
 
 log_done
+
+check_reboot_needed

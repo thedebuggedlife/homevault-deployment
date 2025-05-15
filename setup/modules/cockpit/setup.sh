@@ -30,12 +30,10 @@ cockpit_network_workaround() {
         return 0
     fi
 
-    local requires_restart=false
-
     local gmd_file="/etc/NetworkManager/conf.d/10-globally-managed-devices.conf"
     if [ ! -f "$gmd_file" ]; then
         echo -e "[keyfile]\nunmanaged-devices=none" | sudo tee "$gmd_file" > /dev/null
-        requires_restart=true
+        REQUIRES_RESTART=true
     fi
 
     local architecture
@@ -54,28 +52,7 @@ cockpit_network_workaround() {
             return 1
         }
         echo -e "Interface ${Purple}$if_name${COff} created."
-        requires_restart=true
-    fi
-
-    if [ "$requires_restart" = true ]; then
-        log_warn "The system must be rebooted before continuing with the installation."
-        build_resume_command
-        echo -e "After reboot, run: ${BIGreen}${PROJECT_ROOT}/resume.sh${COff}\n"
-        if [ "$UNATTENDED" = true ]; then
-            echo -e "\nThe system will reboot in 15 seconds..."
-            sleep 15
-            sudo shutdown -r now
-            exit 1
-        else
-            echo ""
-            read -p "Do you want to reboot now? [Y/n] " user_input </dev/tty
-            user_input=${user_input:-Y}
-            if [[ ! "$user_input" =~ ^[Yy]$ ]]; then
-                abort_install
-            fi
-            sudo shutdown -r now
-            exit 1
-        fi
+        REQUIRES_RESTART=true
     fi
 }
 
