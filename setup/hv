@@ -8,6 +8,7 @@ PROJECT_ROOT="${PROJECT_ROOT%/}"
 
 source "$PROJECT_ROOT/lib/logging.sh"
 source "$PROJECT_ROOT/lib/config.sh"
+source "$PROJECT_ROOT/lib/cmdline.sh"
 source "$PROJECT_ROOT/lib/smtp2go.sh"
 source "$PROJECT_ROOT/lib/docker.sh"
 source "$PROJECT_ROOT/lib/backup.sh"
@@ -136,9 +137,7 @@ implicit_env_vars() {
 prepare_env_file() {
     log_header "Preparing environment files"
 
-    local env_exists
-    env_exists=$([ -f "$ENV_FILE" ] && echo true || echo false)
-    if [ "$env_exists" != "true" ]; then
+    if [ ! -f "$ENV_FILE" ]; then
         echo -e "Creating environment file ${Cyan}$ENV_FILE${COff}"
         touch "$ENV_FILE" && chmod 600 "$ENV_FILE" || {
             log_error "Failed to create environment file: '$ENV_FILE'"
@@ -147,25 +146,7 @@ prepare_env_file() {
     fi
     for module in "${ENABLED_MODULES[@]}"; do
         local module_env="$PROJECT_ROOT/modules/$module/.env"
-        if [ -s "$module_env" ]; then
-            while IFS= read -r line || [ -n "$line" ]; do
-                # Skip comments and empty lines
-                if [[ ! "$line" =~ ^[[:space:]]*# && -n "$line" ]]; then
-                    # Extract key from line, everything before first =
-                    key="${line%%=*}"
-                    if [[ -n "$key" && "$line" == *"="* ]]; then
-                        # If key does not already exist in root .env file, append the line
-                        if [[ ! -f "$ENV_FILE" ]] || ! grep -q "^${key}=" "$ENV_FILE"; then
-                            append_file "$line" "$ENV_FILE"
-                            if [ "$env_exists" = "true" ]; then
-                                # Only log line by line if .env file already existed
-                                echo -e "Updated ${Purple}$key${COff} in ${Cyan}$ENV_FILE${COff}."
-                            fi
-                        fi
-                    fi
-                fi
-            done < "$module_env"
-        fi
+        copy_env_values "$module_env" "$ENV_FILE" || exit 1
     done
     # shellcheck source=/dev/null
     source "$ENV_FILE"
@@ -535,94 +516,6 @@ abort_install() {
     exit 1
 }
 
-print_usage() {
-    if [ -z "$SELECTED_ACTION" ]; then
-        echo -e "\nUsage: $0 [global options] <action> [action options]"
-        echo -e "\nActions:\n"
-        echo "  deploy      Installs and/or updates modules in the project."
-        echo "  backup      Creates a new recovery snapshot with the current statue of the project."
-        echo "  snapshots   List and/or manage existing recovery snapshots."
-        echo "  restore     Recovers the state of the project from a previous snapshot."
-        echo "  modules     Shows information about installed or available modules."
-        echo -e "\nTo display help for an action:\n"
-        echo "  $0 <action> --help"
-
-    elif [ "$SELECTED_ACTION" = "deploy" ]; then
-        echo -e "\nUsage: $0 [global options] deploy [deploy options]"
-        echo -e "\nDeploy options:\n"
-        echo "  -m, --module <module>           Includes the given module in the project. Can be specified multiple times."
-        echo "      --module all                Enables all available modules."
-        echo -e "  --rm <module>                   Removes a module that had been previously installed. ${IRed}Use with caution!${COff}" 
-        echo "  -o, --override <var>=<value>    Override environment variable. Can be specified multiple times."
-        echo "  --no-download                   Do not download appdata from GitHub. Only use if appdata was previously downloaded."
-        echo -e "  --keep-compose                  Do not override previously deployed docker-compose files. ${IRed}Use with caution!${COff}"
-        echo -e "  --override-versions             Override running versions with those specified in compose files. ${IRed}Use with caution!${COff}"
-        echo "  --dry-run                       Execute docker compose in dry run mode."
-
-    elif [ "$SELECTED_ACTION" = "backup" ]; then
-        echo -e "\nUsage: $0 [global options] backup <action> [backup options]"
-        echo -e "\nBackup actions:\n"
-        echo "  init                            Initialize the backup configuration. Must be run once before creating a snapshot."
-        echo "  run                             Create a new recovery snapshot."
-        echo "  schedule                        Configure (or disable) the schedule for background backup operations."
-        echo -e "\nBackup 'init' options:\n"
-        echo "  --restic-env <env_file>         Use the specified file to initialize restic environment variables."
-        echo "  --restic-var <var>=<value>      Specify a restic variable value. Can be specified multiple times."
-        echo -e "\nBackup 'run' options:\n"
-        echo "  --keep                          Exclude the new snapshot from the automatic retention policy."
-        echo -e "\nBackup 'schedule' options:\n"
-        echo "  --cron '<expression>'           Set the background schedule to the given expression. Expression MUST be wrapped in quotes."
-        echo "                                  Help: https://www.uptimia.com/cron-expression-generator"
-        echo "                                  Examples:"
-        echo "                                    --cron '0 2 * * *'    (every day at 2AM)"
-        echo "                                    --cron '0 0 * * 0'    (every Sunday at midnight)"
-        echo "                                    --cron off            (disable background schedule)"
-        echo "  --retention [policy]            Configure the retention policy for automatic snapshots."
-        echo "                                  Format: '[#h][#d][#w][#m][#y]' Where: h=hour,d=day,w=week,m=month,y=year"
-        echo "                                  Default: 30d12m10y"
-        echo "                                  Examples:"
-        echo "                                    --retention 24h7d (keep last 24 hourly and last 7 daily snapshots)"
-        echo "                                    --retention 4w6m  (keep last 4 weekly and last 6 monthly snapshots)"
-        echo "                                    --retention off   (disable policy, i.e. keep all snapshots)"
-        echo -e "\nGlobal backup options:\n"
-        echo "  --dry-run                       Execute restic in dry run mode."
-
-    elif [ "$SELECTED_ACTION" = "snapshots" ]; then
-        echo -e "\nUsage: $0 [global options] snapshot [snapshot options]"
-        echo -e "\nSnapshot options:\n"
-        echo "  --browse <id> [dir]             Show contents of a snapshot by ID. You may specify: 'latest'."
-        echo "                                    If [dir] is specified, only files under the specified directory are listed."
-        echo "  --recursive                     Include all files and folders recursively. Valid only when --browse is used."
-        echo "  --forget <id>                   Delete the snapshot referenced by ID. You may specify: 'latest'."
-        echo "  --dry-run                       Execute restic in dry run mode."
-
-    elif [ "$SELECTED_ACTION" = "restore" ]; then
-        echo -e "\nUsage: $0 [global options] restore [restore options]"
-        echo -e "\nRestore options:\n"
-        echo "  --local [appdata path]          Restore from a local appdata (default behavior). Cannot be used with --snapshot"
-        echo "                                    If a path is not specified, it defaults to the configuration in project .env file."
-        echo "  --snapshot [id]                 Restore from a remote snapshot. Cannot be used with --local"
-        echo "                                    If a snapshot ID is not specified, it defaults to the latest snapshot taken."
-        echo "  --restic-env <env_file>         Use the values in the specified .env file to locate the restic repository."
-        echo "  --restic-var <var>=<value>      Specify a restic variable value. Can be specified multiple times."
-        echo "  --dry-run                       Execute restic and docker compose in dry run mode."
-
-    elif [ "$SELECTED_ACTION" = "modules" ]; then
-        echo -e "\nUsage: $0 [global options] modules [modules options]"
-        echo -e "\Modules options:\n"
-        echo "  --all                           Show information for all modules available. Otherwise only installed modules are shown."
-    fi
-
-    echo -e "\nGlobal options:\n"
-    echo "  -h, --help                      Display this help message."
-    echo "  -u, --user <user>               User to apply for file permissions. [Default: '$USER']"
-    echo "  --always-ask                    Force interactive prompts for settings with a default or previously provided."
-    echo "  --unattended                    Do not stop for any prompt. Safe prompts will be auto-accepted."
-    echo "                                    Prompts that cannot be auto-accepted will cause the script to exit with a failure code."
-
-    exit 1
-}
-
 show_modules() {
     if [ "$SHOW_ALL" = true ]; then
         load_module_help
@@ -634,290 +527,6 @@ show_modules() {
     fi
 
     exit 0
-}
-
-check_action_for_option() {
-    local option=$2
-    local valid_actions
-    IFS=':' read -ra valid_actions <<< "$1"
-    if [ -z "$SELECTED_ACTION" ]; then
-        log_invalid "$option is not a global option"
-        print_usage
-    elif ! array_contains "$SELECTED_ACTION" "${valid_actions[@]}"; then
-        log_invalid "$option is not supported for action: $SELECTED_ACTION"
-        print_usage
-    fi
-}
-
-parse_env_override() {
-    local -n overrides=$3
-    if [ -n "$2" ]; then
-        # Parse override in form of: VARIABLE_NAME=VALUE
-        if echo "$2" | grep -q '='; then
-            # shellcheck disable=SC2034
-            overrides["$(echo "$2" | cut -d '=' -f 1)"]="$(echo "$2" | cut -d '=' -f 2-)"
-        else
-            log_invalid "$1 requires an assignment in the form VARIABLE_NAME=VALUE."
-            return 1
-        fi
-    else
-        log_invalid "$1 requires an assignment in the form VARIABLE_NAME=VALUE."
-        return 1
-    fi
-}
-
-parse_command_line() {
-    while [ "$#" -gt 0 ]; do
-        case "$(echo "$1" | tr '[:upper:]' '[:lower:]')" in
-        ## ACTIONS
-        deploy)
-            if [ -n "$SELECTED_ACTION" ]; then log_invalid "Only 1 action can be selected at a time"; exit 1; fi
-            SELECTED_ACTION="deploy"
-            shift 1
-            ;;
-        backup)
-            if [ -n "$SELECTED_ACTION" ]; then log_invalid "Only 1 action can be selected at a time"; exit 1; fi
-            SELECTED_ACTION="backup"
-            shift 1
-            ;;
-        snapshots)
-            if [ -n "$SELECTED_ACTION" ]; then log_invalid "Only 1 action can be selected at a time"; exit 1; fi
-            SELECTED_ACTION="snapshots"
-            shift 1
-            ;;
-        restore)
-            if [ -n "$SELECTED_ACTION" ]; then log_invalid "Only 1 action can be selected at a time"; exit 1; fi
-            SELECTED_ACTION="restore"
-            shift 1
-            ;;
-        modules)
-            if [ -n "$SELECTED_ACTION" ]; then log_invalid "Only 1 action can be selected at a time"; exit 1; fi
-            SELECTED_ACTION="modules"
-            shift 1
-            ;;
-        ## GLOBAL OPTIONS
-        --user | -u)
-            if [ -n "$2" ]; then
-                AS_USER="$2"
-                shift 2
-            else
-                log_invalid "$1 requires a value."
-                exit 1
-            fi
-            ;;
-        --unattended)
-            UNATTENDED=true
-            USE_DEFAULTS=true
-            shift 1
-            ;;
-        --always-ask)
-            USE_DEFAULTS=false
-            shift 1
-            ;;
-        -h | --help)
-            print_usage
-            ;;
-        ## DEPLOY OPTIONS
-        --module | -m)
-            check_action_for_option deploy "$1"
-            if [ -n "$2" ]; then
-                if [ "$2" = "all" ]; then 
-                    find_all_modules
-                else
-                    ENABLED_MODULES+=("$2")
-                fi
-                dedup_modules
-                shift 2
-            else
-                log_invalid "$1 requires a value."
-                exit 1
-            fi
-            ;;
-        --rm)
-            check_action_for_option deploy "$1"
-            if [ -n "$2" ]; then
-                REMOVE_MODULES+=("$2")
-                shift 2
-            else
-                log_invalid "$1 requires a value."
-                exit 1
-            fi
-            ;;
-        --keep-compose)
-            check_action_for_option deploy "$1"
-            OVERRIDE_COMPOSE=false
-            shift 1
-            ;;
-        --override | -o)
-            check_action_for_option deploy "$1"
-            parse_env_override "$1" "$2" ENV_OVERRIDES || exit 1
-            shift 2
-            ;;
-        --override-versions)
-            check_action_for_option deploy "$1"
-            OVERRIDE_VERSIONS=true
-            shift 1
-            ;;
-        --no-download)
-            check_action_for_option deploy "$1"
-            NO_DOWNLOAD=true
-            shift 1
-            ;;
-        ## BACKUP OPTIONS
-        --init)
-            check_action_for_option backup "$1"
-            BACKUP_ACTION=init
-            shift 1
-            if [[ -n "$1" && "$1" != -* ]]; then
-                if [ ! -f "$1" ]; then
-                    log_error "--init: File not found: '$1'"
-                    exit 1
-                fi
-                RESTIC_INIT_ENV="$1"
-                shift 1
-            fi
-            ;;
-        --keep)
-            check_action_for_option backup "$1"
-            if [ "$BACKUP_ACTION" != "run" ]; then
-                log_error "$1 cannot be used in combination with --$BACKUP_ACTION"
-                exit 1
-            fi
-            BACKUP_KEEP=true
-            shift 1
-            ;;
-        ## SNAPSHOT OPTIONS
-        --browse)
-            check_action_for_option snapshots "$1"
-            if [ "$SNAPSHOT_ACTION" != "list" ]; then
-                log_error "$1 cannot be used in combination with --$SNAPSHOT_ACTION"
-                exit 1
-            fi
-            if [ -n "$2" ]; then
-                SNAPSHOT_ACTION=browse
-                SNAPSHOT_ID="$2"
-                shift 2
-                if [[ -n "$1" && "$1" != -* ]]; then
-                    SNAPSHOT_BROWSE_FLAGS+=("$1")
-                    shift 1
-                fi
-            else
-                log_invalid "$1 requires a value for snapshot ID."
-                exit 1
-            fi
-            ;;
-        --recursive)
-            check_action_for_option snapshots "$1"
-            if [ "$SNAPSHOT_ACTION" != "browse" ]; then
-                log_error "$1 is only valid when used with --browse"
-                exit 1
-            fi
-            SNAPSHOT_BROWSE_FLAGS+=("--recursive")
-            shift
-            ;;
-        --forget)
-            check_action_for_option snapshots "$1"
-            if [ "$SNAPSHOT_ACTION" != "list" ]; then
-                log_error "$1 cannot be used in combination with --$SNAPSHOT_ACTION"
-                exit 1
-            fi
-            if [ -n "$2" ]; then
-                SNAPSHOT_ACTION=forget
-                SNAPSHOT_ID="$2"
-                shift 2
-            else
-                log_invalid "$1 requires a value."
-                exit 1
-            fi
-            ;;
-        --retention)
-            check_action_for_option snapshots "$1"
-            if [ "$SNAPSHOT_ACTION" != "list" ]; then
-                log_error "$1 cannot be used in combination with --$SNAPSHOT_ACTION"
-                exit 1
-            fi
-            if [ -n "$2" ]; then
-                SNAPSHOT_ACTION=retention
-                SNAPSHOT_RETENTION="$2"
-                shift 2
-            else
-                log_invalid "$1 requires a value."
-                exit 1
-            fi
-            ;;
-        ## RESTORE OPTIONS
-        --local)
-            check_action_for_option restore "$1"
-            if [ -n "$RESTORE_ACTION" ]; then
-                log_error "$1 cannot be used in combination with --$RESTORE_ACTION"
-                exit 1
-            fi
-            RESTORE_ACTION=local
-            shift 1
-            if [[ "$1" != -* ]]; then
-                APPDATA_LOCATION="$1"
-                shift 1
-            fi
-            ;;
-        --snapshot)
-            check_action_for_option restore "$1"
-            if [ -n "$RESTORE_ACTION" ]; then
-                log_error "$1 cannot be used in combination with --$RESTORE_ACTION"
-                exit 1
-            fi
-            RESTORE_ACTION=snapshot
-            shift 1
-            if [[ -n "$1" && "$1" != -* ]]; then
-                SNAPSHOT_ID="$1"
-                shift 1
-            fi
-            ;;
-        --restic-env)
-            check_action_for_option restore "$1"
-            if [ -n "$RESTIC_ENV" ]; then
-                log_error "$1 can only be specified once"
-                exit 1
-            fi
-            if [ -n "$2" ]; then
-                if [ ! -f "$2" ]; then
-                    log_error "$1: File '$2' does not exist"
-                    exit 1
-                fi
-                RESTIC_ENV="$2"
-                shift 2
-            else
-                log_invalid "$1 requires a value."
-                exit 1
-            fi
-            ;;
-        ## MODULE OPTIONS
-        --all)
-            check_action_for_option modules "$1"
-            SHOW_ALL=true
-            shift 1
-            ;;
-        ## SHARED OPTIONS
-        --restic-var)
-            check_action_for_option backup:restore "$1"
-            parse_env_override "$1" "$2" RESTIC_OVERRIDES || exit 1
-            shift 2
-            ;;
-        --dry-run)
-            check_action_for_option deploy:backup:snapshots:restore "$1"
-            DRY_RUN=true
-            shift 1
-            ;;
-        *)
-            log_invalid "Unknown option: $1"
-            print_usage
-            ;;
-        esac
-    done
-
-    if [ -z "$SELECTED_ACTION" ]; then
-        log_invalid "Missing action parameter"
-        print_usage
-    fi
 }
 
 run_deploy() {
@@ -1024,7 +633,7 @@ trap "echo && abort_install" SIGINT
 
 parse_command_line "$@"
 
-run_${SELECTED_ACTION}
+run_"${SELECTED_ACTION}"
 
 log_done
 

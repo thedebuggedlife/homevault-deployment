@@ -297,6 +297,49 @@ create_rsa_keypair() {
     fi
 }
 
+###
+# Copy all key=value pairs from one .env file to another
+# @param    $1 {path}   Source file
+# @param    $2 {path}   Destination file
+# @option   -o          Override existing keys
+###
+copy_env_values() {
+    local source=$1 destination=$2 overwrite=false newfile=true
+    OPTIND=3
+    while getopts ":o" opt; do
+        case $opt in
+            o) overwrite=true;;
+            *) log_warn "Invalid option: -$OPTARG" ;;
+        esac
+    done
+    if [ -f "$destination" ]; then newfile=false; fi
+    if [ -s "$source" ]; then
+        while IFS= read -r line || [ -n "$line" ]; do
+            # Skip comments and empty lines
+            if [[ ! "$line" =~ ^[[:space:]]*# && -n "$line" ]]; then
+                # Extract key from line, everything before first =
+                key="${line%%=*}"
+                if [[ -n "$key" && "$line" == *"="* ]]; then
+                    # If key does not already exist in root .env file, append the line
+                    if [[ "$newfile" = true ]] || ! grep -q "^${key}=" "$destination"; then
+                        append_file "$line" "$destination" || return 1
+                        if [ "$newfile" = false ]; then
+                            echo -e "Added ${Purple}$key${COff} to ${Cyan}$destination${COff}."
+                        fi
+                    elif [ "$overwrite" = true ]; then
+                        value="${line#*=}"
+                        sed -i "s|^${key}=.*|${key}=${value}|" "$destination" || {
+                            log_error "Failed to update file: '$destination'"
+                            return 1
+                        }
+                        echo -e "Updated ${Purple}$key${COff} in ${Cyan}$destination${COff}."
+                    fi
+                fi
+            fi
+        done < "$source"
+    fi
+}
+
 ################################################################################
 #                           DEPLOYMENT FILE
 
@@ -484,7 +527,7 @@ append_file() {
     local filename=$2
     printf "%s\n" "$content" >>"$filename" || {
         log_error "Failed to write to file: '$filename'"
-        exit 1
+        return 1
     }
 }
 

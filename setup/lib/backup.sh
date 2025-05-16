@@ -18,11 +18,10 @@ RESTIC_DATA_ROOT=/data
 
 declare -A RESTIC_OVERRIDES
 
-# Backup action: init | run
-BACKUP_ACTION=run
+BACKUP_ACTION=
 BACKUP_KEEP=false
 
-SNAPSHOT_ACTION=list
+SNAPSHOT_ACTION=
 SNAPSHOT_ID=latest
 SNAPSHOT_RETENTION=
 declare -a SNAPSHOT_BROWSE_FLAGS=()
@@ -104,6 +103,7 @@ restic_load_env() {
         return 1
     fi
 
+    echo -e "Using restic environment: ${Cyan}$RESTIC_ENV${COff}"
     # shellcheck source=/dev/null
     source "$RESTIC_ENV"
 }
@@ -112,37 +112,40 @@ restic_init_env() {
     RESTIC_ENV="${RESTIC_ENV:-${PROJECT_PATH%/}/restic.env}"
 
     if [ -f "$RESTIC_ENV" ]; then
-        log_warn "A previous backup environment exists at '$RESTIC_ENV'"
-        ask_confirmation -p "Do you want to recreate the file?" && {
-            local bak_file
-            bak_file="$RESTIC_ENV.$(date +%s).bak"
+        local bak_file
+        bak_file="$RESTIC_ENV.$(date +%s).bak"
+        log_warn "A previous restic environment exists at '$RESTIC_ENV'"
+        ask_confirmation -y -p "Do you want to reuse the existing file? (use CTRL+C to exit)" && {
+            if cp "$RESTIC_ENV" "$bak_file"; then
+                echo -e "Previous environment file copied to: ${Cyan}$bak_file${COff}"
+            else
+                log_error "Failed to make a copy of previous environment file: '$bak_file'"
+                return 1
+            fi
+        } || {
             if mv "$RESTIC_ENV" "$bak_file"; then
                 echo -e "Previous environment file moved to: ${Cyan}$bak_file${COff}"
             else
-                log_error "Failed to move previous backup environment file to: '$bak_file'"
+                log_error "Failed to make a copy of previous environment file: '$bak_file'"
                 return 1
             fi
         }
-        echo
     fi
 
     if [ ! -f "$RESTIC_ENV" ]; then
-        if [ -n "$RESTIC_INIT_ENV" ]; then  
-            echo -e "Copying backup environment file to: ${Cyan}$RESTIC_ENV${COff}"
-            cp -f "$RESTIC_INIT_ENV" "$RESTIC_ENV" && chmod 600 "$RESTIC_ENV" || {
-                log_error "Failed to create backup environment file: '$RESTIC_ENV'"
-                return 1
-            }
-        else
-            echo -e "Creating backup environment file: ${Cyan}$RESTIC_ENV${COff}"
-            touch "$RESTIC_ENV" && chmod 600 "$RESTIC_ENV" || {
-                log_error "Failed to create backup environment file: '$RESTIC_ENV'"
-                return 1
-            }
-        fi
+        echo -e "Creating restic environment file: ${Cyan}$RESTIC_ENV${COff}"
+        touch "$RESTIC_ENV" && chmod 600 "$RESTIC_ENV" || {
+            log_error "Failed to create restic environment file: '$RESTIC_ENV'"
+            return 1
+        }
     fi
 
     ## TODO: Support assisted initialization of restic for different repository types
+
+    if [ -n "$RESTIC_INIT_ENV" ]; then
+        copy_env_values "$RESTIC_INIT_ENV" "$RESTIC_ENV" -o || return 1
+    fi
+
     local key
     for key in "${!RESTIC_OVERRIDES[@]}"; do
         save_env "$key" "${RESTIC_OVERRIDES[$key]}" "$RESTIC_ENV"
@@ -154,10 +157,17 @@ restic_init_repository() {
     (
         restic_load_env || return 1
 
-        save_env RESTIC_HOST "${RESTIC_HOST:-$HOSTNAME}" "$RESTIC_ENV"
+        if [ -z "$RESTIC_HOST" ]; then
+            save_env RESTIC_HOST "$HOSTNAME" "$RESTIC_ENV"
+        fi
+
         if [ -d "$RESTIC_REPOSITORY" ]; then
             # Make sure it is saved as a full path
-            save_env RESTIC_REPOSITORY "$(readlink -f "$RESTIC_REPOSITORY")" "$RESTIC_ENV"
+            local full_path
+            full_path="$(readlink -f "$RESTIC_REPOSITORY")"
+            if [ "$full_path" != "$RESTIC_REPOSITORY" ]; then
+                save_env RESTIC_REPOSITORY "" "$RESTIC_ENV"
+            fi
         fi
 
         if [ -z "$RESTIC_PASSWORD" ]; then
@@ -169,7 +179,13 @@ restic_init_repository() {
             echo
         fi
 
-        echo -e "Initializing repository: ${Cyan}${RESTIC_REPOSITORY}${COff}\n"
+        if restic snapshots >/dev/null 2>&1; then
+            echo -e "\nExisting repository found at: ${Cyan}${RESTIC_REPOSITORY}${COff}\n"
+            log_warn "An existing repository was found at this location and will be reused for future snapshots."
+            return 0
+        fi
+
+        echo -e "\nInitializing repository: ${Cyan}${RESTIC_REPOSITORY}${COff}\n"
         restic init -q || {
             log_error "Failed to initialize backup repository"
             return 1
