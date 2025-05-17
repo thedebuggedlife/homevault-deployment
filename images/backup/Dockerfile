@@ -7,6 +7,7 @@ RUN apk add --no-cache \
     tzdata \
     bash \
     docker-cli \
+    docker-compose \
     tini
 
 # Create directories for our scripts and logs

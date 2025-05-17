@@ -28,4 +28,4 @@ fi
 
 # Start cron daemon in foreground
 log "Starting crond in foreground"
-exec crond -f -d 8 -l 2
+exec crond -f -d 5 -l 2
