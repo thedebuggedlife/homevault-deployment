@@ -39,8 +39,9 @@ services:
       - RESTIC_OPTS=--verbose --exclude-file /config/file_exclude.txt --tag ${BACKUP_COMPOSE_PROJECT}
       - ENABLE_FORGET=${BACKUP_ENABLE_FORGET:-true}
       # Format: [#h][#d][#w][#m][#y]
-      # Default: Keep 7 daily, 4 weekly, 6 monthly, 1 yearly
-      - RETENTION_POLICY=${BACKUP_RETENTION_POLICY:-7d4w6m1y}
+      # Default: Keep 7 daily, 4 weekly, 6 monthly
+      - RETENTION_POLICY=${BACKUP_RETENTION_POLICY:-7d4w6m}
+      - RETENTION_ARGS=--keep-tag keep
       # LVM Snapshot configuration
       - USE_LVM_SNAPSHOT=false              # Set to true to enable LVM snapshots
       - LVM_VOLUME_GROUP=vg0                # Your volume group name
