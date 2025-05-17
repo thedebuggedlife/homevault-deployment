@@ -219,7 +219,7 @@ immich_config_secrets() {
 }
 
 immich_compose_extra() {
-    if [ "$BACKUP_ENABLED" ]; then
+    if [ "$BACKUP_ENABLED" = true ]; then
         echo "immich.backup:$(dirname "${BASH_SOURCE[0]}")/docker-compose.backup.yml:base"
     fi
 }

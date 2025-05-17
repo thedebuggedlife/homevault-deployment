@@ -31,7 +31,7 @@ nextcloud_config_secrets() {
 }
 
 nextcloud_compose_extra() {
-    if [ "$BACKUP_ENABLED" ]; then
+    if [ "$BACKUP_ENABLED" = true ]; then
         echo "nextcloud.backup:$(dirname "${BASH_SOURCE[0]}")/docker-compose.backup.yml:base"
     fi
 }
