@@ -1,7 +1,12 @@
+![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/thedebuggedlife/homevault-deployment/build_release.yml?logo=githubactions&logoColor=white)
+![GitHub Tag](https://img.shields.io/github/v/tag/thedebuggedlife/homevault-deployment?logo=github&label=version)
+
+
 # HomeVault Project
 
 > [!NOTE]
-> The complete documentation for this project can be found at: https://thedebugged.life/homevault/introduction/
+> The complete documentation for this project can be found at: <br>
+> https://thedebugged.life/homevault/introduction/
 
 This project will help you bootstrap a simple but powerful home-lab server that can replace services like Google Docs and Google Photos—giving you more control, privacy, and ownership over your data.
 
