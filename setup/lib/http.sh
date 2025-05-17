@@ -5,7 +5,7 @@ __LIB_HTTP=1
 # shellcheck source=./logging.sh
 source "$PROJECT_ROOT/lib/logging.sh"
 
-GH_IO_BASE_URL=https://thedebuggedlife.github.io/selfhost-bootstrap
+GH_IO_BASE_URL="https://github.com/thedebuggedlife/homevault-deployment/releases/download/{{GH_RELEASE_TAG}}"
 PUBLIC_IP=
 
 ################################################################################
@@ -77,7 +77,7 @@ rest_call() {
 ###
 download_module_appdata() {
     local module_name=$1
-    local appdata_url="$GH_IO_BASE_URL/appdata/$module_name.zip"
+    local appdata_url="$GH_IO_BASE_URL/$module_name.zip"
 
     echo -e "Downloading appdata from ${Cyan}$appdata_url${COff} ...\n"
     curl -fsSL "$appdata_url" \

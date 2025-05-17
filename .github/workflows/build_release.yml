@@ -18,12 +18,16 @@ jobs:
         with:
           fetch-depth: 0  # Fetch all history for tags and commits
 
-      - name: Extract tag and branch info
+      - name: Extract tag and version info
         id: extract_info
         run: |
-          # Get the tag name
+          # Get the tag name (e.g., v0.0.1)
           TAG_NAME=${GITHUB_REF#refs/tags/}
           echo "TAG_NAME=$TAG_NAME" >> $GITHUB_OUTPUT
+          
+          # Strip 'v' prefix if present for version (e.g., 0.0.1)
+          VERSION=${TAG_NAME#v}
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
           
           # Get the branch that this tag was created on
           BRANCH_NAME=$(git branch -r --contains $TAG_NAME | grep -v HEAD | sed 's/.*origin\///' | head -n 1)
@@ -37,6 +41,14 @@ jobs:
             echo "IS_PRERELEASE=true" >> $GITHUB_OUTPUT
             echo "RELEASE_NAME=[$BRANCH_NAME] Release $TAG_NAME" >> $GITHUB_OUTPUT
           fi
+
+      - name: Prepare setup files
+        run: |
+          # Create version.txt file
+          echo "${{ steps.extract_info.outputs.VERSION }}" > setup/version.txt
+          
+          # Replace placeholders in all script files in the setup directory
+          find setup \( -name "*.sh" -o -name "hv" \) -type f -exec sed -i "s/{{GH_RELEASE_TAG}}/${{ steps.extract_info.outputs.TAG_NAME }}/g" {} \;
 
       - name: Generate ZIP files
         run: |
