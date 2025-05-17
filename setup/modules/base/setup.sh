@@ -318,7 +318,7 @@ configure_backup() {
         save_env BACKUP_SERVICES "'${BACKUP_SERVICES[*]}'" || return 1
 
         readarray -t backup_exclude < <(env_subst "${BACKUP_FILTER_EXCLUDE[@]}")
-        printf '%s\n' "${backup_exclude[@]}" > "${APPDATA_LOCATION%/}/backup/config/file_exclude.txt"
+        printf "${RESTIC_DATA_ROOT}"'%s\n' "${backup_exclude[@]}" > "${APPDATA_LOCATION%/}/backup/config/file_exclude.txt"
 
     ) || return 1
 }
