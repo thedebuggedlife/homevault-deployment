@@ -1,16 +1,13 @@
-name: Build Resources
+name: Build and Release Resources
 
 on:
   push:
-    branches:
-      - main
-    paths:
-      - 'appdata/**'
-      - 'setup/**'
+    tags:
+      - 'v*' # This will trigger the workflow when you push tags that start with 'v'
   workflow_dispatch: # Allows manual trigger
 
 permissions:
-    contents: write
+  contents: write
 
 jobs:
   build:
@@ -52,30 +49,28 @@ jobs:
           name: output_zips
           path: output_zips
 
-  deploy:
+  release:
     runs-on: ubuntu-latest
     needs: build
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
       - name: Download ZIP files
         uses: actions/download-artifact@v4
         with:
           name: output_zips
-          path: deploy_files
+          path: release_files
 
-      - name: Deploy to gh-pages
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git checkout --orphan gh-pages
-          git rm -rf .
-          
-          # Move files to their correct locations (already in the right structure)
-          cp -r deploy_files/* .
-          rm -rf deploy_files
-          
-          git add .
-          git commit -m "Update Resources"
-          git push -f origin gh-pages
+      - name: Extract tag name
+        id: get_tag
+        run: echo "TAG_NAME=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.get_tag.outputs.TAG_NAME }}
+          name: Release ${{ steps.get_tag.outputs.TAG_NAME }}
+          draft: false
+          prerelease: false
+          files: |
+            release_files/appdata/*.zip
+            release_files/setup.zip
