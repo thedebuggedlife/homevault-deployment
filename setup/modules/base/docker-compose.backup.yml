@@ -36,7 +36,7 @@ services:
       # Use the docker secret instead
       - RESTIC_PASSWORD_FILE=/run/secrets/restic_password
       - BACKUP_PATHS=/data
-      - RESTIC_OPTS=--verbose --exclude-file /config/file_exclude.txt --tag ${BACKUP_COMPOSE_PROJECT}
+      - RESTIC_OPTS=--verbose --exclude-file /config/file_exclude.txt --tag ${BACKUP_COMPOSE_PROJECT} --tag ${PROJECT_VERSION}
       - ENABLE_FORGET=${BACKUP_ENABLE_FORGET:-true}
       # Format: [#h][#d][#w][#m][#y]
       # Default: Keep 7 daily, 4 weekly, 6 monthly

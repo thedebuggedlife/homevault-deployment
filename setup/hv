@@ -2,9 +2,9 @@
 
 set -o pipefail
 
-PROJECT_VERSION=0.1
 PROJECT_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 PROJECT_ROOT="${PROJECT_ROOT%/}"
+PROJECT_VERSION="{{GH_RELEASE_TAG}}"
 
 source "$PROJECT_ROOT/lib/logging.sh"
 source "$PROJECT_ROOT/lib/config.sh"
@@ -148,6 +148,7 @@ prepare_env_file() {
         local module_env="$PROJECT_ROOT/modules/$module/.env"
         copy_env_values "$module_env" "$ENV_FILE" || exit 1
     done
+    save_env PROJECT_VERSION "$PROJECT_VERSION"
     # shellcheck source=/dev/null
     source "$ENV_FILE"
     implicit_env_vars

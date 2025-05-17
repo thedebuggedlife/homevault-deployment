@@ -234,6 +234,7 @@ restic_run_backup() {
             -m "${PROJECT_PATH%/}/deployment.json" \
             backup \
             --tag "$COMPOSE_PROJECT_NAME" \
+            --tag "$PROJECT_VERSION" \
             --exclude-file /config/file_exclude.txt \
             "${var_args[@]}" \
             "$RESTIC_DATA_ROOT" || {
