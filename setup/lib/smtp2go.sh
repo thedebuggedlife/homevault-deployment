@@ -211,7 +211,7 @@ configure_smtp_user() {
     fi
     user=$(echo "$response" | jq -r --arg username "$username" '.data.results[] | select(.username == $username)')
     if [ -z "$user" ]; then
-        echo "User ${Purple}$username${COff} does not exist in SMTP2GO account. Creating user..."
+        echo -e "User ${Purple}$username${COff} does not exist in SMTP2GO account. Creating user..."
         if ! user=$(smtp2go_add_user "$username"); then
             exit 1
         fi
