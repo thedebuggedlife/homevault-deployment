@@ -207,17 +207,45 @@ tailscale_configure_device() {
     exit 1
 }
 
+tailscale_save_status() {
+    local status_file="${PROJECT_ROOT%/}/.tailscale"
+    jq -n --arg ip "$TAILSCALE_IP" --arg status "$1" '
+    {
+        ip: $ip,
+        status: $status,
+    }
+    ' > "$status_file" || return 1
+    echo -e "Tailscale configuration cached to ${Cyan}$status_file${COff}"
+}
+
+tailscale_load_status() {
+    local ip status_file="${PROJECT_ROOT%/}/.tailscale"
+    if [ ! -f "$status_file" ]; then echo unknown; return 0; fi
+    ip=$(jq -r '.ip' "$status_file") || return 1
+    if [ "$ip" != "$TAILSCALE_IP" ]; then echo unknown; return 0; fi
+    jq -r '.status' "$status_file" || return 1
+}
+
 ###
 # Prepare Tailscale connection for deployment and save Tailnet IP
 #
 # @return void
 ###
 configure_tailscale() {
+    local status status_file="${PROJECT_ROOT%/}/.tailscale"
     log_header "Configuring Tailscale"
 
     tailscale_check_installed || return 1
     tailscale_connect || return 1
     tailscale_save_ip || return 1
-    tailscale_configure_device || return 1
+    status=$(tailscale_load_status) || {
+        log_warn "Failed to load cached tailscale status from '$status_file'"
+    }
+    if [ "$status" != configured ]; then
+        tailscale_configure_device || return 1
+    fi
+    tailscale_save_status configured || {
+        log_warn "Failed to cache tailscale status to '$status_file'"
+    }
     echo -e "Tailscale is connected. Address: ${Cyan}$TAILSCALE_IP${COff}"
 }
