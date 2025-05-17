@@ -135,17 +135,21 @@ validate_retention_policy() {
     local policy="$1"
     local retention_regex="^([0-9]+[h])?([0-9]+[d])?([0-9]+[w])?([0-9]+[m])?([0-9]+[y])?$"
     
-    # Check if the policy is empty
     if [[ -z "$policy" ]]; then
         echo "Invalid: Retention policy cannot be empty"
         return 1
     fi
+
+    if [ "$policy" = "all" ]; then return 0; fi
     
-    # Check if the policy matches the expected format
-    if ! [[ $policy =~ $retention_regex ]]; then
-        echo "Invalid: Retention policy format should be a combination of #h, #d, #w, #m, #y"
-        return 1
-    fi
+    (
+        # Run in a subshell to avoid affecting global behavior with shopt
+        shopt -s nocasematch
+        if ! [[ $policy =~ $retention_regex ]]; then
+            echo "Invalid: Retention policy format should be a combination of #h, #d, #w, #m, #y"
+            return 1
+        fi
+    ) || return 1
 }
 
 ################################################################################
@@ -521,7 +525,12 @@ backup_configure_retention() {
         log_error "The retention policy expression is invalid. $result"
         return 1
     }
-    save_env BACKUP_RETENTION_POLICY "$BACKUP_RETENTION_POLICY_CHANGE"
+    if [ "$BACKUP_RETENTION_POLICY_CHANGE" = "all" ]; then
+        save_env BACKUP_ENABLE_FORGET false
+    else
+        save_env BACKUP_ENABLE_FORGET true
+        save_env BACKUP_RETENTION_POLICY "$BACKUP_RETENTION_POLICY_CHANGE"
+    fi
 }
 
 ################################################################################
