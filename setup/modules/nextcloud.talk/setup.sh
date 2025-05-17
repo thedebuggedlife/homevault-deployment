@@ -45,12 +45,12 @@ nextcloud_talk_map_router_port() {
 }
 
 nextcloud_talk_configure_turn() {
-    # Stop the Talk container since it may be using the TURN port, and that would make it impossible to listen on that port
-    docker stop nextcloud_talk > /dev/null 2>&1
-
     check_port_routing "${NEXTCLOUD_TURN_ROUTER_PORT}" 1 && return 0
 
-    if [ "$UNATTENDED" != true ]; then
+    local is_running=false
+    if compose_service_exists nextcloud-talk --state running; then is_running=true; fi
+
+    if [[ "$is_running" = false &&  "$UNATTENDED" != true ]]; then
         read -p "Do you want to try to configure your router to map port ${NEXTCLOUD_TURN_ROUTER_PORT} to this host? [y/N] " user_input </dev/tty
         user_input=${user_input:-N}
         if [[ ! "$user_input" =~ ^[Yy]$ ]]; then
@@ -72,6 +72,8 @@ nextcloud_talk_configure_turn() {
             log_warn "Could not verify that port ${NEXTCLOUD_TURN_ROUTER_PORT} is mapped to this host. Some functions of Nextcloud Talk may not work as expected."
             return 0
         }
+    elif [ "$is_running" = true ]; then
+        log_warn "Could not verify that port ${NEXTCLOUD_TURN_ROUTER_PORT} is mapped to this host. This is likely because Nextcloud is already deployed and running."
     else
         log_warn "Could not verify that port ${NEXTCLOUD_TURN_ROUTER_PORT} is mapped to this host. Some functions of Nextcloud Talk may not work as expected."
     fi
