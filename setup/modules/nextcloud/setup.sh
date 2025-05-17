@@ -97,6 +97,7 @@ nextcloud_backup_config() {
     # shellcheck disable=SC2016
     BACKUP_FILTER_EXCLUDE+=(
         '${APPDATA_LOCATION}/nextcloud/search'
+        '${NEXTCLOUD_DATA_LOCATION}/nextcloud.log'
     )
 }
 

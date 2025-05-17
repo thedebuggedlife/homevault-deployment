@@ -53,7 +53,7 @@ homepage_bootstrap() {
 homepage_backup_config() {
     # shellcheck disable=SC2016
     BACKUP_FILTER_EXCLUDE+=(
-        '${APPDATA_LOCATION}/homepage/logs'
+        '${APPDATA_LOCATION}/homepage/config/logs'
     )
 }
 
