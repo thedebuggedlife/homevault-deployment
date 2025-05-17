@@ -127,3 +127,26 @@ compose_match_container_versions() {
         fi
     done
 }
+
+###
+# Checks if a service exists in a compose project
+#
+# @param    $1  {string}    Service name
+# @param    $@              Additional parameters passed to docker
+#
+# @status   0 if service exists
+# @status   1 if service does not exist
+##
+compose_service_exists() {
+  local service_name="$1" services
+  
+  services=$(docker compose -p "$COMPOSE_PROJECT_NAME" ps --services "$@" 2>/dev/null) || {
+    return 1
+  }
+  
+  if echo "$services" | grep -q "^$service_name$"; then
+    return 0
+  else
+    return 1
+  fi
+}

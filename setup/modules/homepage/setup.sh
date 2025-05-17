@@ -52,10 +52,6 @@ homepage_bootstrap() {
 
 homepage_backup_config() {
     # shellcheck disable=SC2016
-    BACKUP_FILTER_INCLUDE+=(
-        '${APPDATA_LOCATION}/homepage'
-    )
-    # shellcheck disable=SC2016
     BACKUP_FILTER_EXCLUDE+=(
         '${APPDATA_LOCATION}/homepage/logs'
     )

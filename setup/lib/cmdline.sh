@@ -43,19 +43,21 @@ print_usage() {
         echo -e "\nBackup 'run' options:\n"
         echo "  --keep                          Exclude the new snapshot from the automatic retention policy."
         echo -e "\nBackup 'schedule' options:\n"
-        echo "  --cron '<expression>'           Set the background schedule to the given expression. Expression MUST be wrapped in quotes."
+        echo "  --enable                        Turn ON background schedules."
+        echo "  --disable                       Turn OFF background schedules."
+        echo "  --cron '<expression>'           Sets the background schedule to the given expression. Expression MUST be wrapped in quotes."
         echo "                                  Help: https://www.uptimia.com/cron-expression-generator"
+        echo "                                  Default: '0 2 * * *'    (every day at 2AM)"
         echo "                                  Examples:"
-        echo "                                    --cron '0 2 * * *'    (every day at 2AM)"
         echo "                                    --cron '0 0 * * 0'    (every Sunday at midnight)"
-        echo "                                    --cron off            (disable background schedule)"
+        echo "                                    --cron '0 0 1 * *'    (first day of each month at midnight)"
         echo "  --retention [policy]            Configure the retention policy for automatic snapshots."
         echo "                                  Format: '[#h][#d][#w][#m][#y]' Where: h=hour,d=day,w=week,m=month,y=year"
         echo "                                  Default: 30d12m10y"
         echo "                                  Examples:"
         echo "                                    --retention 24h7d (keep last 24 hourly and last 7 daily snapshots)"
         echo "                                    --retention 4w6m  (keep last 4 weekly and last 6 monthly snapshots)"
-        echo "                                    --retention off   (disable policy, i.e. keep all snapshots)"
+        echo "                                    --retention all   (keep all snapshots)"
         echo -e "\nGlobal backup options:\n"
         echo "  --dry-run                       Execute restic in dry run mode."
 
@@ -97,6 +99,9 @@ print_usage() {
     exit 1
 }
 
+################################################################################
+#                                HELPER FUNCTIONS
+
 parse_env_override() {
     local -n overrides=$3
     if [ -n "$2" ]; then
@@ -131,20 +136,8 @@ parse_file_ref() {
     file="$2"
 }
 
-is_valid_action() {
-    local -a valid_actions=("deploy" "backup" "snapshots" "restore" "modules")
-    array_contains "$1" "${valid_actions[@]}" || return 1
-}
-
-is_valid_backup_action() {
-    local -a valid_actions=("init" "run" "schedule")
-    array_contains "$1" "${valid_actions[@]}" || return 1
-}
-
-is_valid_snapshots_action() {
-    local -a valid_actions=("list" "browse" "forget")
-    array_contains "$1" "${valid_actions[@]}" || return 1
-}
+################################################################################
+#                              DEPLOYMENT OPTIONS
 
 parse_deploy_option() {
     local module
@@ -196,6 +189,14 @@ parse_deploy_option() {
     esac
 }
 
+################################################################################
+#                              BACKUP OPTIONS
+
+is_valid_backup_action() {
+    local -a valid_actions=("init" "run" "schedule")
+    array_contains "$1" "${valid_actions[@]}" || return 1
+}
+
 parse_backup_init_option() {
     case "$(echo "$1" | tr '[:upper:]' '[:lower:]')" in
         --restic-var)
@@ -214,6 +215,27 @@ parse_backup_run_option() {
     case "$(echo "$1" | tr '[:upper:]' '[:lower:]')" in
         --keep)
             BACKUP_KEEP=true
+            return 1
+            ;;
+    esac
+}
+
+parse_backup_schedule_option() {
+    case "$(echo "$1" | tr '[:upper:]' '[:lower:]')" in
+        --enable)
+            if [ -n "$BACKUP_SCHEDULE_ENABLED" ]; then
+                log_invalid "Only one of '--enable' or '--disable' can be specified"
+                return 255
+            fi
+            BACKUP_SCHEDULE_ENABLED=true
+            return 1
+            ;;
+        --disable)
+            if [ -n "$BACKUP_SCHEDULE_ENABLED" ]; then
+                log_invalid "Only one of '--enable' or '--disable' can be specified"
+                return 255
+            fi
+            BACKUP_SCHEDULE_ENABLED=false
             return 1
             ;;
     esac
@@ -247,6 +269,14 @@ check_backup_options() {
         log_invalid "A backup action was not specified"
         return 1
     fi
+}
+
+################################################################################
+#                              SNAPSHOTS OPTIONS
+
+is_valid_snapshots_action() {
+    local -a valid_actions=("list" "browse" "forget")
+    array_contains "$1" "${valid_actions[@]}" || return 1
 }
 
 parse_snapshots_browse_option() {
@@ -316,6 +346,9 @@ check_snapshots_options() {
     fi
 }
 
+################################################################################
+#                              RESTORE OPTIONS
+
 parse_restore_option() {
     case "$(echo "$1" | tr '[:upper:]' '[:lower:]')" in
         --local)
@@ -366,6 +399,9 @@ check_restore_options() {
     fi
 }
 
+################################################################################
+#                              MODULES OPTIONS
+
 parse_modules_option() {
     case "$(echo "$1" | tr '[:upper:]' '[:lower:]')" in
         -a | --all)
@@ -373,6 +409,14 @@ parse_modules_option() {
             return 1
             ;;
     esac
+}
+
+################################################################################
+#                              GLOBAL OPTIONS
+
+is_valid_action() {
+    local -a valid_actions=("deploy" "backup" "snapshots" "restore" "modules")
+    array_contains "$1" "${valid_actions[@]}" || return 1
 }
 
 parse_global_option() {
@@ -402,12 +446,15 @@ parse_global_option() {
     esac
 }
 
+################################################################################
+#                                  MAIN PARSER
+
 parse_command_line() {
-    local count action
+    local count action min_error=255
     while [ "$#" -gt 0 ]; do
         parse_global_option "$@"
         count=$?
-        if [ "$count" -gt 0 ]; then
+        if [[ "$count" -gt 0 && "$count" -lt $min_error ]]; then
             shift "$count"
             continue
         fi
@@ -422,13 +469,15 @@ parse_command_line() {
             type "parse_${SELECTED_ACTION}_option" &>/dev/null && {
                 parse_"${SELECTED_ACTION}"_option "$@"
                 count=$?
-                if [ "$count" -gt 0 ]; then
+                if [[ "$count" -gt 0 && "$count" -lt $min_error ]]; then
                     shift "$count"
                     continue
                 fi
             }
         fi
-        log_invalid "Unrecognized parameter: '$1'"
+        if [ "$count" -lt $min_error ]; then
+            log_invalid "Unrecognized parameter: '$1'"
+        fi
         print_usage
     done
     if [ -z "$SELECTED_ACTION" ]; then

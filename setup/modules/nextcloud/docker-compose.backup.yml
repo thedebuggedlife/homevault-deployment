@@ -1,0 +1,4 @@
+services:
+  backup:
+    volumes:
+      - ${NEXTCLOUD_DATA_LOCATION}:/data/${NEXTCLOUD_DATA_LOCATION}:ro

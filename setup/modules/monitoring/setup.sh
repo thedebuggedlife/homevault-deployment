@@ -42,14 +42,6 @@ monitoring_backup_config() {
         "grafana"
     )
     # shellcheck disable=SC2016
-    BACKUP_FILTER_INCLUDE+=(
-        '${APPDATA_LOCATION}/alloy'
-        '${APPDATA_LOCATION}/grafana'
-        '${APPDATA_LOCATION}/loki'
-        '${APPDATA_LOCATION}/process-exporter'
-        '${APPDATA_LOCATION}/prometheus'
-    )
-    # shellcheck disable=SC2016
     BACKUP_FILTER_EXCLUDE+=(
         '${APPDATA_LOCATION}/alloy/data'
         '${APPDATA_LOCATION}/loki/data'

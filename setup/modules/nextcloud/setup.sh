@@ -30,10 +30,16 @@ nextcloud_config_secrets() {
     create_password_digest_pair "${SECRETS_PATH}oidc_nextcloud"
 }
 
+nextcloud_compose_extra() {
+    if [ "$BACKUP_ENABLED" ]; then
+        echo "nextcloud.backup:$(dirname "${BASH_SOURCE[0]}")/docker-compose.backup.yml:base"
+    fi
+}
+
 nextcloud_pre_install() {
     log_header "Preparing NextCloud for deployment"
 
-    ensure_path_exists "$NEXTCLOUD_DATA_LOCATION"
+    ensure_path_exists "$NEXTCLOUD_DATA_LOCATION" || exit 1
     
     # Elastic Search requires special permissions on the file which aren't compatible with NC
     if [ ! -s "${SECRETS_PATH}elastic_password" ]; then
@@ -53,7 +59,7 @@ nextcloud_pre_install() {
 
     # Provide proper access to ElasticSearch data location
     local search_path="${APPDATA_LOCATION%/}/nextcloud/search"
-    ensure_path_exists "$search_path"
+    ensure_path_exists "$search_path" || exit 1
     echo -e "Changing ownership of ${Cyan}$search_path${COff} to ${Purple}1000:0${COff}"
     sudo chown 1000:0 "${APPDATA_LOCATION%/}/nextcloud/search"
 
@@ -86,7 +92,6 @@ nextcloud_backup_config() {
     )
     # shellcheck disable=SC2016
     BACKUP_FILTER_INCLUDE+=(
-        '${APPDATA_LOCATION}/nextcloud'
         '${NEXTCLOUD_DATA_LOCATION}'
     )
     # shellcheck disable=SC2016
@@ -108,6 +113,7 @@ nextcloud_post_restore() {
 
 CONFIG_ENV_HOOKS+=("nextcloud_config_env")
 CONFIG_SECRETS_HOOKS+=("nextcloud_config_secrets")
+COMPOSE_EXTRA_HOOKS+=("nextcloud_compose_extra")
 PRE_INSTALL_HOOKS+=("nextcloud_pre_install")
 # POST_INSTALL_HOOKS+=(...)
 # BOOTSTRAP_HOOKS+=(...)

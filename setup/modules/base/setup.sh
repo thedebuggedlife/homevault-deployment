@@ -233,7 +233,7 @@ pam_update_server_admin() {
 pam_generate_ssl_cert() {
     # SSSD requires LDAPS (SSL)
 
-    ensure_path_exists "${APPDATA_LOCATION%/}/lldap"
+    ensure_path_exists "${APPDATA_LOCATION%/}/lldap" || return 1
     if [[ -f "${APPDATA_LOCATION%/}/lldap/key.pem" && -f "${APPDATA_LOCATION%/}/lldap/cert.pem" ]]; then
         echo "SSL certificates for LLDAP already exist"
         return 0
@@ -305,6 +305,24 @@ pam_post_install() {
     sudo systemctl restart sssd
 }
 
+configure_backup() {
+    # shellcheck disable=SC2030
+    (
+        # Save files used by background backup container
+        ensure_path_exists "${APPDATA_LOCATION%/}/backup/config"
+
+        BACKUP_SERVICES=()
+        BACKUP_FILTER_EXCLUDE=()
+        execute_hooks "${BACKUP_CONFIG_HOOKS[@]}" "backup-config" || return 1
+        save_env BACKUP_COMPOSE_PROJECT "$COMPOSE_PROJECT_NAME" || return 1
+        save_env BACKUP_SERVICES "'${BACKUP_SERVICES[*]}'" || return 1
+
+        readarray -t backup_exclude < <(env_subst "${BACKUP_FILTER_EXCLUDE[@]}")
+        printf '%s\n' "${backup_exclude[@]}" > "${APPDATA_LOCATION%/}/backup/config/file_exclude.txt"
+
+    ) || return 1
+}
+
 ################################################################################
 #                             BASE SETUP HOOKS
 
@@ -369,6 +387,12 @@ base_config_secrets() {
     create_rsa_keypair "${SECRETS_PATH}oidc_jwks_key" "${SECRETS_PATH}oidc_jwks_public"
 }
 
+base_compose_extra() {
+    if [ "$BACKUP_ENABLED" = true ]; then
+        echo "backup:$(dirname "${BASH_SOURCE[0]}")/docker-compose.backup.yml:base"
+    fi
+}
+
 base_pre_install() {
     log_header "Configuring PAM support for LLDAP"
     pam_pre_install || return 1
@@ -382,6 +406,11 @@ base_pre_install() {
 
     log_header "Preparing Traefik for deployment"
     configure_traefik || return 1
+
+    if [ "$BACKUP_ENABLED" = true ]; then
+        log_header "Preparing backup configuration"
+        configure_backup || return 1
+    fi
 }
 
 base_post_install() {
@@ -390,6 +419,7 @@ base_post_install() {
 }
 
 base_backup_config() {
+    # shellcheck disable=SC2031
     BACKUP_SERVICES+=(
         "authelia"
         "lldap"
@@ -398,17 +428,13 @@ base_backup_config() {
     )
     # shellcheck disable=SC2016
     BACKUP_FILTER_INCLUDE+=(
-        '${APPDATA_LOCATION}/authelia'
-        '${APPDATA_LOCATION}/lldap'
-        '${APPDATA_LOCATION}/project'
-        '${APPDATA_LOCATION}/secrets'
-        '${APPDATA_LOCATION}/traefik'
-        '${APPDATA_LOCATION}/trafego'
+        '${APPDATA_LOCATION}'
     )
 }
 
 CONFIG_ENV_HOOKS+=("base_config_env")
 CONFIG_SECRETS_HOOKS+=("base_config_secrets")
+COMPOSE_EXTRA_HOOKS+=("base_compose_extra")
 PRE_INSTALL_HOOKS+=("base_pre_install")
 POST_INSTALL_HOOKS+=("base_post_install")
 BACKUP_CONFIG_HOOKS+=("base_backup_config")

@@ -118,7 +118,7 @@ execute_hooks() {
     for hook in "${hooks[@]}"; do
         if ! $hook; then
             log_error "Hook '$hook' failed"
-            exit 1
+            return 1
         fi
     done
 }
@@ -273,7 +273,7 @@ create_data_locations() {
 # @return void
 ###
 ask_for_variables() {
-    execute_hooks "${CONFIG_ENV_HOOKS[@]}" "config-env"
+    execute_hooks "${CONFIG_ENV_HOOKS[@]}" "config-env" || exit 1
     implicit_env_vars
 }
 
@@ -284,9 +284,31 @@ ask_for_variables() {
 ###
 save_secrets() {
     log_header "Preparing secret files"
-    execute_hooks "${CONFIG_SECRETS_HOOKS[@]}" "config-secrets"
+    execute_hooks "${CONFIG_SECRETS_HOOKS[@]}" "config-secrets" || exit 1
     if ! chmod 644 "${SECRETS_PATH}"*; then
         exit 1
+    fi
+}
+
+DEPLOY_BACKUP_STOPPED=false
+
+deploy_stop_backup() {
+    compose_service_exists "backup" --status running && {
+        echo -e "Stopping service ${Purple}backup${COff} during deployment"
+        docker compose -p "$COMPOSE_PROJECT_NAME" stop backup || {
+            log_error "Failed to stop backup service"
+            exit 1
+        }
+        DEPLOY_BACKUP_STOPPED=true
+    }
+}
+
+deploy_restart_backup() {
+    if [ "$DEPLOY_BACKUP_STOPPED" = true ]; then
+        echo -e "Restarting ${Purple}backup${COff} service"
+        docker compose -p "$COMPOSE_PROJECT_NAME" start backup || {
+            log_warn "Failed to restart backup service"
+        }
     fi
 }
 
@@ -301,11 +323,11 @@ deploy_project() {
     if [ "$DRY_RUN" = true ]; then COMPOSE_UP_OPTIONS+=" --dry-run"; fi
 
 
-    ensure_path_exists "${COMPOSE_PATH%/}/"
+    ensure_path_exists "${COMPOSE_PATH%/}/" || return 1
     if [ "$OVERRIDE_COMPOSE" = true ]; then
         rm -rf "${COMPOSE_PATH:?}/"* || {
             log_error "Failed to delete previous compose files"
-            exit 1
+            return 1
         }
     fi
 
@@ -320,7 +342,9 @@ deploy_project() {
     done
 
     # Collect any additional files provided by the enabled modules
-    readarray -t extra_files < <(execute_hooks  "${COMPOSE_EXTRA_HOOKS[@]}" "compose-extra")
+    local hooks_output extra_files
+    hooks_output=$(execute_hooks  "${COMPOSE_EXTRA_HOOKS[@]}" "compose-extra") || return 1
+    readarray -t extra_files <<< "$hooks_output"
     original_files+=("${extra_files[@]}")
 
     # Copy the files to match the following file layout: 
@@ -344,10 +368,10 @@ deploy_project() {
                 echo -e "Using existing compose file: ${Cyan}$project_file${COff}"
             else
                 echo -e "Copying docker compose file for ${Purple}$target_project${COff} to ${Cyan}$project_file${COff}"
-                ensure_path_exists "$( dirname "$project_file" )"
+                ensure_path_exists "$( dirname "$project_file" )" || return 1
                 (cp -f "$original_file" "$project_file") || {
                     log_error "Failed to copy docker compose file for '$target_project'"
-                    exit 1
+                    return 1
                 }
             fi
         fi
@@ -362,7 +386,7 @@ deploy_project() {
     if [ "$OVERRIDE_VERSIONS" != true ]; then
         if ! compose_match_container_versions "$COMPOSE_PROJECT_NAME" "${project_files[@]}"; then
             log_error "Failed to match existing container versions in compose project files"
-            exit 1
+            return 1
         fi
     fi
 
@@ -376,23 +400,25 @@ deploy_project() {
         abort_install
     fi
 
-    execute_hooks "${PRE_INSTALL_HOOKS[@]}" "pre-install"
+    deploy_stop_backup
+
+    execute_hooks "${PRE_INSTALL_HOOKS[@]}" "pre-install" || return 1
 
     log_header "Deploying services"
 
     echo -e "Deploying project ${Purple}$COMPOSE_PROJECT_NAME${COff}..."
     if ! sg docker -c "docker compose $COMPOSE_OPTIONS up $COMPOSE_UP_OPTIONS"; then
         log_error "Docker Compose deployment failed"
-        exit 1
+        return 1
     fi
 
     log_header "Finalizing deployment"
 
-    execute_hooks "${POST_INSTALL_HOOKS[@]}" "post-install"
+    execute_hooks "${POST_INSTALL_HOOKS[@]}" "post-install" || return 1
 
-    execute_hooks "${BOOTSTRAP_HOOKS[@]}" "bootstrap"
+    execute_hooks "${BOOTSTRAP_HOOKS[@]}" "bootstrap" || return 1
 
-    save_deployment_file || exit 1
+    save_deployment_file || return 1
 }
 
 ###
@@ -513,37 +539,30 @@ check_reboot_needed() {
 # Terminate program
 abort_install() {
     log_warn "Setup aborted by user."
+    # Restart any services that may have been stopped as part of the operation
+    deploy_restart_backup
+    backup_start_services
     exit 1
 }
 
-show_modules() {
-    if [ "$SHOW_ALL" = true ]; then
-        load_module_help
-        echo -e "\nAvailable modules:\n"
-        log_options MODULE_OPTIONS true
-    else
-        find_installed_modules
-        echo
-    fi
-
-    exit 0
-}
-
 run_deploy() {
+    local exit_code
     find_installed_modules
     load_modules
     configure_docker
     prepare_env_file
     ask_for_variables
-    create_data_locations
+    create_data_locations || return 1
     download_appdata
     configure_admin_account
-    configure_tailscale || exit 1
+    configure_tailscale || return 1
     configure_cloudflare_tunnel
     configure_smtp2go
     save_secrets
     find_missing_modules
-    deploy_project
+    deploy_project; exit_code=$?
+    deploy_restart_backup
+    return $exit_code
 }
 
 backup_action_init() {
@@ -557,73 +576,93 @@ backup_action_init() {
 backup_action_run() {
     local exit_code
     log_header "Creating a new recovery snapshot"
-    backup_check_requisites || exit 1
-    load_deployment_file || exit 1
-    backup_stop_services || exit 1
+    backup_check_requisites || return 1
+    load_deployment_file || return 1
+    backup_stop_services || return 1
     echo "Running restic backup operation. This operation could take several minutes..."
     restic_run_backup; exit_code=$?
     backup_start_services
-    if [ $exit_code -ne 0 ]; then return $exit_code; fi
+    return $exit_code
+}
+
+backup_action_schedule() {
+    log_header "Configuring scheduled backups"
+    if [[ "$BACKUP_SCHEDULE_ENABLED" = true ]]; then
+        backup_schedule_check || return 1
+        save_env BACKUP_ENABLED true
+        run_deploy
+    fi
+    if [[ "$BACKUP_SCHEDULE_ENABLED" = false ]]; then
+        save_env BACKUP_ENABLED false
+        run_deploy
+    fi
 }
 
 run_backup() {
     configure_docker
     find_installed_modules
     prepare_env_file
-    backup_action_"${BACKUP_ACTION}"
+    backup_action_"${BACKUP_ACTION}" || return 1
 }
 
 snapshots_action_list() {
     log_header "Enumerating existing recovery snapshots"
-    restic_list_snapshots || exit 1
+    restic_list_snapshots || return 1
 }
 
 snapshots_action_browse() {
     log_header "Browsing snapshot contents"
-    restic_browse_snapshot || exit 1
+    restic_browse_snapshot || return 1
 }
 
 snapshots_action_forget() {
     log_header "Removing an existing recovery snapshot"
-    restic_forget_snapshots || exit 1
-    restic_list_snapshots || exit 1
+    restic_forget_snapshots || return 1
+    restic_list_snapshots || return 1
 }
 
 run_snapshots() {
     configure_docker
     prepare_env_file
-    snapshots_action_"${SNAPSHOT_ACTION}"
+    snapshots_action_"${SNAPSHOT_ACTION}" || return 1
 }
 
 restore_action_local() {
     log_header "Performing local restore operation"
-    restore_configure_local || exit 1
-    load_deployment_file || exit 1
+    restore_configure_local || return 1
+    load_deployment_file || return 1
     run_deploy
 }
 
 restore_action_snapshot() {
     log_header "Performing remote restore operation"
-    restore_configure_remote || exit 1
-    restore_snapshot || exit 1
-    restore_configure_local || exit 1
+    restore_configure_remote || return 1
+    restore_snapshot || return 1
+    restore_configure_local || return 1
     run_deploy
 }
 
 run_restore() {
     if [ -z "$RESTORE_ACTION" ]; then
         log_error "You must specify either option: '--local' or '--snapshot'"
-        exit 1
+        return 1
     fi
     configure_docker
     find_installed_modules
     restore_check_installed || abort_install
-    restore_action_"${RESTORE_ACTION}"
-    execute_hooks "${POST_RESTORE_HOOKS[@]}" "post-restore"
+    restore_action_"${RESTORE_ACTION}" || return 1
+    execute_hooks "${POST_RESTORE_HOOKS[@]}" "post-restore" || return 1
 }
 
 run_modules() {
-    show_modules
+    if [ "$SHOW_ALL" = true ]; then
+        load_module_help
+        echo -e "\nAvailable modules:\n"
+        log_options MODULE_OPTIONS true
+    else
+        find_installed_modules
+        echo
+    fi
 }
 
 ################################################################################
@@ -633,7 +672,7 @@ trap "echo && abort_install" SIGINT
 
 parse_command_line "$@"
 
-run_"${SELECTED_ACTION}"
+run_"${SELECTED_ACTION}" || exit 1
 
 log_done
 

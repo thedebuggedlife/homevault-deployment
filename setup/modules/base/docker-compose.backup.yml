@@ -1,36 +1,42 @@
-version: '3'
+volumes:
+  restic-cache:
 
 secrets:
   restic_password:
-    file: ${APPDATA_LOCATION:-/srv/appdata}/backup/restic_password
+    file: ${APPDATA_LOCATION}/secrets/restic_password
 
 services:
-  homevault-backup:
+  backup:
     image: ghcr.io/thedebuggedlife/homevault-backup:0.1
-    container_name: homevault_backup
+    container_name: backup
     restart: unless-stopped
     privileged: true  # Required for LVM access
     secrets:
       - restic_password
     volumes:
-      - ${APPDATA_LOCATION:-/srv/appdata}:/data:ro
       # Required for LVM access
       - /dev:/dev:rw
       - /run:/run:rw
       - /etc/lvm:/etc/lvm:ro
       # For Docker container operations
       - /var/run/docker.sock:/var/run/docker.sock
-      # Custom hooks (optional)
-      - ${APPDATA_LOCATION:-/srv/appdata}/backup/hooks:/hooks:ro
+      # Custom hooks and config
+      - ${APPDATA_LOCATION}/backup/config:/config:ro
+      - ${APPDATA_LOCATION}/backup/hooks:/hooks:ro
       # Cache volume for better restic performance
       - restic-cache:/root/.cache/restic
-    env_file: ${APPDATA_LOCATION:-/srv/appdata}/backup/restic.env
+      # Backup locations
+      - ${APPDATA_LOCATION}:/data/${APPDATA_LOCATION}:ro
+    env_file: ${APPDATA_LOCATION}/backup/restic.env
     environment:
       - TZ
       - CRON_SCHEDULE=${BACKUP_SCHEDULE:-0 2 * * *}
+      # Remove the password from the environment (in case it is set in restic.env)
+      - RESTIC_PASSWORD=
+      # Use the docker secret instead
       - RESTIC_PASSWORD_FILE=/run/secrets/restic_password
       - BACKUP_PATHS=/data
-      - RESTIC_OPTS=--verbose
+      - RESTIC_OPTS=--verbose --exclude-file /config/file_exclude.txt --tag ${BACKUP_COMPOSE_PROJECT}
       - ENABLE_FORGET=${BACKUP_ENABLE_FORGET:-true}
       # Format: [#h][#d][#w][#m][#y]
       # Default: Keep 7 daily, 4 weekly, 6 monthly, 1 yearly
@@ -45,8 +51,5 @@ services:
       - REPLACE_BACKUP_PATH=true            # Replace backup path with snapshot path
       # Docker operations
       - USE_DOCKER=true
-      - DOCKER_COMPOSE_PROJECT=homevault
-      - DOCKER_COMPOSE_SERVICES=${BACKUP_STOP_SERVICES}
-
-volumes:
-  restic-cache:
+      - DOCKER_COMPOSE_PROJECT=${BACKUP_COMPOSE_PROJECT}
+      - DOCKER_COMPOSE_SERVICES=${BACKUP_SERVICES}

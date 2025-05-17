@@ -18,14 +18,21 @@ RESTIC_DATA_ROOT=/data
 
 declare -A RESTIC_OVERRIDES
 
+# Set with hv backup <action>
 BACKUP_ACTION=
+# Set with hv backup run --keep
 BACKUP_KEEP=false
+# Set with hv backup schedule [--enable|--disable]
+BACKUP_SCHEDULE_ENABLED=
 
+
+# Set with hv snapshots <action>
 SNAPSHOT_ACTION=
 SNAPSHOT_ID=latest
 SNAPSHOT_RETENTION=
 declare -a SNAPSHOT_BROWSE_FLAGS=()
 
+# Set with hv restore <action>
 RESTORE_ACTION=
 
 ################################################################################
@@ -96,7 +103,7 @@ restic() {
 #                            RESTIC ACTIONS
 
 restic_load_env() {
-    RESTIC_ENV="${RESTIC_ENV:-${PROJECT_PATH%/}/restic.env}"
+    RESTIC_ENV="${RESTIC_ENV:-${APPDATA_LOCATION%/}/backup/restic.env}"
 
     if [ ! -f "$RESTIC_ENV" ]; then
         log_error "Restic configuration file is missing: '$RESTIC_ENV'"
@@ -109,7 +116,7 @@ restic_load_env() {
 }
 
 restic_init_env() {
-    RESTIC_ENV="${RESTIC_ENV:-${PROJECT_PATH%/}/restic.env}"
+    RESTIC_ENV="${RESTIC_ENV:-${APPDATA_LOCATION%/}/backup/restic.env}"
 
     if [ -f "$RESTIC_ENV" ]; then
         local bak_file
@@ -133,6 +140,7 @@ restic_init_env() {
     fi
 
     if [ ! -f "$RESTIC_ENV" ]; then
+        ensure_path_exists "$(dirname "$RESTIC_ENV")" || return 1
         echo -e "Creating restic environment file: ${Cyan}$RESTIC_ENV${COff}"
         touch "$RESTIC_ENV" && chmod 600 "$RESTIC_ENV" || {
             log_error "Failed to create restic environment file: '$RESTIC_ENV'"
@@ -161,7 +169,10 @@ restic_init_repository() {
             save_env RESTIC_HOST "$HOSTNAME" "$RESTIC_ENV"
         fi
 
-        if [ -d "$RESTIC_REPOSITORY" ]; then
+        if [ -z "$RESTIC_REPOSITORY" ]; then
+            log_error "Variable RESTIC_REPOSITORY is required but was not provided"
+            return 1
+        elif [ -d "$RESTIC_REPOSITORY" ]; then
             # Make sure it is saved as a full path
             local full_path
             full_path="$(readlink -f "$RESTIC_REPOSITORY")"
@@ -182,14 +193,21 @@ restic_init_repository() {
         if restic snapshots >/dev/null 2>&1; then
             echo -e "\nExisting repository found at: ${Cyan}${RESTIC_REPOSITORY}${COff}\n"
             log_warn "An existing repository was found at this location and will be reused for future snapshots."
-            return 0
+        else
+            echo -e "\nInitializing repository: ${Cyan}${RESTIC_REPOSITORY}${COff}\n"
+            restic init -q || {
+                log_error "Failed to initialize backup repository"
+                return 1
+            }
         fi
 
-        echo -e "\nInitializing repository: ${Cyan}${RESTIC_REPOSITORY}${COff}\n"
-        restic init -q || {
-            log_error "Failed to initialize backup repository"
-            return 1
-        }
+        local password_file="${SECRETS_PATH%/}/restic_password"
+        echo -e "Saving restic password to ${Cyan}$password_file${COff}"
+        printf "%s" "$RESTIC_PASSWORD" > "$password_file" && 
+            chmod 600 "$password_file" || {
+                log_error "Failed to save restic password to '$password_file'"
+                return 1
+            }
     ) || return 1
 }
 
@@ -324,6 +342,8 @@ backup_check_requisites() {
     fi
 }
 
+BACKUP_SERVICES_STOPPED=false
+
 backup_stop_services() {
     if [[ -n "${BACKUP_SERVICES[*]}" && "$DRY_RUN" != true ]]; then
         echo -e "Stopping docker services ..."
@@ -332,11 +352,12 @@ backup_stop_services() {
             log_error "Failed to stop docker services in preparation for backup. Some services may need to be restarted manually."
             return 1
         }
+        BACKUP_SERVICES_STOPPED=true
     fi
 }
 
 backup_start_services() {
-    if [[ -n "${BACKUP_SERVICES[*]}" && "$DRY_RUN" != true ]]; then
+    if [[ "$BACKUP_SERVICES_STOPPED" = true && -n "${BACKUP_SERVICES[*]}" && "$DRY_RUN" != true ]]; then
         echo -e "Starting docker services ..."
         # shellcheck disable=SC2048,SC2086
         docker compose -p "$COMPOSE_PROJECT_NAME" start ${BACKUP_SERVICES[*]} || {
@@ -347,9 +368,25 @@ backup_start_services() {
 }
 
 ################################################################################
-#                                 SNAPSHOTS STEPS
+#                                 SCHEDULE STEPS
 
-
+backup_schedule_check() {
+    (
+        restic_load_env || return 1
+        if [ -z "$RESTIC_REPOSITORY" ]; then
+            log_error "The value for RESTIC_REPOSITORY is missing from '$RESTIC_ENV'"
+            return 1
+        fi
+        if [ -z "$RESTIC_PASSWORD" ]; then
+            log_error "The value for RESTIC_PASSWORD is missing from '$RESTIC_ENV'"
+            return 1
+        fi
+        if ! restic snapshots >/dev/null 2>&1; then
+            log_error "The repository at ${Cyan}$RESTIC_REPOSITORY${COff} does not appear to be available"
+            return 1
+        fi
+    ) || return 1
+}
 
 ################################################################################
 #                                 RESTORE STEPS
@@ -428,11 +465,11 @@ restore_snapshot() {
     load_deployment_file "$deployment_file" || return 1
     echo
 
-    ensure_path_exists "$APPDATA_LOCATION"
+    ensure_path_exists "$APPDATA_LOCATION" || return 1
 
     local target_folder
     for target_folder in "${BACKUP_FILTER_INCLUDE[@]}"; do
-        ensure_path_exists "$target_folder"
+        ensure_path_exists "$target_folder" || return 1
     done
     echo
 

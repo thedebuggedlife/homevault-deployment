@@ -1,0 +1,4 @@
+services:
+  backup:
+    volumes:
+      - ${IMMICH_UPLOAD_LOCATION}:/data/${IMMICH_UPLOAD_LOCATION}:ro

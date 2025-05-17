@@ -273,10 +273,6 @@ portainer_backup_config() {
     BACKUP_SERVICES+=(
         "portainer"
     )
-    # shellcheck disable=SC2016
-    BACKUP_FILTER_INCLUDE+=(
-        '${APPDATA_LOCATION}/portainer'
-    )
 }
 
 CONFIG_ENV_HOOKS+=("portainer_config_env")

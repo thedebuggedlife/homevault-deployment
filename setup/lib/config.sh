@@ -129,7 +129,10 @@ save_env() {
     fi
     
     # Set the variable in the current shell
-    eval "$env_variable=$env_value"
+    eval "$env_variable=$env_value" || {
+        log_error "Failed to set '$env_variable' to '$env_value'"
+        exit 1
+    }
 }
 
 ###
@@ -350,7 +353,7 @@ save_deployment_file() {
     BACKUP_SERVICES=()
     BACKUP_FILTER_INCLUDE=()
     BACKUP_FILTER_EXCLUDE=()
-    execute_hooks "${BACKUP_CONFIG_HOOKS[@]}" "backup-config"
+    execute_hooks "${BACKUP_CONFIG_HOOKS[@]}" "backup-config" || exit 1
 
     # Substitute any environment variables specified in the following array items
     local backup_services backup_include backup_exclude
@@ -480,7 +483,7 @@ ensure_path_exists() {
         sudo mkdir -p "$1" && \
         sudo chown "$AS_USER:docker" "$1" || {
             log_error "Failed to create path '$1'"
-            exit 1
+            return 1
         }
     fi
 }
@@ -508,7 +511,7 @@ write_file() {
     local content=$1
     local filename=$2
     echo -e "Creating file ${Cyan}$filename${COff}"
-    ensure_path_exists "$(dirname "$filename")"
+    ensure_path_exists "$(dirname "$filename")" || return 1
     printf "%s" "$content" >"$filename" || {
         log_error "Failed to write to file: '$filename'"
         exit 1

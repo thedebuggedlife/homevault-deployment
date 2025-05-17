@@ -218,6 +218,12 @@ immich_config_secrets() {
     create_password_digest_pair "${SECRETS_PATH}oidc_immich"
 }
 
+immich_compose_extra() {
+    if [ "$BACKUP_ENABLED" ]; then
+        echo "immich.backup:$(dirname "${BASH_SOURCE[0]}")/docker-compose.backup.yml:base"
+    fi
+}
+
 immich_pre_install() {
     ensure_path_exists "$IMMICH_UPLOAD_LOCATION" || return 1
 }
@@ -237,13 +243,13 @@ immich_backup_config() {
     )
     # shellcheck disable=SC2016
     BACKUP_FILTER_INCLUDE+=(
-        '${APPDATA_LOCATION}/immich'
         '${IMMICH_UPLOAD_LOCATION}'
     )
 }
 
 CONFIG_ENV_HOOKS+=("immich_config_env")
 CONFIG_SECRETS_HOOKS+=("immich_config_secrets")
+COMPOSE_EXTRA_HOOKS+=("immich_compose_extra")
 PRE_INSTALL_HOOKS+=("immich_pre_install")
 POST_INSTALL_HOOKS+=("immich_post_install")
 # BOOTSTRAP_HOOKS+=("immich_bootstrap")
