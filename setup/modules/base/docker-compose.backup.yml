@@ -7,7 +7,7 @@ secrets:
 
 services:
   backup:
-    image: ghcr.io/thedebuggedlife/homevault-backup:0.1
+    image: ghcr.io/thedebuggedlife/homevault-backup:0.1.2
     container_name: backup
     restart: unless-stopped
     privileged: true  # Required for LVM access
@@ -54,3 +54,8 @@ services:
       - USE_DOCKER=true
       - DOCKER_COMPOSE_PROJECT=${BACKUP_COMPOSE_PROJECT}
       - DOCKER_COMPOSE_SERVICES=${BACKUP_SERVICES}
+    labels:
+      selfhost.module.base: 1
+      wud.watch: true
+      wud.display.icon: sh-restic
+      wud.tag.include: ^0\.\d+\.\d+$$
