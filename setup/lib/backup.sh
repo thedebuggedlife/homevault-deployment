@@ -22,9 +22,21 @@ declare -A RESTIC_OVERRIDES
 BACKUP_ACTION=
 # Set with hv backup run --keep
 BACKUP_KEEP=false
-# Set with hv backup schedule [--enable|--disable]
-BACKUP_SCHEDULE_ENABLED=
 
+# Indicates whether background backups are set to run automatically
+BACKUP_ENABLED=
+# Set with $0 backup schedule [--enable|--disable]
+BACKUP_ENABLED_CHANGE=
+
+# The CRON expression used by the background backup runner
+BACKUP_SCHEDULE=
+# Set with $0 backup schedule --cron <expr>
+BACKUP_SCHEDULE_CHANGE=
+
+# The policy used after a background backup to prune available snapshots
+BACKUP_RETENTION_POLICY=
+# Set with $0 backup schedule --retention <policy>
+BACKUP_RETENTION_POLICY_CHANGE=
 
 # Set with hv snapshots <action>
 SNAPSHOT_ACTION=
@@ -34,6 +46,107 @@ declare -a SNAPSHOT_BROWSE_FLAGS=()
 
 # Set with hv restore <action>
 RESTORE_ACTION=
+
+################################################################################
+#                         PARAMETER VALIDATION
+
+validate_cron_month() {
+    local field="$1"
+    local month="^(\\*|\\*/([1-9]|1[0-2])|([1-9]|1[0-2])(-([1-9]|1[0-2]))?(,([1-9]|1[0-2])(-([1-9]|1[0-2]))?)*)$|^(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)$"
+    (
+        # Run in a subshell to avoid affecting global behavior with shopt
+        shopt -s nocasematch
+        if [[ ! $field =~ $month ]]; then
+            return 1
+        fi
+    )
+    return $?
+}
+
+validate_cron_dow() {
+    local field="$1"
+    local dow="^(\\*|\\*/[0-7]|[0-7](-[0-7])?(,[0-7](-[0-7])?)*)$|^(SUN|MON|TUE|WED|THU|FRI|SAT)$"
+    (
+        # Run in a subshell to avoid affecting global behavior with shopt
+        shopt -s nocasematch
+        if [[  ! $field =~ $dow ]]; then
+            return 1
+        fi
+    )
+    return $?
+}
+
+validate_cron_regex() {
+    local cron_expr="$1"
+    
+    # First, split and count the fields
+    # shellcheck disable=SC2206
+    IFS=' ' read -r -a fields <<< "$cron_expr"
+    local field_count=${#fields[@]}
+    
+    if [[ $field_count -ne 5 && $field_count -ne 6 ]]; then
+        echo "Invalid: Expected 5 or 6 fields, got $field_count"
+        return 1
+    fi
+    
+    # Define regex patterns for each field
+    local second_minute="^(\\*|\\*/[0-5]?[0-9]|[0-5]?[0-9](-[0-5]?[0-9])?(,[0-5]?[0-9](-[0-5]?[0-9])?)*)$"
+    local hour="^(\\*|\\*/([0-9]|1[0-9]|2[0-3])|([0-9]|1[0-9]|2[0-3])(-([0-9]|1[0-9]|2[0-3]))?(,([0-9]|1[0-9]|2[0-3])(-([0-9]|1[0-9]|2[0-3]))?)*)$"
+    local dom="^(\\*|\\*/([1-9]|[12][0-9]|3[01])|([1-9]|[12][0-9]|3[01])(-([1-9]|[12][0-9]|3[01]))?(,([1-9]|[12][0-9]|3[01])(-([1-9]|[12][0-9]|3[01]))?)*)$"
+
+    local index=0
+
+    # Validate based on field count
+    if [[ $field_count -eq 6 ]]; then
+        # Validate with seconds: seconds, minutes, hours, dom, month, dow
+        if ! [[ ${fields[$index]} =~ $second_minute ]]; then
+            echo "Invalid seconds field: ${fields[$index]}"
+            return 1
+        fi
+        ((index++))
+    fi
+    if ! [[ ${fields[$index]} =~ $second_minute ]]; then
+        echo "Invalid minutes field: ${fields[$index]}"
+        return 1
+    fi
+    ((index++))
+    if ! [[ ${fields[$index]} =~ $hour ]]; then
+        echo "Invalid hours field: ${fields[$index]}"
+        return 1
+    fi
+    ((index++))
+    if ! [[ ${fields[$index]} =~ $dom ]]; then
+        echo "Invalid day-of-month field: ${fields[$index]}"
+        return 1
+    fi
+    ((index++))
+    if ! validate_cron_month "${fields[$index]}"; then
+        echo "Invalid month field: ${fields[$index]}"
+        return 1
+    fi
+    ((index++))
+    if ! validate_cron_dow "${fields[$index]}"; then
+        echo "Invalid day-of-week field: ${fields[$index]}"
+        return 1
+    fi
+}
+
+validate_retention_policy() {
+    local policy="$1"
+    local retention_regex="^([0-9]+[h])?([0-9]+[d])?([0-9]+[w])?([0-9]+[m])?([0-9]+[y])?$"
+    
+    # Check if the policy is empty
+    if [[ -z "$policy" ]]; then
+        echo "Invalid: Retention policy cannot be empty"
+        return 1
+    fi
+    
+    # Check if the policy matches the expected format
+    if ! [[ $policy =~ $retention_regex ]]; then
+        echo "Invalid: Retention policy format should be a combination of #h, #d, #w, #m, #y"
+        return 1
+    fi
+}
 
 ################################################################################
 #                            RESTIC COMMAND
@@ -371,8 +484,10 @@ backup_start_services() {
 ################################################################################
 #                                 SCHEDULE STEPS
 
-backup_schedule_check() {
+backup_configure_enabled() {
+    if [ "$BACKUP_ENABLED_CHANGE" = true ]; then
     (
+        #Running in a subshell to avoid polluting environment with restic variables
         restic_load_env || return 1
         if [ -z "$RESTIC_REPOSITORY" ]; then
             log_error "The value for RESTIC_REPOSITORY is missing from '$RESTIC_ENV'"
@@ -387,6 +502,26 @@ backup_schedule_check() {
             return 1
         fi
     ) || return 1
+    fi
+    save_env BACKUP_ENABLED "$BACKUP_ENABLED_CHANGE"
+}
+
+backup_configure_schedule() {
+    local result
+    result=$(validate_cron_regex "$BACKUP_SCHEDULE_CHANGE") || {
+        log_error "The schedule cron expression is invalid. $result"
+        return 1
+    }
+    save_env BACKUP_SCHEDULE "'$BACKUP_SCHEDULE_CHANGE'"
+}
+
+backup_configure_retention() {
+    local result
+    result=$(validate_retention_policy "$BACKUP_RETENTION_POLICY_CHANGE") || {
+        log_error "The retention policy expression is invalid. $result"
+        return 1
+    }
+    save_env BACKUP_RETENTION_POLICY "$BACKUP_RETENTION_POLICY_CHANGE"
 }
 
 ################################################################################

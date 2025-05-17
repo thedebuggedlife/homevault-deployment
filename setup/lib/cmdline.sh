@@ -6,6 +6,8 @@ __LIB_CMDLINE=1
 
 # shellcheck source=./logging.sh
 source "$PROJECT_ROOT/lib/logging.sh"
+# shellcheck source=./backup.sh
+source "$PROJECT_ROOT/lib/backup.sh"
 
 print_usage() {
     if [ -z "$SELECTED_ACTION" ]; then
@@ -26,7 +28,6 @@ print_usage() {
         echo "      --module all                Enables all available modules."
         echo -e "  --rm <module>                   Removes a module that had been previously installed. ${IRed}Use with caution!${COff}" 
         echo "  -o, --override <var>=<value>    Override environment variable. Can be specified multiple times."
-        echo "  --no-download                   Do not download appdata from GitHub. Only use if appdata was previously downloaded."
         echo -e "  --keep-compose                  Do not override previously deployed docker-compose files. ${IRed}Use with caution!${COff}"
         echo -e "  --override-versions             Override running versions with those specified in compose files. ${IRed}Use with caution!${COff}"
         echo "  --dry-run                       Execute docker compose in dry run mode."
@@ -51,7 +52,7 @@ print_usage() {
         echo "                                  Examples:"
         echo "                                    --cron '0 0 * * 0'    (every Sunday at midnight)"
         echo "                                    --cron '0 0 1 * *'    (first day of each month at midnight)"
-        echo "  --retention [policy]            Configure the retention policy for automatic snapshots."
+        echo "  --retention <policy>            Configure the retention policy for automatic snapshots."
         echo "                                  Format: '[#h][#d][#w][#m][#y]' Where: h=hour,d=day,w=week,m=month,y=year"
         echo "                                  Default: 30d12m10y"
         echo "                                  Examples:"
@@ -93,6 +94,7 @@ print_usage() {
     echo "  -h, --help                      Display this help message."
     echo "  -u, --user <user>               User to apply for file permissions. [Default: '$USER']"
     echo "  --always-ask                    Force interactive prompts for settings with a default or previously provided."
+    echo "  --no-download                   Do not download data from GitHub. Only use if all selected modules have been previously deployed."
     echo "  --unattended                    Do not stop for any prompt. Safe prompts will be auto-accepted."
     echo "                                  Prompts that cannot be auto-accepted will cause the script to exit with a failure code."
 
@@ -178,10 +180,6 @@ parse_deploy_option() {
             OVERRIDE_VERSIONS=true
             return 1
             ;;
-        --no-download)
-            NO_DOWNLOAD=true
-            return 1
-            ;;
         --dry-run)
             DRY_RUN=true
             return 1
@@ -223,20 +221,54 @@ parse_backup_run_option() {
 parse_backup_schedule_option() {
     case "$(echo "$1" | tr '[:upper:]' '[:lower:]')" in
         --enable)
-            if [ -n "$BACKUP_SCHEDULE_ENABLED" ]; then
+            if [ -n "$BACKUP_ENABLED_CHANGE" ]; then
                 log_invalid "Only one of '--enable' or '--disable' can be specified"
                 return 255
             fi
-            BACKUP_SCHEDULE_ENABLED=true
+            BACKUP_ENABLED_CHANGE=true
             return 1
             ;;
         --disable)
-            if [ -n "$BACKUP_SCHEDULE_ENABLED" ]; then
+            if [ -n "$BACKUP_ENABLED_CHANGE" ]; then
                 log_invalid "Only one of '--enable' or '--disable' can be specified"
                 return 255
             fi
-            BACKUP_SCHEDULE_ENABLED=false
+            BACKUP_ENABLED_CHANGE=false
             return 1
+            ;;
+        --cron)
+            if [ "$BACKUP_SCHEDULE_CHANGE" = true ]; then
+                log_invalid "$1 can only be specified once"
+                return 255
+            fi
+            if [ -z "$2" ]; then
+                log_invalid "$1 requires a value."
+                return 255
+            fi
+            local result
+            result=$(validate_cron_regex "$2") || {
+                log_invalid "$result"
+                return 255
+            }
+            BACKUP_SCHEDULE_CHANGE="$2"
+            return 2
+            ;;
+        --retention)
+            if [ "$BACKUP_RETENTION_POLICY_CHANGE" = true ]; then
+                log_invalid "$1 can only be specified once"
+                return 255
+            fi
+            if [ -z "$2" ]; then
+                log_invalid "$1 requires a value."
+                return 255
+            fi
+            local result
+            result=$(validate_retention_policy "$2") || {
+                log_invalid "$result"
+                return 255
+            }
+            BACKUP_RETENTION_POLICY_CHANGE="$2"
+            return 2
             ;;
     esac
 }
@@ -438,6 +470,10 @@ parse_global_option() {
             ;;
         --always-ask)
             USE_DEFAULTS=false
+            return 1
+            ;;
+        --no-download)
+            NO_DOWNLOAD=true
             return 1
             ;;
         -h | --help)

@@ -29,8 +29,19 @@ declare -g AS_USER="$USER"
 declare -g COMPOSE_PROJECT_NAME=homevault
 declare -g COMPOSE_OPTIONS=
 declare -g COMPOSE_UP_OPTIONS=
+
+# Defaults to false, if set to true, docker and restic operations will be passed the --dry-run parameter
+# Can be set with the --dry-run command line option
 declare -g DRY_RUN=false
+
+# Defaults to false, if set to true, a restart will be requested at the end of the deployment
 declare -g REQUIRES_RESTART=false
+
+# Defaults to empty, use it to override which services to pass to docker-compose
+declare -g DEPLOY_SERVICES=
+
+# Defaults to empty, the values in the map override the default values for prompts
+# Can be set the -o|--override on command line option
 declare -gA ENV_OVERRIDES
 
 # Administrator account
@@ -408,7 +419,7 @@ deploy_project() {
     log_header "Deploying services"
 
     echo -e "Deploying project ${Purple}$COMPOSE_PROJECT_NAME${COff}..."
-    if ! sg docker -c "docker compose $COMPOSE_OPTIONS up $COMPOSE_UP_OPTIONS"; then
+    if ! sg docker -c "docker compose $COMPOSE_OPTIONS up $COMPOSE_UP_OPTIONS $DEPLOY_SERVICES"; then
         log_error "Docker Compose deployment failed"
         return 1
     fi
@@ -588,14 +599,32 @@ backup_action_run() {
 
 backup_action_schedule() {
     log_header "Configuring scheduled backups"
-    if [[ "$BACKUP_SCHEDULE_ENABLED" = true ]]; then
-        backup_schedule_check || return 1
-        save_env BACKUP_ENABLED true
-        run_deploy
+    local has_changes=false
+    if [ -n "$BACKUP_SCHEDULE_CHANGE" ]; then
+        has_changes=true
+        backup_configure_schedule || return 1
     fi
-    if [[ "$BACKUP_SCHEDULE_ENABLED" = false ]]; then
-        save_env BACKUP_ENABLED false
-        run_deploy
+    if [ -n "$BACKUP_RETENTION_POLICY_CHANGE" ]; then
+        has_changes=true
+        backup_configure_retention || return 1
+    fi
+    if [ -n "$BACKUP_ENABLED_CHANGE" ]; then
+        backup_configure_enabled || return 1
+    fi
+    if [ "$BACKUP_ENABLED" = false ] && compose_service_exists backup; then
+        echo -e "Removing service ${Purple}backup${COff} from deployment\n"
+        docker compose -p "$COMPOSE_PROJECT_NAME" down backup || {
+            log_error "Failed to remove backup service"
+            return 1
+        }
+    elif [ "$BACKUP_ENABLED" = true ]; then
+        if [ "$has_changes" = true ] || ! compose_service_exists backup --status running; then
+            DEPLOY_SERVICES=backup
+            NO_DOWNLOAD=true
+            OVERRIDE_COMPOSE=false
+            OVERRIDE_VERSIONS=false
+            run_deploy || return 1
+        fi
     fi
 }
 
@@ -632,7 +661,7 @@ restore_action_local() {
     log_header "Performing local restore operation"
     restore_configure_local || return 1
     load_deployment_file || return 1
-    run_deploy
+    run_deploy || return 1
 }
 
 restore_action_snapshot() {
@@ -640,7 +669,7 @@ restore_action_snapshot() {
     restore_configure_remote || return 1
     restore_snapshot || return 1
     restore_configure_local || return 1
-    run_deploy
+    run_deploy || return 1
 }
 
 run_restore() {
