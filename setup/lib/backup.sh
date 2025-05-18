@@ -176,7 +176,7 @@ restic() {
     done
     shift $((OPTIND - 1))
     # Bind all directories under the same path in the container
-    cmd="docker run -q --rm "
+    cmd="docker run -q --rm -e TZ=$TZ"
     if [ -n "$data_paths" ]; then
         local path_array
         IFS=':' read -ra path_array <<< "$data_paths"
