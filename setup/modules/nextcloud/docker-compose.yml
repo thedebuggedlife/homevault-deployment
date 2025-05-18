@@ -126,6 +126,9 @@ services:
       - ELASTIC_SEARCH_INDEX=elastic
       - ELASTIC_SEARCH_USER=elastic
       - ELASTIC_SEARCH_PASSWORD_FILE=/run/secrets/nextcloud_elastic_password
+      - OVERWRITEHOST=${NEXTCLOUD_SUBDOMAIN}.${CF_DOMAIN_NAME}
+      - OVERWRITECLIURL=https://${NEXTCLOUD_SUBDOMAIN}.${CF_DOMAIN_NAME}
+      - OVERWRITEPROTOCOL=https
     labels:
       selfhost.module.nextcloud: 1
       dns.manage: true
