@@ -328,8 +328,8 @@ configure_backup() {
 
 base_config_env() {
     # Global Settings
-    ask_for_env APPDATA_LOCATION "Application Data folder"
-    ask_for_env TZ "Server Timezone"
+    ask_for_env APPDATA_LOCATION "Application Data folder" -v "$RE_VALID_PATH"
+    ask_for_env TZ "Server Timezone" -v is_valid_timezone -E "Please enter a valid timezone. See: https://timeapi.io/documentation/iana-timezones"
     save_env HOSTNAME "${HOSTNAME}"
     save_env INSTALLER_UID "$(id -u "$USER")"
     save_env DOCKER_GID "$(getent group docker | cut -d: -f3)"
@@ -339,9 +339,9 @@ base_config_env() {
 
     # Cloudflare Settings
     ask_for_env CF_DNS_API_TOKEN "Cloudflare API Token"
-    ask_for_env CF_DOMAIN_NAME "Domain Name (e.g. example.com)"
+    ask_for_env CF_DOMAIN_NAME "Domain Name (e.g. example.com)" -v "$RE_MAIN_DOMAIN"
     save_env CF_DOMAIN_CN "\"$(echo "$CF_DOMAIN_NAME" | sed 's/^/dc=/' | sed 's/\./,dc=/g')\""
-    ask_for_env CF_TUNNEL_NAME "Cloudflare Tunnel Name"
+    ask_for_env CF_TUNNEL_NAME "Cloudflare Tunnel Name" -v "$RE_VALID_TUNNEL_NAME"
 
     # SMTP Server Settings
     if [ -z "$USE_SMTP2GO" ]; then
@@ -353,13 +353,13 @@ base_config_env() {
         fi
     fi
     ask_for_env SMTP2GO_API_KEY "SMTP2GO API Key"
-    ask_for_env SMTP_SENDER "SMTP Email From (username only)"
+    ask_for_env SMTP_SENDER "SMTP Email From (username only)" -v "$RE_VALID_EMAIL_NAME"
     if [ "$USE_SMTP2GO" != "true" ]; then
-        ask_for_env SMTP_USERNAME "SMTP Server Username"
-        ask_for_env SMTP_PASSWORD "SMTP Server Password"
-        ask_for_env SMTP_SERVER "SMTP Server Address"
-        ask_for_env SMTP_PORT "SMTP Server Port"
-        ask_for_env SMTP_SECURE "SMTP Security Protocol (optional) ('tls' or 'ssl')" -e
+        ask_for_env SMTP_USERNAME "SMTP Server Username" -v "$RE_VALID_EMAIL_NAME"
+        ask_for_env SMTP_PASSWORD "SMTP Server Password".
+        ask_for_env SMTP_SERVER "SMTP Server Address" -v "$RE_VALID_HOSTNAME"
+        ask_for_env SMTP_PORT "SMTP Server Port" -v "$RE_VALID_PORT_NUMBER"
+        ask_for_env SMTP_SECURE "SMTP Security Protocol (optional)" -e -o "tls,ssl"
     else
         if [ -z "$SMTP_USERNAME" ]; then
             save_env SMTP_USERNAME "selfhost@${CF_DOMAIN_NAME}"
@@ -368,7 +368,7 @@ base_config_env() {
     fi
 
     # Authelia Settings
-    ask_for_env AUTHELIA_THEME "Authelia admin website theme (dark | light)"
+    ask_for_env AUTHELIA_THEME "Authelia admin website theme" -o "dark,light"
 }
 
 base_config_secrets() {

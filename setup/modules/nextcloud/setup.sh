@@ -15,9 +15,9 @@ nextcloud_run_occ() {
 #                         NEXTCLOUD SETUP HOOKS
 
 nextcloud_config_env() {
-    ask_for_env NEXTCLOUD_SUBDOMAIN "Subdomain under ${CF_DOMAIN_NAME} to use for Nextcloud"
-    ask_for_env NEXTCLOUD_DATA_LOCATION "Nextcloud document storage location"
-    ask_for_env NEXTCLOUD_FTS_MEMORY_LIMIT "Memory limit for ElasticSearch (units: #m or #g)"
+    ask_for_env NEXTCLOUD_SUBDOMAIN "Subdomain under ${CF_DOMAIN_NAME} to use for Nextcloud" -v "$RE_VALID_LOCAL_HOSTNAME"
+    ask_for_env NEXTCLOUD_DATA_LOCATION "Nextcloud document storage location" -v "$RE_VALID_PATH"
+    ask_for_env NEXTCLOUD_FTS_MEMORY_LIMIT "Memory limit for ElasticSearch (units: #m or #g)" -v "^([0-9]+[mg])+$" -E "Not a valid size. Supported units: m, g. Ex: 2g"
     save_env_id NEXTCLOUD_TOKEN
 }
 

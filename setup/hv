@@ -480,8 +480,8 @@ configure_admin_account() {
         echo -e "The following user will be created and configured with ${Yellow}administrator privileges${COff} across all applications."
         echo
 
-        ADMIN_USERNAME=$(ask_value "Username" -d "$ADMIN_USERNAME")
-        ADMIN_EMAIL=$(ask_value "Email address" -d "$ADMIN_EMAIL")
+        ADMIN_USERNAME=$(ask_value "Username" -d "$ADMIN_USERNAME" -v "$RE_VALID_USERNAME")
+        ADMIN_EMAIL=$(ask_value "Email address" -d "$ADMIN_EMAIL" -v "$RE_VALID_EMAIL")
         while true; do
             local confirm_pass
             ADMIN_PASSWORD=$(ask_value "Password" -m)

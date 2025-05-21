@@ -242,7 +242,7 @@ cockpit_configure_dns() {
 #                          COCKPIT SETUP HOOKS
 
 cockpit_config_env() {
-    ask_for_env COCKPIT_SUBDOMAIN "Subdomain under ${CF_DOMAIN_NAME} to use for Cockpit"
+    ask_for_env COCKPIT_SUBDOMAIN "Subdomain under ${CF_DOMAIN_NAME} to use for Cockpit" -v "$RE_VALID_LOCAL_HOSTNAME"
 }
 
 cockpit_pre_install() {

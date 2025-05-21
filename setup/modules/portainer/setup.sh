@@ -252,7 +252,7 @@ portainer_configure_oauth() {
 #                          PORTAINER SETUP HOOKS
 
 portainer_config_env() {
-    ask_for_env PORTAINER_SUBDOMAIN "Subdomain under ${CF_DOMAIN_NAME} to use for Portainer"
+    ask_for_env PORTAINER_SUBDOMAIN "Subdomain under ${CF_DOMAIN_NAME} to use for Portainer" -v "$RE_VALID_LOCAL_HOSTNAME"
 }
 
 portainer_config_secrets() {

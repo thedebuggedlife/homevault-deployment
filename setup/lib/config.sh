@@ -1,3 +1,5 @@
+# shellcheck disable=SC2034
+
 if [ -n "$__LIB_CONFIG" ]; then return 0; fi
 
 __LIB_CONFIG=1
@@ -9,32 +11,79 @@ _PYTHON_INSTALLED=
 _UPNPC_INSTALLED=
 
 ################################################################################
+#                           PARAMETER VALIDATION
+
+RE_VALID_PATH="^(/?([a-zA-Z0-9._-]+))*/?$"
+
+RE_VALID_LOCAL_HOSTNAME="^[a-zA-Z0-9][-a-zA-Z0-9]{0,62}$"
+
+RE_VALID_HOSTNAME="^([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])(\.([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]{0,61}[a-zA-Z0-9]))*$"
+
+RE_VALID_USERNAME="^[a-z_][a-z0-9_-]{0,31}$"
+
+RE_VALID_UID="^([0-9]|[1-9][0-9]{1,8})$"
+
+RE_VALID_NUMBER="^([0-9]|[1-9][0-9]{1,8})$"
+
+RE_MAIN_DOMAIN="^[a-zA-Z0-9][-a-zA-Z0-9]{0,61}[a-zA-Z0-9]\.[a-zA-Z][-a-zA-Z0-9]{0,61}[a-zA-Z]$"
+
+RE_VALID_TUNNEL_NAME="^[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$"
+
+RE_VALID_EMAIL="^(([A-Za-z0-9]+((\.|\-|\_|\+)?[A-Za-z0-9]?)*[A-Za-z0-9]+)|[A-Za-z0-9]+)@(([A-Za-z0-9]+)+((\.|\-|\_)?([A-Za-z0-9]+)+)*)+\.([A-Za-z]{2,})+$"
+
+RE_VALID_EMAIL_NAME="^[a-zA-Z0-9][-a-zA-Z0-9._]{0,62}[a-zA-Z0-9]$|^[a-zA-Z0-9]$"
+
+RE_VALID_PORT_NUMBER="^([1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$"
+
+RE_VALID_DURATION="^([0-9]+[smhdwy])+$"
+
+MSG_INVALID_DURATION="Not a valid duration. Units supported: y, w, d, h, m, s, ms. Ex: 7d"
+
+RE_VALID_STORAGE_SIZE="^[0-9]+([KMGTP]B|B)$"
+
+MSG_INVALID_STORAGE_SIZE="Not a valid size. Units supported: B, KB, MB, GB, TB, PB, EB. Ex: 100GB"
+
+is_valid_timezone() {
+  local timezone="$1"
+  if [ -f "/usr/share/zoneinfo/$timezone" ]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+################################################################################
 #                           MANIPULATING .ENV FILE
 
 ###
 # Asks user for input
 #
-# @param {string} prompt    - The prompt to display
-# Options:
-#   -e              Allow empty values
-#   -m              Mask the input (e.g. for passwords)
-#   -d {default}    Default value if not specified
-#   -o {options}    Valid options user can provide
-# @return {string} The value entered by the user
+# @param    $1  {string}    The prompt to display
+# @option   -d  {default}   Default value if not specified
+# @option   -e  {flag}      Allow empty values
+# @option   -m  {flag}      Mask the input (e.g. for passwords)
+# @option   -o  {list}      Valid options (comma-separated list)
+# @option   -v  {string}    Regex pattern to validate input against, or name of a validation function
+# @option   -E  {message}   Custom error message when validation fails
+# @return       {string}    The value entered by the user
 ###
 ask_value() {
     local prompt="$1"
     local default options
     local required=true
     local masked=false
+    local validation_pattern
+    local validation_error="Please enter a valid value."
     local user_input
     OPTIND=2
-    while getopts ":emd:o:" opt; do
+    while getopts ":emd:o:v:E:" opt; do
         case $opt in
             e) required=false ;;
             m) masked=true ;;
             d) default="$OPTARG" ;;
             o) options="$OPTARG" ;;
+            v) validation_pattern="$OPTARG" ;;
+            E) validation_error="$OPTARG" ;;
             \?) log_warn "Invalid option: -$OPTARG" ;;
             :) log_warn "Option -$OPTARG requires an argument" ;;
         esac
@@ -55,13 +104,30 @@ ask_value() {
         read "${args[@]}" -p "$prompt: " user_input </dev/tty
         if [ "$masked" = true ]; then echo >&2; fi
         user_input=${user_input:-${default}}
-        if [[ -z "$user_input" && "$required" = "true" ]]; then
+        if [ -z "$user_input" ]; then
+            if [ "$required" = "false" ]; then
+                break;
+            fi
             echo -e "\n${Yellow}Empty value is not allowed. Please try again.${COff}\n" >&2
             continue
         fi
         if [ -n "$options" ] && ! echo ",$options," | grep -q ",${user_input},"; then
-            echo -e "\n${Yellow}Value must be one of the options: ${options}\n" >&2
+            echo -e "\n${Yellow}Value must be one of the options: ${options}${COff}\n" >&2
             continue
+        fi
+        if [ -n "$validation_pattern" ]; then
+            # Check if validation_pattern is a function name (no spaces, starts with letter)
+            if [[ "$validation_pattern" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]] && declare -F "$validation_pattern" >/dev/null; then
+                # Call the validation function
+                if ! "$validation_pattern" "$user_input"; then
+                    echo -e "\n${Yellow}${validation_error}${COff}\n" >&2
+                    continue
+                fi
+            # Otherwise treat as regex pattern
+            elif ! [[ "$user_input" =~ $validation_pattern ]]; then
+                echo -e "\n${Yellow}${validation_error}${COff}\n" >&2
+                continue
+            fi
         fi
         break
     done
@@ -164,14 +230,14 @@ save_env_id() {
 ###
 # Prompt user for a value and save to $ENV_FILE
 #
-# Params:
-#   $1 Variable name
-#   $2 Text prompt
-# Options:
-#   -i Ignore existing value (i.e. do not offer as default)
-#   -e Allow empty values
-#   -m Mask the input (e.g. for passwords)
-#   -o Valid options (comma-separated list)
+# @param    $1 {string}     Variable name
+# @param    $2 {string}     Text prompt
+# @option   -i {flag}       Ignore existing value (i.e. do not offer as default)
+# @option   -e {flag}       Allow empty values
+# @option   -m {flag}       Mask the input (e.g. for passwords)
+# @option   -o {string}     Valid options (comma-separated list)
+# @option   -v {string}     Regex pattern to validate input against, or name of a validation function
+# @option   -E {message}    Custom error message when validation fails
 ###
 ask_for_env() {
     local env_variable=$1
@@ -179,12 +245,14 @@ ask_for_env() {
     local -a input_opts=()
     local use_default=true
     OPTIND=3
-    while getopts ":iemo:" opt; do
+    while getopts ":iemo:v:E:" opt; do
         case $opt in
             i) use_default=false ;;
             e) input_opts+=("-e") ;;
             m) input_opts+=("-m") ;;
             o) input_opts+=("-o" "$OPTARG") ;;
+            v) input_opts+=("-v" "$OPTARG") ;;
+            E) input_opts+=("-E" "$OPTARG") ;;
             \?) log_warn "Invalid option: -$OPTARG" ;;
             :) log_warn "Option -$OPTARG requires an argument" ;;
         esac

@@ -32,7 +32,7 @@ homepage_merge_config() {
 #                          HOMEPAGE SETUP HOOKS
 
 homepage_config_env() {
-    ask_for_env HOMEPAGE_SUBDOMAIN "Subdomain under ${CF_DOMAIN_NAME} to use for Homepage"
+    ask_for_env HOMEPAGE_SUBDOMAIN "Subdomain under ${CF_DOMAIN_NAME} to use for Homepage" -v "$RE_VALID_LOCAL_HOSTNAME"
 }
 
 homepage_compose_extra() {
