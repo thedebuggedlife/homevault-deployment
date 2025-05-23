@@ -79,17 +79,17 @@ download_module_appdata() {
     local module_name=$1
     local appdata_url="$GH_IO_BASE_URL/$module_name.zip"
 
-    echo -e "Downloading appdata from ${Cyan}$appdata_url${COff} ...\n"
+    log "Downloading appdata from ${Cyan}$appdata_url${COff} ...\n"
     curl -fsSL "$appdata_url" \
         | sudo busybox unzip -n - -d "$APPDATA_LOCATION" 2>&1 \
         | { grep -E "creating:|inflating:" || echo ""; } \
         | awk -F': ' '{print $2}' \
         | while read -r path; do
             full_path="${APPDATA_LOCATION%/}/$path"
-            echo -e "Changing owner of: ${Purple}${full_path}${COff}"
+            log "Changing owner of: ${Purple}${full_path}${COff}"
             sudo chown "$AS_USER":docker "$full_path"
             if [[ "$path" == *.sh ]]; then
-                echo -e "Setting execute flag on: ${Purple}${full_path}${COff}"
+                log "Setting execute flag on: ${Purple}${full_path}${COff}"
                 sudo chmod +x "$full_path"
             fi
         done || \
@@ -175,11 +175,11 @@ check_port_routing() {
     local test_string="PORT_CHECK_$(date +%s)"
 
     if (echo >"/dev/tcp/localhost/$port") 2>/dev/null; then
-        echo -e "\n${BIYellow}WARNING${COff}: Cannot check if port ${Cyan}$port${COff} is forwarded because it is already in use" >&2
+        log "\n${BIYellow}WARNING${COff}: Cannot check if port ${Cyan}$port${COff} is forwarded because it is already in use"
         return 1
     fi
 
-    echo -e "Checking if port ${Cyan}$port${COff} on this host is accessible from the internet" >&2
+    log "Checking if port ${Cyan}$port${COff} on this host is accessible from the internet"
 
     local public_ip
     public_ip=$(get_public_ip) || return 1
@@ -189,17 +189,17 @@ check_port_routing() {
     IFS=':' read -r server_pid temp_dir <<< "$server_info"
 
     while true; do
-        echo -n "." >&2
+        log -n "."
         response=$(curl -s --connect-timeout 5 "http://${public_ip}:${port}/")
         if echo "$response" | grep -q "$test_string"; then
-            echo -e "\n${BIGreen}SUCCESS${COff}: Port ${Cyan}$port${COff} is properly routed to this machine" >&2
+            log "\n${BIGreen}SUCCESS${COff}: Port ${Cyan}$port${COff} is properly routed to this machine"
             kill "$server_pid" 2>/dev/null; rm -rf "$temp_dir" 2>/dev/null
             return 0
         else
             # shellcheck disable=SC2155
             local current_time=$(date +%s)
             if [ "$current_time" -ge $end_time ]; then
-                echo -e "\n${BIYellow}WARNING${COff}: Port ${Cyan}$port${COff} is not accessible or not routed to this machine" >&2
+                log "\n${BIYellow}WARNING${COff}: Port ${Cyan}$port${COff} is not accessible or not routed to this machine"
                 kill "$server_pid" 2>/dev/null; rm -rf "$temp_dir" 2>/dev/null
                 return 1
             fi

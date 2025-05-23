@@ -125,34 +125,34 @@ immich_configure_admin_account() {
     local is_onboarded
     if ! is_onboarded=$(immich_get_server_config | jq -r '.isInitialized'); then return 1; fi
     if [ "$is_onboarded" = true ]; then
-        echo "Immich administrator account is already onboarded."
+        log "Immich administrator account is already onboarded."
         return 0
     fi
-    echo "Onboarding Immich administrator account..."
+    log "Onboarding Immich administrator account..."
     immich_admin_sign_up "$ADMIN_EMAIL" "$ADMIN_PASSWORD" "$ADMIN_DISPLAY_NAME" > /dev/null || return 1
-    echo -e "Administrator account ${Purple}$ADMIN_EMAIL${COff} has been onboarded to Immich"
+    log "Administrator account ${Purple}$ADMIN_EMAIL${COff} has been onboarded to Immich"
 }
 
 immich_configure_api_key() {
     if [ -n "$IMMICH_API_KEY" ]; then
-        echo "Immich API Key is already configured."
+        log "Immich API Key is already configured."
         return 0
     fi
-    echo "Logging in administrator account..."
+    log "Logging in administrator account..."
     if ! IMMICH_TOKEN=$(immich_login "$ADMIN_EMAIL" "$ADMIN_PASSWORD" | jq -r '.accessToken'); then
         log_error "Failed to sign user '$ADMIN_EMAIL' to Immich."
         return 1
     fi
-    echo "Creating new API Key..."
+    log "Creating new API Key..."
     local api_key
     if ! api_key=$(immich_create_api_key "Selfhost" "systemConfig.read" "systemConfig.update"); then return 1; fi
-    echo "Logging out administrator account..."
+    log "Logging out administrator account..."
     immich_logout
     save_env IMMICH_API_KEY "$api_key"
 }
 
 immich_configure_oauth() {
-    echo "Fetching current Immich server configuration..."
+    log "Fetching current Immich server configuration..."
     
     local immich_config client_secret
     if ! immich_config=$(immich_get_system_config); then
@@ -198,7 +198,7 @@ immich_configure_oauth() {
         return 1
     fi
 
-    echo "Saving updated Immich server configuration..."
+    log "Saving updated Immich server configuration..."
 
     immich_update_system_config "$immich_config" >/dev/null || return 1
 }

@@ -83,14 +83,14 @@ tailscale_disable_key_expiration() {
 ###
 tailscale_check_installed() {
     if ! command -v tailscale >/dev/null 2>&1; then
-        echo -e "\n${Yellow}Tailscale is not installed.${COff}"
+        log "\n${Yellow}Tailscale is not installed.${COff}"
         local user_input=Y
         if [ "$UNATTENDED" != "true" ]; then
             read -p "Do you want to install tailscale? [Y/n] " user_input </dev/tty
             user_input=${user_input:-Y}
         fi
         if [[ "$user_input" =~ ^[Yy]$ ]]; then
-            echo "Installing tailscale..."
+            log "Installing tailscale..."
             if ! curl -fsSL https://tailscale.com/install.sh | sh >/dev/null; then
                 log_error "Failed to install tailscale"
                 exit 1
@@ -99,7 +99,7 @@ tailscale_check_installed() {
                     log_error "Failed to enable tailscale auto-start"
                     exit 1
                 }
-                echo -e "\n✅ Tailscale installation completed successfully\n"
+                log "\n✅ Tailscale installation completed successfully\n"
             fi
         else
             abort_install
@@ -114,15 +114,15 @@ tailscale_check_installed() {
 ###
 tailscale_connect() {
     if tailscale status >/dev/null 2>&1; then 
-        echo "Tailscale is already connected."
+        log "Tailscale is already connected."
         return 0; 
     fi
     if sudo tailscale up --timeout 5s >/dev/null 2>&1; then
-        echo "Tailscale connected with existing authentication."
+        log "Tailscale connected with existing authentication."
         return 0;
     fi
     local connected=false
-    echo "Generating new auth key..."
+    log "Generating new auth key..."
     local -a up_params=()
     if [ -n "$TAILSCALE_API_KEY" ]; then
         local auth_key
@@ -131,7 +131,7 @@ tailscale_connect() {
         fi
         up_params+=("--auth-key=$auth_key")
     fi
-    echo "Authenticating with Tailscale..."
+    log "Authenticating with Tailscale..."
     if ! sudo tailscale up "${up_params[@]}"; then
         log_error "Failed to initiate tailscale connection."
         exit 1
@@ -176,10 +176,10 @@ tailscale_configure_device() {
     while [ $attempt -le $max_attempts ]; do
         if device=$(tailscale_find_device "$TAILSCALE_IP") && [ -n "$device" ]; then
             device_name=$(echo "$device" | jq -r '.name')
-            echo -e "Tailscale device name: ${Purple}$device_name${COff}"
+            log "Tailscale device name: ${Purple}$device_name${COff}"
             expiry_disabled=$(echo "$device" | jq -r '.keyExpiryDisabled')
             if [ "$expiry_disabled" = true ]; then
-                echo "Key expiration is already disabled"
+                log "Key expiration is already disabled"
                 return 0
             fi
             if ! device_id=$(echo "$device" | jq -r '.id'); then
@@ -189,13 +189,13 @@ tailscale_configure_device() {
             if ! tailscale_disable_key_expiration "$device_id" >/dev/null; then
                 exit 1
             fi
-            echo -e "Key expiration disabled for this device."
+            log "Key expiration disabled for this device."
             return 0
         fi
         
         # Device not found yet
         if [ $attempt -lt $max_attempts ]; then
-            echo -e "Device with IP ${Purple}$TAILSCALE_IP${COff} not found yet, retrying in 5 seconds... (attempt $attempt/$max_attempts)"
+            log "Device with IP ${Purple}$TAILSCALE_IP${COff} not found yet, retrying in 5 seconds... (attempt $attempt/$max_attempts)"
             sleep 5
         fi
         
@@ -215,7 +215,7 @@ tailscale_save_status() {
         status: $status,
     }
     ' > "$status_file" || return 1
-    echo -e "Tailscale configuration cached to ${Cyan}$status_file${COff}"
+    log "Tailscale configuration cached to ${Cyan}$status_file${COff}"
 }
 
 tailscale_load_status() {
@@ -247,5 +247,5 @@ configure_tailscale() {
     tailscale_save_status configured || {
         log_warn "Failed to cache tailscale status to '$status_file'"
     }
-    echo -e "Tailscale is connected. Address: ${Cyan}$TAILSCALE_IP${COff}"
+    log "Tailscale is connected. Address: ${Cyan}$TAILSCALE_IP${COff}"
 }

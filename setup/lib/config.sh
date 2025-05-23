@@ -100,19 +100,19 @@ ask_value() {
     if [ -n "$display" ]; then prompt="$prompt [$display]"; fi
 
     while true; do
-        echo >&2
+        log
         read "${args[@]}" -p "$prompt: " user_input </dev/tty
-        if [ "$masked" = true ]; then echo >&2; fi
+        if [ "$masked" = true ]; then log; fi
         user_input=${user_input:-${default}}
         if [ -z "$user_input" ]; then
             if [ "$required" = "false" ]; then
                 break;
             fi
-            echo -e "\n${Yellow}Empty value is not allowed. Please try again.${COff}\n" >&2
+            log "\n${Yellow}Empty value is not allowed. Please try again.${COff}\n"
             continue
         fi
         if [ -n "$options" ] && ! echo ",$options," | grep -q ",${user_input},"; then
-            echo -e "\n${Yellow}Value must be one of the options: ${options}${COff}\n" >&2
+            log "\n${Yellow}Value must be one of the options: ${options}${COff}\n"
             continue
         fi
         if [ -n "$validation_pattern" ]; then
@@ -120,12 +120,12 @@ ask_value() {
             if [[ "$validation_pattern" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]] && declare -F "$validation_pattern" >/dev/null; then
                 # Call the validation function
                 if ! "$validation_pattern" "$user_input"; then
-                    echo -e "\n${Yellow}${validation_error}${COff}\n" >&2
+                    log "\n${Yellow}${validation_error}${COff}\n"
                     continue
                 fi
             # Otherwise treat as regex pattern
             elif ! [[ "$user_input" =~ $validation_pattern ]]; then
-                echo -e "\n${Yellow}${validation_error}${COff}\n" >&2
+                log "\n${Yellow}${validation_error}${COff}\n"
                 continue
             fi
         fi
@@ -177,7 +177,7 @@ save_env() {
     local env_variable=$1
     local env_value=$2
     local env_file=${3:-$ENV_FILE}
-    echo -e "Saving ${Purple}$env_variable${COff} in ${Cyan}$env_file${COff}"
+    log "Saving ${Purple}$env_variable${COff} in ${Cyan}$env_file${COff}"
     
     # Check if the variable exists in the file
     if grep -q "^${env_variable}=" "$env_file"; then
@@ -294,7 +294,7 @@ save_env_secret() {
         log_error "Missing value for '$env_variable' in '$ENV_FILE'"
         exit 1
     fi
-    echo -e "Creating secret file ${Cyan}$secret_filename${COff}"
+    log "Creating secret file ${Cyan}$secret_filename${COff}"
     printf "%s" "${!env_variable}" >"$secret_filename"
 }
 
@@ -305,7 +305,7 @@ create_secret() {
     local secret_filename=$1
     local SECRET_LENGTH=${2:-40}
     if [ -f "$secret_filename" ]; then
-        echo -e "Secret file ${Cyan}$secret_filename${COff} already exists."
+        log "Secret file ${Cyan}$secret_filename${COff} already exists."
     else
         local secret_value
         secret_value=$(tr -cd '[:alnum:]' </dev/urandom | fold -w "${SECRET_LENGTH}" | head -n 1 | tr -d '\n')
@@ -323,7 +323,7 @@ create_password_digest_pair() {
     local password_filename="${pair_name}_password"
     local digest_filename="${pair_name}_digest"
     if [ -f "$password_filename" ] && [ -f "$digest_filename" ]; then
-        echo -e "The password and digest files for ${Cyan}$pair_name${COff} already exist."
+        log "The password and digest files for ${Cyan}$pair_name${COff} already exist."
         return 0
     fi
     local output password_value digest_value
@@ -334,9 +334,9 @@ create_password_digest_pair() {
         log_error "Password or digest extraction failed."
         exit 1
     fi
-    echo -e "Creating password file ${Cyan}$password_filename${COff}"
+    log "Creating password file ${Cyan}$password_filename${COff}"
     printf "%s" "$password_value" >"$password_filename"
-    echo -e "Creating digest file ${Cyan}$digest_filename${COff}"
+    log "Creating digest file ${Cyan}$digest_filename${COff}"
     printf "%s" "$digest_value" >"$digest_filename"
 }
 
@@ -349,18 +349,18 @@ create_rsa_keypair() {
     local public_key=$2
     local key_length=${3:-2048}
     if [ -f "$private_key" ]; then
-        echo -e "Private key file ${Cyan}$private_key${COff} already exists."
+        log "Private key file ${Cyan}$private_key${COff} already exists."
     else
-        echo -e "Generating private key ${Cyan}$private_key${COff}."
+        log "Generating private key ${Cyan}$private_key${COff}."
         if ! openssl genrsa -out "$private_key" $key_length; then
             log_error "Failed to generate private key '$private_key'."
             exit 1
         fi
     fi
     if [ -f "$public_key" ]; then
-        echo -e "Public key file ${Cyan}$public_key${COff} already exists."
+        log "Public key file ${Cyan}$public_key${COff} already exists."
     else
-        echo -e "Generating public key ${Cyan}$public_key${COff}."
+        log "Generating public key ${Cyan}$public_key${COff}."
         if ! openssl rsa -in "$private_key" -outform PEM -pubout -out "$public_key"; then
             log_error "Failed to generate public key '$public_key'"
             exit 1
@@ -395,7 +395,7 @@ copy_env_values() {
                     if [[ "$newfile" = true ]] || ! grep -q "^${key}=" "$destination"; then
                         append_file "$line" "$destination" || return 1
                         if [ "$newfile" = false ]; then
-                            echo -e "Added ${Purple}$key${COff} to ${Cyan}$destination${COff}."
+                            log "Added ${Purple}$key${COff} to ${Cyan}$destination${COff}."
                         fi
                     elif [ "$overwrite" = true ]; then
                         value="${line#*=}"
@@ -403,7 +403,7 @@ copy_env_values() {
                             log_error "Failed to update file: '$destination'"
                             return 1
                         }
-                        echo -e "Updated ${Purple}$key${COff} in ${Cyan}$destination${COff}."
+                        log "Updated ${Purple}$key${COff} in ${Cyan}$destination${COff}."
                     fi
                 fi
             fi
@@ -429,7 +429,7 @@ save_deployment_file() {
     readarray -t backup_include < <(env_subst "${BACKUP_FILTER_INCLUDE[@]}")
     readarray -t backup_exclude < <(env_subst "${BACKUP_FILTER_EXCLUDE[@]}")
 
-    echo -e "\nSaving deployment settings to ${Cyan}$deployment_file${COff}" >&2
+    log "\nSaving deployment settings to ${Cyan}$deployment_file${COff}"
     jq -n \
         --arg version "$PROJECT_VERSION" \
         --arg project "$COMPOSE_PROJECT_NAME" \
@@ -457,7 +457,7 @@ save_deployment_file() {
     }
 
     # Copy the ENV file to include in backup/restore
-    echo -e "\nSaving deployment environment to ${Cyan}${PROJECT_PATH%/}/.env${COff}"
+    log "\nSaving deployment environment to ${Cyan}${PROJECT_PATH%/}/.env${COff}"
     cp -f "$ENV_FILE" "${PROJECT_PATH%/}/.env" || {
         log_error "Failed to save file '${PROJECT_PATH%/}/.env'"
         return 1
@@ -472,7 +472,7 @@ load_deployment_file() {
         return 1
     fi
 
-    echo -e "Loading deployment settings from ${Cyan}$deployment_file${COff}" >&2
+    log "Loading deployment settings from ${Cyan}$deployment_file${COff}"
     # shellcheck disable=SC2015
     COMPOSE_PROJECT_NAME=$(jq -r '.project' "$deployment_file") &&
     readarray -t ENABLED_MODULES < <(jq -r '.modules[]' "$deployment_file") &&
@@ -578,7 +578,7 @@ mask_password() {
 write_file() {
     local content=$1
     local filename=$2
-    echo -e "Creating file ${Cyan}$filename${COff}"
+    log "Creating file ${Cyan}$filename${COff}"
     ensure_path_exists "$(dirname "$filename")" || return 1
     printf "%s" "$content" >"$filename" || {
         log_error "Failed to write to file: '$filename'"
@@ -667,9 +667,9 @@ ensure_packages_installed() {
         # Debian/Ubuntu
         for pkg in $packages; do
             if dpkg -s "$pkg" >/dev/null 2>&1; then
-                echo -e "${Purple}$pkg${COff} is already installed"
+                log "${Purple}$pkg${COff} is already installed"
             else
-                echo -e "Installing ${Purple}$pkg${COff} ..."
+                log "Installing ${Purple}$pkg${COff} ..."
                 if ! sudo apt-get install -y "$pkg"; then
                     log_error "Failed to install package '$pkg'"
                     return 1
@@ -682,9 +682,9 @@ ensure_packages_installed() {
             # Fedora or newer RHEL/CentOS
             for pkg in $packages; do
                 if rpm -q "$pkg" >/dev/null 2>&1; then
-                    echo -e "${Purple}$pkg${COff} is already installed"
+                    log "${Purple}$pkg${COff} is already installed"
                 else
-                    echo -e "Installing ${Purple}$pkg${COff} ..."
+                    log "Installing ${Purple}$pkg${COff} ..."
                     if ! sudo dnf install -y "$pkg"; then
                         log_error "Failed to install package '$pkg'"
                         return 1
@@ -695,9 +695,9 @@ ensure_packages_installed() {
             # Older RHEL/CentOS
             for pkg in $packages; do
                 if rpm -q "$pkg" >/dev/null 2>&1; then
-                    echo -e "${Purple}$pkg${COff} is already installed"
+                    log "${Purple}$pkg${COff} is already installed"
                 else
-                    echo -e "Installing ${Purple}$pkg${COff} ..."
+                    log "Installing ${Purple}$pkg${COff} ..."
                     if ! sudo yum install -y "$pkg"; then
                         log_error "Failed to install package '$pkg'"
                         return 1
@@ -712,9 +712,9 @@ ensure_packages_installed() {
         # Arch Linux
         for pkg in $packages; do
             if pacman -Qq "$pkg" >/dev/null 2>&1; then
-                echo -e "${Purple}$pkg${COff} is already installed"
+                log "${Purple}$pkg${COff} is already installed"
             else
-                echo -e "Installing ${Purple}$pkg${COff} ..."
+                log "Installing ${Purple}$pkg${COff} ..."
                 if ! sudo pacman -S --noconfirm "$pkg"; then
                     log_error "Failed to install package '$pkg'"
                     return 1
@@ -725,9 +725,9 @@ ensure_packages_installed() {
         # OpenSUSE
         for pkg in $packages; do
             if zypper search -i "$pkg" | grep -q "$pkg"; then
-                echo -e "${Purple}$pkg${COff} is already installed"
+                log "${Purple}$pkg${COff} is already installed"
             else
-                echo -e "Installing ${Purple}$pkg${COff} ..."
+                log "Installing ${Purple}$pkg${COff} ..."
                 if ! sudo zypper install -y "$pkg"; then
                     log_error "Failed to install package '$pkg'"
                     return 1
@@ -738,9 +738,9 @@ ensure_packages_installed() {
         # Alpine
         for pkg in $packages; do
             if apk info -e "$pkg" >/dev/null 2>&1; then
-                echo -e "${Purple}$pkg${COff} is already installed"
+                log "${Purple}$pkg${COff} is already installed"
             else
-                echo -e "Installing ${Purple}$pkg${COff} ..."
+                log "Installing ${Purple}$pkg${COff} ..."
                 if ! sudo apk add "$pkg"; then
                     log_error "Failed to install package '$pkg'"
                     return 1
@@ -752,9 +752,9 @@ ensure_packages_installed() {
         for pkg in $packages; do
             # In Gentoo, we need to check differently since package names have categories
             if equery list "*/$pkg" >/dev/null 2>&1; then
-                echo -e "${Purple}$pkg${COff} is already installed"
+                log "${Purple}$pkg${COff} is already installed"
             else
-                echo -e "Installing ${Purple}$pkg${COff} ..."
+                log "Installing ${Purple}$pkg${COff} ..."
                 if ! sudo emerge --ask=n "$pkg"; then
                     log_error "Failed to install package '$pkg'"
                     return 1
@@ -785,11 +785,11 @@ check_python3() {
         _PYTHON_INSTALLED=true
         # shellcheck disable=SC2155
         local version=$(python3 --version 2>&1 | awk '{print $2}')
-        echo -e "Python 3 is installed, version: ${Purple}$version${COff}"
+        log "Python 3 is installed, version: ${Purple}$version${COff}"
         return 0
     else
-        echo -e "\n${Yellow}Python is not installed.${COff}\n"
-        echo "Installing Python..."
+        log "\n${Yellow}Python is not installed.${COff}\n"
+        log "Installing Python..."
         ensure_packages_installed "python3" || return 1
         _PYTHON_INSTALLED=true
     fi
@@ -801,8 +801,8 @@ check_upnpc() {
         _UPNPC_INSTALLED=true
         return 0
     else
-        echo -e "\n${Yellow}upnpc is not installed.${COff}\n"
-        echo "Installing upnpc..."
+        log "\n${Yellow}upnpc is not installed.${COff}\n"
+        log "Installing upnpc..."
         ensure_packages_installed "miniupnpc" || return 1
         _UPNPC_INSTALLED=true
     fi

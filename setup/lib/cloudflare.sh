@@ -97,7 +97,7 @@ cloudflare_add_or_update_record() {
         '{type: $type, name: $name, content: $content, proxied: $proxied, comment: $comment}')
     local response
     if [ -n "$record_id" ]; then
-        echo -e "Updating existing ${Cyan}$type${COff} record for ${Purple}$name${COff}..."
+        log "Updating existing ${Cyan}$type${COff} record for ${Purple}$name${COff}..."
         if ! response=$(cloudflare_rest_call PUT "zones/$zone_id/dns_records/$record_id" "$json_payload"); then
             exit 1
         fi
@@ -108,12 +108,12 @@ cloudflare_add_or_update_record() {
             exit 1
         fi
     else
-        echo -e "Creating new ${Cyan}$type${COff} record for ${Purple}$name${COff}..."
+        log "Creating new ${Cyan}$type${COff} record for ${Purple}$name${COff}..."
         if ! response=$(cloudflare_rest_call POST "zones/$zone_id/dns_records" "$json_payload"); then
             exit 1
         fi
         if echo "$response" | jq -e '.success' >/dev/null; then
-            echo "Record created successfully."
+            log "Record created successfully."
         else
             log_error "Failed to create record: $response"
             exit 1
@@ -205,7 +205,7 @@ configure_cloudflare_tunnel() {
     fi
     local token_file=${SECRETS_PATH}cloudflare_tunnel_token
     if [ -n "$CF_TUNNEL_ID" ] && [ -f "$token_file" ]; then
-        echo "Cloudflare tunnel appears to be already configured." >&2
+        log "Cloudflare tunnel appears to be already configured."
         if [ "$USE_DEFAULTS" = "true" ]; then return 0; fi
         local user_input=N
         if [ "$UNATTENDED" != "true" ]; then
@@ -220,18 +220,18 @@ configure_cloudflare_tunnel() {
     fi
     tunnel=$(cloudflare_get_tunnel "$account_id" "$CF_TUNNEL_NAME")
     if [ -z "$tunnel" ]; then
-        echo -e "Cloudflare tunnel ${Purple}$CF_TUNNEL_NAME${COff} does not exist. Creating one..."
+        log "Cloudflare tunnel ${Purple}$CF_TUNNEL_NAME${COff} does not exist. Creating one..."
         if ! tunnel=$(cloudflare_create_tunnel "$account_id" "$CF_TUNNEL_NAME"); then
             exit 1
         fi
     else
-        echo -e "Cloudflare tunnel ${Purple}$CF_TUNNEL_NAME${COff} already exists."
+        log "Cloudflare tunnel ${Purple}$CF_TUNNEL_NAME${COff} already exists."
     fi
     tunnel_id=$(echo "$tunnel" | jq -r '.id')
     if ! token=$(cloudflare_get_tunnel_token "$account_id" "$tunnel_id"); then
         exit 1
     fi
     save_env "CF_TUNNEL_ID" "$tunnel_id"
-    echo -e "Saving tunnel credentials to ${Cyan}$token_file${COff}..."
+    log "Saving tunnel credentials to ${Cyan}$token_file${COff}..."
     printf "%s" "$token" >"$token_file"
 }

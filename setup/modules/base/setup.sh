@@ -73,14 +73,14 @@ lldap_bootstrap() {
         exit 1
     }
 
-    echo -e "Starting LLDAP service...\n"
+    log "Starting LLDAP service...\n"
     sg docker -c "docker compose $COMPOSE_OPTIONS up $COMPOSE_UP_OPTIONS lldap" || {
         log_error "Failed to start LLDAP service for bootstrapping"
         exit 1
     }
 
     # Run LLDAP's built-in bootstrap script to create/update users and groups
-    echo -e "Configuring LLDAP with built-in users and groups...\n"
+    log "Configuring LLDAP with built-in users and groups...\n"
     sg docker -c "docker exec \
         -e LLDAP_ADMIN_PASSWORD_FILE=/run/secrets/ldap_admin_password \
         -e USER_CONFIGS_DIR=/data/bootstrap/user-configs \
@@ -112,7 +112,7 @@ pam_write_sssd_config() {
                 abort_install
             fi
         else
-            echo -e "Configuration for ${Purple}$CF_DOMAIN_NAME${COff} already present in ${Cyan}$_SSSD_CONFIG_PATH${COff}"
+            log "Configuration for ${Purple}$CF_DOMAIN_NAME${COff} already present in ${Cyan}$_SSSD_CONFIG_PATH${COff}"
             if [ "$USE_DEFAULTS" = true ]; then return 0; fi
             read -p "Do you want to override the existing configuration? [y/N] " user_input </dev/tty
             user_input=${user_input:-N}
@@ -122,7 +122,7 @@ pam_write_sssd_config() {
         fi
     fi
 
-    echo -e "Generating configuration file ${Cyan}$_SSSD_CONFIG_PATH${COff}"
+    log "Generating configuration file ${Cyan}$_SSSD_CONFIG_PATH${COff}"
 
     cat "$PROJECT_ROOT/modules/base/sssd.conf" \
         | sed "s/\${CF_DOMAIN_NAME}/$CF_DOMAIN_NAME/g" \
@@ -235,11 +235,11 @@ pam_generate_ssl_cert() {
 
     ensure_path_exists "${APPDATA_LOCATION%/}/lldap" || return 1
     if [[ -f "${APPDATA_LOCATION%/}/lldap/key.pem" && -f "${APPDATA_LOCATION%/}/lldap/cert.pem" ]]; then
-        echo "SSL certificates for LLDAP already exist"
+        log "SSL certificates for LLDAP already exist"
         return 0
     fi
 
-    echo "Generating SSL certificates for LLDAP"
+    log "Generating SSL certificates for LLDAP"
     openssl req \
         -x509 \
         -nodes \
@@ -259,7 +259,7 @@ pam_generate_ssl_cert() {
 
 lldap_add_to_hosts_file() {
     if ! grep -Fq "${CF_DOMAIN_NAME}" /etc/hosts; then
-        echo -e "Adding redirection for ${Purple}lldap.${CF_DOMAIN_NAME}${COff} to ${Cyan}/etc/hosts${COff}"
+        log "Adding redirection for ${Purple}lldap.${CF_DOMAIN_NAME}${COff} to ${Cyan}/etc/hosts${COff}"
         local temp_file
         temp_file=$(mktemp)
         echo "127.0.0.1 lldap.${CF_DOMAIN_NAME}" | cat - /etc/hosts > "$temp_file"
@@ -299,9 +299,9 @@ pam_pre_install() {
 
 pam_post_install() {
     sudo pam-auth-update --enable mkhomedir
-    echo "Clearing SSSD cache"
+    log "Clearing SSSD cache"
     sudo sss_cache -E
-    echo -e "Restarting service ${Cyan}sssd${COff}"
+    log "Restarting service ${Cyan}sssd${COff}"
     sudo systemctl restart sssd
 }
 
@@ -345,7 +345,7 @@ base_config_env() {
 
     # SMTP Server Settings
     if [ -z "$USE_SMTP2GO" ]; then
-        echo
+        log
         if ask_confirmation -p "Do you want to configure SMTP2GO for outgoing email?" -y; then
             save_env USE_SMTP2GO true
         else

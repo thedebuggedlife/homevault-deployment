@@ -33,11 +33,11 @@ nextcloud_talk_map_router_port() {
 
     # upnpc can be flaky - try 3 times before giving up
     upnpc "${upnpc_args[@]}" >/dev/null || {
-        echo "Call to upnpc failed. Trying again..." >&2
+        log "Call to upnpc failed. Trying again..."
         upnpc "${upnpc_args[@]}" >/dev/null || {
-            echo "Call to upnpc failed. Trying again..." >&2
+            log "Call to upnpc failed. Trying again..."
             upnpc "${upnpc_args[@]}" >/dev/null || {
-                echo "Call to upnpc failed. Giving up." >&2
+                log "Call to upnpc failed. Giving up."
                 return 1
             }
         }
@@ -87,7 +87,7 @@ nextcloud_talk_install_app() {
     }
 
     if echo "$existing" | grep -q -w "spreed:"; then
-        echo "The Nextcloud Talk app is already installed"
+        log "The Nextcloud Talk app is already installed"
         return 0
     fi
 
@@ -109,7 +109,7 @@ nextcloud_talk_add_turn_server() {
     }
 
     if echo "$existing" | grep -q "$server:$port"; then
-        echo -e "TURN server ${Cyan}$server:$port${COff} is already configured in Nextcloud"
+        log "TURN server ${Cyan}$server:$port${COff} is already configured in Nextcloud"
         return 0
     fi
 
@@ -118,7 +118,7 @@ nextcloud_talk_add_turn_server() {
         return 1
     }
 
-    echo -e "TURN server ${Cyan}$server:$port{$COff} added to Nextcloud"
+    log "TURN server ${Cyan}$server:$port{$COff} added to Nextcloud"
 }
 
 nextcloud_talk_add_signaling_server() {
@@ -132,7 +132,7 @@ nextcloud_talk_add_signaling_server() {
     }
 
     if echo "$existing" | grep -q "$server"; then
-        echo -e "Signaling server ${Cyan}$server${COff} is already configured in Nextcloud"
+        log "Signaling server ${Cyan}$server${COff} is already configured in Nextcloud"
         return 0
     fi
 
@@ -141,7 +141,7 @@ nextcloud_talk_add_signaling_server() {
         return 1
     }
 
-    echo -e "Signaling server ${Cyan}$server${COff} added to Nextcloud"
+    log "Signaling server ${Cyan}$server${COff} added to Nextcloud"
 }
 
 ################################################################################
