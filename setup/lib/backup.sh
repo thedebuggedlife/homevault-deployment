@@ -550,7 +550,7 @@ backup_configure_retention() {
 
 restore_check_installed() {
     if [[ "${#INSTALLED_MODULES[@]}" -gt 0 ]]; then
-        log_warn "here are ${#INSTALLED_MODULES[@]} modules already installed."
+        log_warn "There are ${#INSTALLED_MODULES[@]} modules already installed."
         log "This operation will destroy and recreate Docker resources for these modules."
         ask_confirmation || return 1
     fi

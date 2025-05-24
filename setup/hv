@@ -29,7 +29,7 @@ declare -g AS_USER="$USER"
 declare -g COMPOSE_PROJECT_NAME=homevault
 declare -g COMPOSE_OPTIONS=
 declare -g COMPOSE_UP_OPTIONS=
-declare -g JSON_OUTPUT=
+declare -g JSON_OUTPUT={}
 
 # Defaults to false, if set to true, docker and restic operations will be passed the --dry-run parameter
 # Can be set with the --dry-run command line option
@@ -180,10 +180,15 @@ download_appdata() {
 }
 
 load_module_help() {
+    local module_file module_name module_help
     for module_file in "$PROJECT_ROOT"/modules/*/help.txt; do
         module_name=$(basename "$(dirname "$module_file")")
+        module_help=$(cat "$module_file")
         #shellcheck disable=SC2034
-        MODULE_OPTIONS["$module_name"]=$(cat "$module_file")
+        MODULE_OPTIONS["$module_name"]="$module_help"
+        JSON_OUTPUT=$(echo "${JSON_OUTPUT}" | jq --arg name "$module_name" --arg help "$module_help" '
+            .modules.available[$name] = $help
+        ')
     done
 }
 
@@ -221,11 +226,18 @@ find_installed_modules() {
 
     if [[ ${#INSTALLED_MODULES[@]} -eq 0 ]]; then
         log "There are no modules installed."
+        JSON_OUTPUT=$(echo "${JSON_OUTPUT}" | jq '. + {
+            modules: {
+                installed: []
+            }
+        }')
         return 0
     fi
 
     # Remove duplicates from the array
     mapfile -t INSTALLED_MODULES < <(printf "%s\n" "${INSTALLED_MODULES[@]}" | sort -u)
+
+    JSON_OUTPUT=$(echo "${JSON_OUTPUT}" | jq --args '.modules.installed=$ARGS.positional' "${INSTALLED_MODULES[@]}")
 
     local module
     for module in "${INSTALLED_MODULES[@]}"; do
@@ -561,7 +573,11 @@ abort_install() {
 
 on_script_exit() {
     if [ "$JSON_OUT" = true ]; then
-        JSON_OUTPUT=$(echo "${JSON_OUTPUT:-{}}" | jq --args '$ARGS.positional as $logs | . + {logs: $logs}' "${LOG_LINES[@]}")
+        JSON_OUTPUT=$(echo "${JSON_OUTPUT}" | jq \
+            --arg 'version' "$PROJECT_VERSION" \
+            --args '.version = $version | .logs=$ARGS.positional' \
+            "${LOG_LINES[@]}"
+        )
         echo "$JSON_OUTPUT"
     fi
 }
