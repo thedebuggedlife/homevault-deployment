@@ -8,10 +8,10 @@
             "type": "shell",
             "command": "bash ${workspaceFolder}/.local/reset.sh",
             "options": {
-                "cwd": "${workspaceFolder}",
+                "cwd": "${workspaceFolder}"
             },
             "presentation": {
-                "focus": true,
+                "focus": true
             },
             "problemMatcher": []
         },
@@ -25,6 +25,31 @@
             "problemMatcher": []
         },
         {
+            "label": "Copy WebUI",
+            "type": "shell",
+            "command": "bash ${workspaceFolder}/.local/copy_webui.sh",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "dependsOn": [
+                "Build Backend",
+                "Build Frontend"
+            ],
+            "problemMatcher": []
+        },
+        {
+            "label": "Copy Backend",
+            "type": "shell",
+            "command": "bash ${workspaceFolder}/.local/copy_backend.sh",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "dependsOn": [
+                "Build Backend"
+            ],
+            "problemMatcher": []
+        },
+        {
             "label": "Copy Appdata",
             "type": "shell",
             "command": "bash ${workspaceFolder}/.local/copy_appdata.sh",
@@ -32,7 +57,7 @@
                 "cwd": "${workspaceFolder}"
             },
             "presentation": {
-                "focus": true,
+                "focus": true
             },
             "problemMatcher": []
         },
@@ -53,6 +78,31 @@
                 "cwd": "${workspaceFolder}"
             },
             "problemMatcher": []
+        },
+        {
+            "label": "Build Backend",
+            "type": "npm",
+            "script": "build",
+            "path": "webui/backend",
+            "group": "build",
+            "problemMatcher": [],
+        },
+        {
+            "label": "Build Frontend",
+            "type": "npm",
+            "script": "build",
+            "path": "webui/frontend",
+            "group": "build",
+            "problemMatcher": [],
+        },
+        {
+            "label": "Run Frontend",
+            "type": "npm",
+            "script": "dev",
+            "options": {
+                "cwd": "${workspaceFolder}/webui/frontend"
+            },
+            "problemMatcher": [],
         }
     ]
 }
