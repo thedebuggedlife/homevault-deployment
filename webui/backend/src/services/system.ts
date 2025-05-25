@@ -35,7 +35,7 @@ class SystemService {
             memoryTotal: memory.total,
             memoryUsage: memory.used,
             diskTotal: rootDisk?.size ?? 0,
-            diskUsage: rootDisk?.use ?? 0,
+            diskUsage: rootDisk?.used ?? 0,
         }
     }
 
