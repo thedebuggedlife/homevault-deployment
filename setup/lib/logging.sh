@@ -121,15 +121,15 @@ function stack_trace() {
   done
 }
 
+log_pipe() {
+    log "$@" "$(cat)"
+}
+
 log() {
     if [ "$JSON_OUT" != true ]; then
         echo -e "$@" >&2
     else
-        OPTIND=1
-        while getopts "en" opt; do
-            shift
-        done
-        LOG_LINES+=("$1")
+        LOG_LINES+=("${!#}")
     fi
 }
 
@@ -182,10 +182,10 @@ log_options() {
         local desc_indent=$((indent + display_width + 1))  # +1 for space after option
         
         # shellcheck disable=SC2183
-        if [ "$dividers" = true ]; then printf '%*s' "$terminal_width" | tr ' ' '-'; fi
+        if [ "$dividers" = true ]; then printf '%*s' "$terminal_width" | tr ' ' '-' | log_pipe; fi
 
         # Print option with padding to align all descriptions
-        printf "%${indent}s%s%${padding}s" "" "$option" ""
+        printf "%${indent}s%s%${padding}s" "" "$option" "" | log_pipe -n
         
         if [ -z "$description" ]; then
             # If description is empty, just print a newline
@@ -207,7 +207,7 @@ log_options() {
                     if [ -n "$first_wrapped" ]; then
                         log " $first_wrapped"
                         while read -r next_wrapped; do
-                            printf "%${desc_indent}s%s\n" "" "$next_wrapped" | log
+                            printf "%${desc_indent}s%s\n" "" "$next_wrapped" | log_pipe -e
                         done
                     else
                         # Empty first line
@@ -217,7 +217,7 @@ log_options() {
             else
                 # All subsequent lines get full indentation for each wrapped segment
                 echo "$line" | fold -s -w $((wrap_width - desc_indent)) | while IFS= read -r wrapped; do
-                    printf "%${desc_indent}s%s\n" "" "$wrapped" | log
+                    printf "%${desc_indent}s%s\n" "" "$wrapped" | log_pipe -e
                 done
             fi
             line_num=$((line_num + 1))
