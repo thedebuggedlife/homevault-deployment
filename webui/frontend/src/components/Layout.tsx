@@ -16,9 +16,8 @@ import {
 } from '@mui/material';
 import {
   Menu as MenuIcon,
-  Dashboard as DashboardIcon,
   Extension as ModuleIcon,
-  Storage as StatusIcon,
+  Dashboard as DashboardIcon,
   Backup as BackupIcon,
   Logout as LogoutIcon
 } from '@mui/icons-material';
@@ -35,7 +34,6 @@ interface MenuItem {
 const menuItems: MenuItem[] = [
   { text: 'Dashboard', icon: <DashboardIcon />, path: '/' },
   { text: 'Modules', icon: <ModuleIcon />, path: '/modules' },
-  { text: 'System Status', icon: <StatusIcon />, path: '/status' },
   { text: 'Backup & Restore', icon: <BackupIcon />, path: '/backup' }
 ];
 

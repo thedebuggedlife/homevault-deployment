@@ -45,7 +45,7 @@
                 "cwd": "${workspaceFolder}"
             },
             "dependsOn": [
-                "Build Backend"
+                "Dist Backend"
             ],
             "problemMatcher": []
         },
@@ -88,6 +88,13 @@
             "problemMatcher": [],
         },
         {
+            "label": "Dist Backend",
+            "type": "npm",
+            "script": "dist",
+            "path": "webui/backend",
+            "problemMatcher": [],
+        },
+        {
             "label": "Build Frontend",
             "type": "npm",
             "script": "build",
@@ -103,6 +110,21 @@
                 "cwd": "${workspaceFolder}/webui/frontend"
             },
             "problemMatcher": [],
-        }
+        },
+        {
+            "label": "Run Backend",
+            "type": "shell",
+            "command": "bash ${workspaceFolder}/.local/run_backend.sh",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "dependsOn": [
+                "Copy Backend"
+            ],
+            "presentation": {
+                "focus": true
+            },
+            "problemMatcher": []
+        },
     ]
 }

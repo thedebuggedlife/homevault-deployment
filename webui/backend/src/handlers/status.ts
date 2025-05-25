@@ -1,14 +1,22 @@
 import { AuthenticatedRequest } from "@/middleware/auth";
-import { Response } from 'express';
-import installerService from '@/services/installer';
+import { Response } from "express";
 import { logger } from "@/logger";
+import { ErrorResponse, SystemStatusResponse } from "@/types";
+import docker from "@/services/docker";
+import installer from "@/services/installer";
+import system from "@/services/system";
 
-export async function status(_req: AuthenticatedRequest, res: Response) {
+export async function status(_req: AuthenticatedRequest, res: Response<SystemStatusResponse|ErrorResponse>) {
     try {
-      const status = await installerService.getSystemStatus();
-      res.json(status);
+        const status: SystemStatusResponse = {
+          version: await installer.getVersion(),
+          resources: await system.getStatus(),
+          dockerContainers: await docker.listContainers(),
+          installedModules: await installer.getInstalledModules(),
+        }
+        res.json(status);
     } catch (error) {
-      logger.error('Failed to get system status:', error);
-      res.status(500).json({ error: 'Failed to get system status' });
+        logger.error("Failed to get system status:", error);
+        res.status(500).json({ error: "Failed to get system status" });
     }
-  }
+}

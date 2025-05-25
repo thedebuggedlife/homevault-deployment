@@ -3,9 +3,8 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import Login from '@/pages/Login';
-import Dashboard from '@/pages/Dashboard';
 import ModuleInstallation from '@/pages/ModuleInstallation';
-import SystemStatus from '@/pages/SystemStatus';
+import Dashboard from '@/pages/Dashboard';
 import BackupRestore from '@/pages/BackupRestore';
 import Layout from '@/components/Layout';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
@@ -55,16 +54,6 @@ const App: React.FC = () => {
                 <PrivateRoute>
                   <Layout>
                     <ModuleInstallation />
-                  </Layout>
-                </PrivateRoute>
-              }
-            />
-            <Route
-              path="/status"
-              element={
-                <PrivateRoute>
-                  <Layout>
-                    <SystemStatus />
                   </Layout>
                 </PrivateRoute>
               }

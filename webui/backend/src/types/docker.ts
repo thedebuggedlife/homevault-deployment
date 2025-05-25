@@ -1,8 +1,3 @@
-export interface SystemStatus {
-    docker: DockerContainer[];
-    installedModules: string[];
-}
-
 export interface Publisher {
     URL: string;
     TargetPort: number;

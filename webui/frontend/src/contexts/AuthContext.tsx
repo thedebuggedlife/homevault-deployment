@@ -28,7 +28,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           axios.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`;
           
           // Validate token by making a request to a protected endpoint
-          await axios.get(`${config.backendUrl}/api/protected`);
+          await axios.get(`${config.backendUrl}/api/check`);
           
           setToken(storedToken);
           setIsAuthenticated(true);

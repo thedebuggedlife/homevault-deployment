@@ -49,6 +49,4 @@ io.on('connection', (socket) => {
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
   logger.info(`Server running on port ${PORT}`);
-}); 
-
-installer.getSystemStatus().catch(err => logger.info("Failed to get system status", { err }));
+});
