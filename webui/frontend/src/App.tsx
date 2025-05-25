@@ -1,5 +1,8 @@
 import * as React from 'react';
-import DashboardIcon from '@mui/icons-material/Dashboard';
+import { 
+  Dashboard as DashboardIcon,
+  Extension as ExtensionIcon,
+} from '@mui/icons-material';
 import { ReactRouterAppProvider } from '@toolpad/core/react-router';
 import { Outlet } from 'react-router';
 import type { Authentication, Navigation } from '@toolpad/core';
@@ -13,7 +16,13 @@ const NAVIGATION: Navigation = [
   },
   {
     title: 'Dashboard',
+    segment: 'dashboard',
     icon: <DashboardIcon />,
+  },
+  {
+    title: 'Modules',
+    segment: 'modules',
+    icon: <ExtensionIcon />,
   },
 ];
 

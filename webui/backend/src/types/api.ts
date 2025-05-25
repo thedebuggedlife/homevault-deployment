@@ -19,6 +19,11 @@ export interface SystemStatusResponse {
     installedModules: string[];
 }
 
+export interface GetModulesResponse {
+    installedModules: string[];
+    availableModules: Record<string, string>;
+}
+
 export interface LoginResponse {
     token: string;
 }

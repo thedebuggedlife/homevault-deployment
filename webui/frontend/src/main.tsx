@@ -5,6 +5,7 @@ import App from './App';
 import Layout from './layouts/dashboard';
 import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
+import Modules from './pages/Modules';
 
 const router = createBrowserRouter([
   {
@@ -15,8 +16,12 @@ const router = createBrowserRouter([
         Component: Layout,
         children: [
           {
-            path: '',
+            path: 'dashboard',
             Component: Dashboard,
+          },
+          {
+            path: 'modules',
+            Component: Modules,
           },
         ],
       },

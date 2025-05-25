@@ -6,7 +6,7 @@ import docker from "@/services/docker";
 import installer from "@/services/installer";
 import system from "@/services/system";
 
-export async function status(_req: AuthenticatedRequest, res: Response<SystemStatusResponse|ErrorResponse>) {
+export async function getStatus(_req: AuthenticatedRequest, res: Response<SystemStatusResponse|ErrorResponse>) {
     try {
         const status: SystemStatusResponse = {
           version: await installer.getVersion(),

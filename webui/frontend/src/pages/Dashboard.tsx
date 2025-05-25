@@ -205,19 +205,6 @@ const Dashboard: React.FC = () => {
                     />
                 </Paper>
             </Grid>
-
-            <Grid size={{ xs: 12 }}>
-                <Paper sx={{ p: 2 }}>
-                    <Typography variant="h6" gutterBottom>
-                        Active Services
-                    </Typography>
-                    {/* {systemStatus?.services?.map((service) => (
-            <Typography key={service.name}>
-            {service.name}: {service.status}
-            </Typography>
-        ))} */}
-                </Paper>
-            </Grid>
         </Grid>
     );
 };

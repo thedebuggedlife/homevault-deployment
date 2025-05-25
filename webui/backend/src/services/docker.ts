@@ -14,7 +14,7 @@ class DockerService {
 
     async listContainers(): Promise<DockerContainer[]> {
         try {
-            const result = await system.executeCommand<DockerContainer[]>("docker", ["compose", "-p", COMPOSE_PROJECT, "ps", "--format", "json"], {
+            const result = await system.executeCommand<DockerContainer[]>("docker", ["compose", "-p", COMPOSE_PROJECT, "ps", "--all", "--format", "json"], {
                 jsonOutput: true,
                 jsonArray: true,
             });

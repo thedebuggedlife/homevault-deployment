@@ -40,6 +40,11 @@ class InstallerService {
         return output?.modules?.installed ?? [];
     }
 
+    async getAvailableModules(): Promise<Record<string, string>> {
+        const output = await this.executeCommand("modules", "--all");
+        return output?.modules?.available ?? {};
+    }
+
     // async getAvailableModules(): Promise<Module[]> {
     //     try {
     //         const result = await system.executeCommand("ls", ["setup/modules"]);

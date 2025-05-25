@@ -8,11 +8,11 @@ import { login } from '@/handlers/login';
 import { handleValidationErrors } from '@/middleware/validation';
 import { errorHandler } from '@/middleware/error';
 import { authenticateToken } from '@/middleware/auth';
-import { status } from '@/handlers/status';
+import { getStatus } from '@/handlers/status';
 import { check } from '@/handlers/check';
 import { logger } from '@/logger';
 import { startInstallation } from './handlers/startInstallation';
-import installer from './services/installer';
+import { getModules } from './handlers/modules';
 
 const app = express();
 const server = http.createServer(app);
@@ -32,7 +32,8 @@ app.post('/api/login', [
   handleValidationErrors
 ], login);
 app.get('/api/check', authenticateToken, check);
-app.get('/api/status', authenticateToken, status);
+app.get('/api/status', authenticateToken, getStatus);
+app.get('/api/modules', authenticateToken, getModules);
 
 // WebSocket connection handling
 io.on('connection', (socket) => {
