@@ -12,9 +12,8 @@ import {
     Divider,
 } from "@mui/material";
 import { Computer, Memory, Storage, Speed } from "@mui/icons-material";
-import axios from "axios";
-import config from "@/config";
 import { SystemResources, SystemStatusResponse } from "@backend/types";
+import backend from "@/backend";
 
 function formatBytes(bytes: number, decimals = 1) {
     if (bytes === 0) return "0 B";
@@ -97,8 +96,8 @@ const Dashboard: React.FC = () => {
 
     const fetchSystemStatus = async () => {
         try {
-            const response = await axios.get<SystemStatusResponse>(`${config.backendUrl}/api/status`);
-            setSystemStatus(response.data);
+            const response = await backend.getStatus();
+            setSystemStatus(response);
             setError("");
         } catch (err) {
             setError("Failed to load system status");
@@ -130,102 +129,96 @@ const Dashboard: React.FC = () => {
     const diskUsagePercent = diskUsage(systemStatus?.resources);
 
     return (
-        <Container>
-            <Typography variant="h4" component="h1" gutterBottom>
-                Dashboard
-            </Typography>
+        <Grid container spacing={3}>
+            {/* System Overview */}
+            <Grid size={{ xs: 12, md: 6 }}>
+                <Paper sx={{ p: 3, height: "fit-content" }}>
+                    <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
+                        <Computer color="primary" />
+                        <Typography variant="h6" sx={{ ml: 1 }}>
+                            System Overview
+                        </Typography>
+                    </Box>
 
-            <Grid container spacing={3}>
-                {/* System Overview */}
-                <Grid item xs={12} md={6}>
-                    <Paper sx={{ p: 3, height: "fit-content" }}>
-                        <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
-                            <Computer color="primary" />
-                            <Typography variant="h6" sx={{ ml: 1 }}>
-                                System Overview
+                    <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                        <Box>
+                            <Typography variant="body2" color="text.secondary" gutterBottom>
+                                Version
+                            </Typography>
+                            <Typography variant="h6" color="primary">
+                                {systemStatus?.version || "Unknown"}
                             </Typography>
                         </Box>
 
-                        <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                            <Box>
-                                <Typography variant="body2" color="text.secondary" gutterBottom>
-                                    Version
+                        <Divider />
+
+                        <Box sx={{ display: "flex", justifyContent: "space-between" }}>
+                            <Box sx={{ textAlign: "center" }}>
+                                <Typography variant="h4" color="primary" fontWeight="bold">
+                                    {systemStatus?.installedModules?.length || 0}
                                 </Typography>
-                                <Typography variant="h6" color="primary">
-                                    {systemStatus?.version || "Unknown"}
+                                <Typography variant="body2" color="text.secondary">
+                                    Installed Modules
                                 </Typography>
                             </Box>
 
-                            <Divider />
+                            <Divider orientation="vertical" flexItem />
 
-                            <Box sx={{ display: "flex", justifyContent: "space-between" }}>
-                                <Box sx={{ textAlign: "center" }}>
-                                    <Typography variant="h4" color="primary" fontWeight="bold">
-                                        {systemStatus?.installedModules?.length || 0}
-                                    </Typography>
-                                    <Typography variant="body2" color="text.secondary">
-                                        Installed Modules
-                                    </Typography>
-                                </Box>
-
-                                <Divider orientation="vertical" flexItem />
-
-                                <Box sx={{ textAlign: "center" }}>
-                                    <Typography variant="h4" color="primary" fontWeight="bold">
-                                        {systemStatus?.dockerContainers?.length || 0}
-                                    </Typography>
-                                    <Typography variant="body2" color="text.secondary">
-                                        Docker Containers
-                                    </Typography>
-                                </Box>
+                            <Box sx={{ textAlign: "center" }}>
+                                <Typography variant="h4" color="primary" fontWeight="bold">
+                                    {systemStatus?.dockerContainers?.length || 0}
+                                </Typography>
+                                <Typography variant="body2" color="text.secondary">
+                                    Docker Containers
+                                </Typography>
                             </Box>
                         </Box>
-                    </Paper>
-                </Grid>
-
-                {/* Resource Usage */}
-                <Grid item xs={12} md={6}>
-                    <Paper sx={{ p: 3 }}>
-                        <Typography variant="h6" gutterBottom sx={{ mb: 3 }}>
-                            Resource Usage
-                        </Typography>
-
-                        <ResourceUsageItem icon={<Speed color="action" />} label="CPU Usage" percentage={cpuUsage} />
-
-                        <ResourceUsageItem
-                            icon={<Memory color="action" />}
-                            label="Memory Usage"
-                            percentage={memUsage}
-                            details={`${formatBytes(systemStatus?.resources?.memoryUsage ?? 0)} / ${formatBytes(
-                                systemStatus?.resources?.memoryTotal ?? 0
-                            )}`}
-                        />
-
-                        <ResourceUsageItem
-                            icon={<Storage color="action" />}
-                            label="Disk Usage"
-                            percentage={diskUsagePercent}
-                            details={`${formatBytes(systemStatus?.resources?.diskUsage ?? 0)} / ${formatBytes(
-                                systemStatus?.resources?.diskTotal ?? 0
-                            )}`}
-                        />
-                    </Paper>
-                </Grid>
-
-                <Grid item xs={12}>
-                    <Paper sx={{ p: 2 }}>
-                        <Typography variant="h6" gutterBottom>
-                            Active Services
-                        </Typography>
-                        {/* {systemStatus?.services?.map((service) => (
-              <Typography key={service.name}>
-                {service.name}: {service.status}
-              </Typography>
-            ))} */}
-                    </Paper>
-                </Grid>
+                    </Box>
+                </Paper>
             </Grid>
-        </Container>
+
+            {/* Resource Usage */}
+            <Grid size={{ xs: 12, md: 6 }}>
+                <Paper sx={{ p: 3 }}>
+                    <Typography variant="h6" gutterBottom sx={{ mb: 3 }}>
+                        Resource Usage
+                    </Typography>
+
+                    <ResourceUsageItem icon={<Speed color="action" />} label="CPU Usage" percentage={cpuUsage} />
+
+                    <ResourceUsageItem
+                        icon={<Memory color="action" />}
+                        label="Memory Usage"
+                        percentage={memUsage}
+                        details={`${formatBytes(systemStatus?.resources?.memoryUsage ?? 0)} / ${formatBytes(
+                            systemStatus?.resources?.memoryTotal ?? 0
+                        )}`}
+                    />
+
+                    <ResourceUsageItem
+                        icon={<Storage color="action" />}
+                        label="Disk Usage"
+                        percentage={diskUsagePercent}
+                        details={`${formatBytes(systemStatus?.resources?.diskUsage ?? 0)} / ${formatBytes(
+                            systemStatus?.resources?.diskTotal ?? 0
+                        )}`}
+                    />
+                </Paper>
+            </Grid>
+
+            <Grid size={{ xs: 12 }}>
+                <Paper sx={{ p: 2 }}>
+                    <Typography variant="h6" gutterBottom>
+                        Active Services
+                    </Typography>
+                    {/* {systemStatus?.services?.map((service) => (
+            <Typography key={service.name}>
+            {service.name}: {service.status}
+            </Typography>
+        ))} */}
+                </Paper>
+            </Grid>
+        </Grid>
     );
 };
 

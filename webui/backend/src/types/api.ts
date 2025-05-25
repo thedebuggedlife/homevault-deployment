@@ -1,5 +1,9 @@
 import { DockerContainer } from "./docker";
 
+export interface User {
+    username: string;
+}
+
 export interface SystemResources {
     cpuLoad: number;
     memoryTotal: number;
@@ -15,6 +19,14 @@ export interface SystemStatusResponse {
     installedModules: string[];
 }
 
+export interface LoginResponse {
+    token: string;
+}
+
+export interface CheckResponse {
+    user: User;
+}
+
 export interface ErrorResponse {
-    error: string;
+    errors: string[];
 }

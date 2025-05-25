@@ -17,6 +17,6 @@ export async function status(_req: AuthenticatedRequest, res: Response<SystemSta
         res.json(status);
     } catch (error) {
         logger.error("Failed to get system status:", error);
-        res.status(500).json({ error: "Failed to get system status" });
+        res.status(500).json({ errors: ["Failed to get system status"] });
     }
 }

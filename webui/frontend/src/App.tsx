@@ -1,78 +1,68 @@
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { ThemeProvider, createTheme } from '@mui/material/styles';
-import CssBaseline from '@mui/material/CssBaseline';
-import Login from '@/pages/Login';
-import ModuleInstallation from '@/pages/ModuleInstallation';
-import Dashboard from '@/pages/Dashboard';
-import BackupRestore from '@/pages/BackupRestore';
-import Layout from '@/components/Layout';
-import { AuthProvider, useAuth } from '@/contexts/AuthContext';
+import * as React from 'react';
+import DashboardIcon from '@mui/icons-material/Dashboard';
+import { ReactRouterAppProvider } from '@toolpad/core/react-router';
+import { Outlet } from 'react-router';
+import type { Authentication, Navigation } from '@toolpad/core';
+import SessionContext, { type Session, onAuthStateChanged, restoreSession, signOut } from './contexts/SessionContext';
+import { User } from './types';
 
-const theme = createTheme({
-  palette: {
-    mode: 'dark',
-    primary: {
-      main: '#90caf9',
-    },
-    secondary: {
-      main: '#f48fb1',
-    },
+const NAVIGATION: Navigation = [
+  {
+    kind: 'header',
+    title: 'Navigation',
   },
-});
+  {
+    title: 'Dashboard',
+    icon: <DashboardIcon />,
+  },
+];
 
-interface PrivateRouteProps {
-  children: React.ReactNode;
-}
-
-const PrivateRoute: React.FC<PrivateRouteProps> = ({ children }) => {
-  const { isAuthenticated } = useAuth();
-  return isAuthenticated ? <>{children}</> : <Navigate to="/login" />;
+const BRANDING = {
+  title: 'HomeVault',
 };
 
-const App: React.FC = () => {
-  return (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
-      <AuthProvider>
-        <Router>
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route
-              path="/"
-              element={
-                <PrivateRoute>
-                  <Layout>
-                    <Dashboard />
-                  </Layout>
-                </PrivateRoute>
-              }
-            />
-            <Route
-              path="/modules"
-              element={
-                <PrivateRoute>
-                  <Layout>
-                    <ModuleInstallation />
-                  </Layout>
-                </PrivateRoute>
-              }
-            />
-            <Route
-              path="/backup"
-              element={
-                <PrivateRoute>
-                  <Layout>
-                    <BackupRestore />
-                  </Layout>
-                </PrivateRoute>
-              }
-            />
-          </Routes>
-        </Router>
-      </AuthProvider>
-    </ThemeProvider>
+const AUTHENTICATION: Authentication = {
+  signIn: () => {},
+  signOut: signOut,
+};
+
+export default function App() {
+  const [session, setSession] = React.useState<Session | null>(null);
+  const [loading, setLoading] = React.useState(true);
+
+  const sessionContextValue = React.useMemo(
+    () => ({
+      session,
+      setSession,
+      loading,
+    }),
+    [session, loading],
   );
-};
 
-export default App; 
+  React.useEffect(() => {
+    // Returns an `unsubscribe` function to be called during teardown
+    const unsubscribe = onAuthStateChanged((user: User | null) => {
+      if (user) {
+        setSession({ user });
+      } else {
+        setSession(null);
+      }
+      setLoading(false);
+    });
+    restoreSession();
+    return () => unsubscribe();
+  }, []);
+  
+  return (
+    <ReactRouterAppProvider 
+      navigation={NAVIGATION} 
+      branding={BRANDING}
+      session={session}
+      authentication={AUTHENTICATION}
+    >
+      <SessionContext.Provider value={sessionContextValue}>
+        <Outlet />
+      </SessionContext.Provider>
+    </ReactRouterAppProvider>
+  );
+}

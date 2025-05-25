@@ -1,14 +1,5 @@
 export interface User {
-  username: string;
-}
-
-export interface AuthContextType {
-  isAuthenticated: boolean;
-  token: string | null;
-  user: User | null;
-  login: (username: string, password: string) => Promise<boolean>;
-  logout: () => void;
-  isLoading: boolean;
+  name: string;
 }
 
 export interface Module {

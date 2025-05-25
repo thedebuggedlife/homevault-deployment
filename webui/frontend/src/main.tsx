@@ -1,9 +1,35 @@
-import React from 'react'
-import ReactDOM from 'react-dom/client'
-import App from './App'
+import * as React from 'react';
+import * as ReactDOM from 'react-dom/client';
+import { createBrowserRouter, RouterProvider } from 'react-router';
+import App from './App';
+import Layout from './layouts/dashboard';
+import Dashboard from './pages/Dashboard';
+import Login from './pages/Login';
+
+const router = createBrowserRouter([
+  {
+    Component: App, // root layout route
+    children: [
+      {
+        path: '/',
+        Component: Layout,
+        children: [
+          {
+            path: '',
+            Component: Dashboard,
+          },
+        ],
+      },
+      {
+        path: '/login',
+        Component: Login,
+      },
+    ],
+  },
+]);
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <App />
+    <RouterProvider router={router} />
   </React.StrictMode>,
-) 
+);
