@@ -147,6 +147,15 @@ nextcloud_talk_add_signaling_server() {
 ################################################################################
 #                         NEXTCLOUD SETUP HOOKS
 
+nextcloud_talk_config_webui() {
+    webui_add_prompt nextcloud.talk NEXTCLOUD_TALK_SUBDOMAIN "Subdomain under {CF_DOMAIN_NAME} to use for Nextcloud Talk signaling server" -v "$RE_VALID_LOCAL_HOSTNAME"
+    webui_add_prompt nextcloud.talk NEXTCLOUD_TURN_ENABLED "Do you want to enable the TURN server for Talk?" -o "true,false"
+    webui_add_prompt nextcloud.talk NEXTCLOUD_TURN_SUBDOMAIN "Subdomain under {CF_DOMAIN_NAME} to use for Nextcloud Talk TURN server" -v "$RE_VALID_LOCAL_HOSTNAME" -c "NEXTCLOUD_TURN_ENABLED==true"
+    webui_add_prompt nextcloud.talk NEXTCLOUD_TURN_HOST_PORT "Port in the host that will be mapped to the Nextcloud Talk TURN server container" -v "$RE_VALID_PORT_NUMBER" -c "NEXTCLOUD_TURN_ENABLED==true"
+    webui_add_prompt nextcloud.talk NEXTCLOUD_TURN_ROUTER_PORT "Port in the router that will be forwarded to port {NEXTCLOUD_TURN_HOST_PORT} on this host" -v "$RE_VALID_PORT_NUMBER" -c "NEXTCLOUD_TURN_ENABLED==true"
+    webui_add_prompt nextcloud.talk NEXTCLOUD_TURN_UPNP_SLEEP "How often to reconfigure port mapping on your home router, in seconds (0=disabled)" -v "$RE_VALID_NUMBER" -c "NEXTCLOUD_TURN_ENABLED==true"
+}
+
 nextcloud_talk_config_env() {
     ask_for_env NEXTCLOUD_TALK_SUBDOMAIN "Subdomain under ${CF_DOMAIN_NAME} to use for Nextcloud Talk signaling server" -v "$RE_VALID_LOCAL_HOSTNAME"
     ask_for_env NEXTCLOUD_TURN_ENABLED "Do you want to enable the TURN server for Talk?" -o "true,false"
@@ -186,6 +195,7 @@ nextcloud_talk_post_install() {
     fi
 }
 
+CONFIG_WEBUI_HOOKS+=("nextcloud_talk_config_webui")
 CONFIG_ENV_HOOKS+=("nextcloud_talk_config_env")
 CONFIG_SECRETS_HOOKS+=("nextcloud_talk_config_secrets")
 COMPOSE_EXTRA_HOOKS+=("nextcloud_talk_compose_extra")

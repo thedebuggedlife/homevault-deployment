@@ -30,6 +30,7 @@ declare -g COMPOSE_PROJECT_NAME=homevault
 declare -g COMPOSE_OPTIONS=
 declare -g COMPOSE_UP_OPTIONS=
 declare -g JSON_OUTPUT={}
+declare -g WEBUI_CONFIG=false
 
 # Defaults to false, if set to true, docker and restic operations will be passed the --dry-run parameter
 # Can be set with the --dry-run command line option
@@ -65,6 +66,7 @@ declare -ga REMOVE_MODULES=()
 ################################################################################
 #                           SETUP MODULES
 
+declare -ga CONFIG_WEBUI_HOOKS=()
 declare -ga CONFIG_ENV_HOOKS=()
 declare -ga CONFIG_SECRETS_HOOKS=()
 declare -ga COMPOSE_EXTRA_HOOKS=()
@@ -298,7 +300,11 @@ create_data_locations() {
 # @return void
 ###
 ask_for_variables() {
-    execute_hooks "${CONFIG_ENV_HOOKS[@]}" "config-env" || exit 1
+    if [ "$WEBUI_CONFIG" = true ]; then
+        execute_hooks "${CONFIG_WEBUI_HOOKS[@]}" "config-webui" || exit 1
+    else
+        execute_hooks "${CONFIG_ENV_HOOKS[@]}" "config-env" || exit 1
+    fi
     implicit_env_vars
 }
 
@@ -589,6 +595,7 @@ run_deploy() {
     configure_docker
     prepare_env_file
     ask_for_variables
+    if [ "$WEBUI_CONFIG" == true ]; then return 0; fi
     create_data_locations || return 1
     download_appdata
     configure_admin_account

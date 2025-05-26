@@ -206,6 +206,12 @@ immich_configure_oauth() {
 ################################################################################
 #                          IMMICH SETUP HOOKS
 
+immich_config_webui() {
+    webui_add_prompt immich IMMICH_SUBDOMAIN "Subdomain under {CF_DOMAIN_NAME} to use for Immich"
+    webui_add_prompt immich IMMICH_UPLOAD_LOCATION "Immich photo upload location" -v "$RE_VALID_PATH"
+    webui_add_prompt immich IMMICH_DEFAULT_QUOTA "Immich default user storage quota (in GB)" -v "$RE_VALID_NUMBER"
+}
+
 immich_config_env() {
     ask_for_env IMMICH_SUBDOMAIN "Subdomain under ${CF_DOMAIN_NAME} to use for Immich" -v "$RE_VALID_LOCAL_HOSTNAME"
     ask_for_env IMMICH_UPLOAD_LOCATION "Immich photo upload location" -v "$RE_VALID_PATH"
@@ -247,6 +253,7 @@ immich_backup_config() {
     )
 }
 
+CONFIG_WEBUI_HOOKS+=("immich_config_webui")
 CONFIG_ENV_HOOKS+=("immich_config_env")
 CONFIG_SECRETS_HOOKS+=("immich_config_secrets")
 COMPOSE_EXTRA_HOOKS+=("immich_compose_extra")

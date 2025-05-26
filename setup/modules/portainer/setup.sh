@@ -251,6 +251,10 @@ portainer_configure_oauth() {
 ################################################################################
 #                          PORTAINER SETUP HOOKS
 
+portainer_config_webui() {
+    webui_add_prompt portainer PORTAINER_SUBDOMAIN "Subdomain under {CF_DOMAIN_NAME} to use for Portainer" -v "$RE_VALID_LOCAL_HOSTNAME"
+}
+
 portainer_config_env() {
     ask_for_env PORTAINER_SUBDOMAIN "Subdomain under ${CF_DOMAIN_NAME} to use for Portainer" -v "$RE_VALID_LOCAL_HOSTNAME"
 }
@@ -275,6 +279,7 @@ portainer_backup_config() {
     )
 }
 
+CONFIG_WEBUI_HOOKS+=("portainer_config_webui")
 CONFIG_ENV_HOOKS+=("portainer_config_env")
 CONFIG_SECRETS_HOOKS+=("portainer_config_secrets")
 # PRE_INSTALL_HOOKS+=("")

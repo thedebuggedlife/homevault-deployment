@@ -326,10 +326,29 @@ configure_backup() {
 ################################################################################
 #                             BASE SETUP HOOKS
 
+base_config_webui() {
+    webui_add_prompt base APPDATA_LOCATION "Application Data folder" -v "$RE_VALID_PATH"
+    webui_add_prompt base TZ "Server Timezone" -v "is_valid_timezone##Please enter a valid timezone. See: https://timeapi.io/documentation/iana-timezones"
+    webui_add_prompt base TAILSCALE_API_KEY "Tailscale API Key"
+    webui_add_prompt base CF_DNS_API_TOKEN "Cloudflare API Token"
+    webui_add_prompt base CF_DOMAIN_NAME "Domain Name (e.g. example.com)" -v "$RE_MAIN_DOMAIN"
+    webui_add_prompt base CF_TUNNEL_NAME "Cloudflare Tunnel Name" -v "$RE_VALID_TUNNEL_NAME"
+    webui_add_prompt base USE_SMTP2GO "Do you want to configure SMTP2GO for outgoing email?" -o "true,false"
+    webui_add_prompt base SMTP_SENDER "SMTP Email From (username only)" -v "$RE_VALID_EMAIL_NAME"
+    webui_add_prompt base SMTP_USERNAME "SMTP Server Username" -v "$RE_VALID_EMAIL_NAME" -c "USE_SMTP2GO==false"
+    webui_add_prompt base SMTP_PASSWORD "SMTP Server Password" -c "USE_SMTP2GO==false"
+    webui_add_prompt base SMTP_SERVER "SMTP Server Address" -v "$RE_VALID_HOSTNAME" -c "USE_SMTP2GO==false"
+    webui_add_prompt base SMTP_PORT "SMTP Server Port" -v "$RE_VALID_PORT_NUMBER" -c "USE_SMTP2GO==false"
+    webui_add_prompt base SMTP_SECURE "SMTP Security Protocol (optional)" -e -o "tls,ssl" -c "USE_SMTP2GO==false"
+    webui_add_prompt base SMTP2GO_API_KEY "SMTP2GO API Key" -c "USE_SMTP2GO==true"
+    webui_add_prompt base SMTP_USERNAME "SMTP Server Username" -a "selfhost@{CF_DOMAIN_NAME}" -c "USE_SMTP2GO==true"
+    webui_add_prompt base AUTHELIA_THEME "Authelia admin website theme" -o "dark,light"
+}
+
 base_config_env() {
     # Global Settings
     ask_for_env APPDATA_LOCATION "Application Data folder" -v "$RE_VALID_PATH"
-    ask_for_env TZ "Server Timezone" -v is_valid_timezone -E "Please enter a valid timezone. See: https://timeapi.io/documentation/iana-timezones"
+    ask_for_env TZ "Server Timezone" -v "is_valid_timezone##Please enter a valid timezone. See: https://timeapi.io/documentation/iana-timezones"
     save_env HOSTNAME "${HOSTNAME}"
     save_env INSTALLER_UID "$(id -u "$USER")"
     save_env DOCKER_GID "$(getent group docker | cut -d: -f3)"
@@ -352,19 +371,16 @@ base_config_env() {
             save_env USE_SMTP2GO false
         fi
     fi
-    ask_for_env SMTP2GO_API_KEY "SMTP2GO API Key"
     ask_for_env SMTP_SENDER "SMTP Email From (username only)" -v "$RE_VALID_EMAIL_NAME"
     if [ "$USE_SMTP2GO" != "true" ]; then
         ask_for_env SMTP_USERNAME "SMTP Server Username" -v "$RE_VALID_EMAIL_NAME"
-        ask_for_env SMTP_PASSWORD "SMTP Server Password".
+        ask_for_env SMTP_PASSWORD "SMTP Server Password"
         ask_for_env SMTP_SERVER "SMTP Server Address" -v "$RE_VALID_HOSTNAME"
         ask_for_env SMTP_PORT "SMTP Server Port" -v "$RE_VALID_PORT_NUMBER"
         ask_for_env SMTP_SECURE "SMTP Security Protocol (optional)" -e -o "tls,ssl"
     else
-        if [ -z "$SMTP_USERNAME" ]; then
-            save_env SMTP_USERNAME "selfhost@${CF_DOMAIN_NAME}"
-        fi
-        ask_for_env SMTP_USERNAME "SMTP Server Username"
+        ask_for_env SMTP2GO_API_KEY "SMTP2GO API Key"
+        ask_for_env SMTP_USERNAME "SMTP Server Username" -a "selfhost@${CF_DOMAIN_NAME}"
     fi
 
     # Authelia Settings
@@ -432,6 +448,7 @@ base_backup_config() {
     )
 }
 
+CONFIG_WEBUI_HOOKS+=("base_config_webui")
 CONFIG_ENV_HOOKS+=("base_config_env")
 CONFIG_SECRETS_HOOKS+=("base_config_secrets")
 COMPOSE_EXTRA_HOOKS+=("base_compose_extra")

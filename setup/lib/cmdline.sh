@@ -187,6 +187,10 @@ parse_deploy_option() {
             OVERRIDE_VERSIONS=true
             return 1
             ;;
+        --webui-config)
+            WEBUI_CONFIG=true
+            return 1
+            ;;
         --dry-run)
             DRY_RUN=true
             return 1

@@ -242,6 +242,10 @@ cockpit_configure_dns() {
 ################################################################################
 #                          COCKPIT SETUP HOOKS
 
+cockpit_config_webui() {
+    webui_add_prompt cockpit COCKPIT_SUBDOMAIN "Subdomain under {CF_DOMAIN_NAME} to use for Cockpit" -v "$RE_VALID_LOCAL_HOSTNAME"
+}
+
 cockpit_config_env() {
     ask_for_env COCKPIT_SUBDOMAIN "Subdomain under ${CF_DOMAIN_NAME} to use for Cockpit" -v "$RE_VALID_LOCAL_HOSTNAME"
 }
@@ -257,6 +261,7 @@ cockpit_pre_install() {
     cockpit_configure_dns || return 1
 }
 
+CONFIG_WEBUI_HOOKS+=("cockpit_config_webui")
 CONFIG_ENV_HOOKS+=("cockpit_config_env")
 # CONFIG_SECRETS_HOOKS+=("")
 PRE_INSTALL_HOOKS+=("cockpit_pre_install")

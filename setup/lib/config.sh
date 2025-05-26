@@ -13,7 +13,7 @@ _UPNPC_INSTALLED=
 ################################################################################
 #                           PARAMETER VALIDATION
 
-RE_VALID_PATH="^(/?([a-zA-Z0-9._-]+))*/?$"
+RE_VALID_PATH="^(?:\/?[a-zA-Z0-9._-]+)*\/?$"
 
 RE_VALID_LOCAL_HOSTNAME="^[a-zA-Z0-9][-a-zA-Z0-9]{0,62}$"
 
@@ -63,8 +63,7 @@ is_valid_timezone() {
 # @option   -e  {flag}      Allow empty values
 # @option   -m  {flag}      Mask the input (e.g. for passwords)
 # @option   -o  {list}      Valid options (comma-separated list)
-# @option   -v  {string}    Regex pattern to validate input against, or name of a validation function
-# @option   -E  {message}   Custom error message when validation fails
+# @option   -v  {string}    Regex pattern to validate input against, or name of a validation function, separated by ## from error message
 # @return       {string}    The value entered by the user
 ###
 ask_value() {
@@ -72,18 +71,16 @@ ask_value() {
     local default options
     local required=true
     local masked=false
-    local validation_pattern
-    local validation_error="Please enter a valid value."
+    local -a validations=()  # Array to store validation patterns and error messages
     local user_input
     OPTIND=2
-    while getopts ":emd:o:v:E:" opt; do
+    while getopts ":emd:o:v:" opt; do
         case $opt in
             e) required=false ;;
             m) masked=true ;;
             d) default="$OPTARG" ;;
             o) options="$OPTARG" ;;
-            v) validation_pattern="$OPTARG" ;;
-            E) validation_error="$OPTARG" ;;
+            v) validations+=("$OPTARG") ;;  # Add each validation to the array
             \?) log_warn "Invalid option: -$OPTARG" ;;
             :) log_warn "Option -$OPTARG requires an argument" ;;
         esac
@@ -115,20 +112,40 @@ ask_value() {
             log "\n${Yellow}Value must be one of the options: ${options}${COff}\n"
             continue
         fi
-        if [ -n "$validation_pattern" ]; then
+        
+        # Process all validations
+        local validation_failed=false
+        for validation in "${validations[@]}"; do
+            # Split validation pattern and error message by ##
+            local validation_pattern="${validation%%##*}"
+            local validation_error="${validation##*##}"
+            
+            # If no ## separator found, use default error message
+            if [ "$validation_pattern" = "$validation_error" ]; then
+                validation_error="Please enter a valid value."
+            fi
+            
             # Check if validation_pattern is a function name (no spaces, starts with letter)
             if [[ "$validation_pattern" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]] && declare -F "$validation_pattern" >/dev/null; then
                 # Call the validation function
                 if ! "$validation_pattern" "$user_input"; then
                     log "\n${Yellow}${validation_error}${COff}\n"
-                    continue
+                    validation_failed=true
+                    break
                 fi
             # Otherwise treat as regex pattern
             elif ! [[ "$user_input" =~ $validation_pattern ]]; then
                 log "\n${Yellow}${validation_error}${COff}\n"
-                continue
+                validation_failed=true
+                break
             fi
+        done
+        
+        # If any validation failed, continue the loop to ask again
+        if [ "$validation_failed" = true ]; then
+            continue
         fi
+        
         break
     done
     echo "$user_input"
@@ -228,26 +245,122 @@ save_env_id() {
 }
 
 ###
+# Add a prompt to the JSON_OUTPUT for the WebUI
+#
+# @param    $1 {string}     Variable name
+# @param    $2 {string}     Text prompt
+# @option   -a {string}     Alternate default if no existing value
+# @option   -e {flag}       Allow empty values
+# @option   -m {flag}       Mask the input (e.g. for passwords)
+# @option   -o {string}     Valid options (comma-separated list)
+# @option   -v {string}     Regex pattern to validate input against, separated by ## from error message
+###
+webui_add_prompt() {
+    local module="$1"
+    local variable="$2"
+    local prompt="$3"
+    shift 3
+    
+    local optional="false"
+    local password="false"
+    local default="${!variable}"
+    local options=""
+    local condition=""
+    local -a validations=()
+    
+    # Parse optional parameters
+    OPTIND=1
+    while getopts ":a:emo:v:c:" opt; do
+        case $opt in
+            e) optional="true" ;;
+            m) password="true" ;;
+            a) if [ -z "$default" ]; then default="$OPTARG"; fi ;;
+            c) condition="$OPTARG" ;;
+            o) options="$OPTARG" ;;
+            v) validations+=("$OPTARG") ;;
+            *) log_error "Unknown option: $opt"; return 1 ;;
+        esac
+    done
+    
+    # Build the regex array if validations exist
+    local regex_json="[]"
+    if [ ${#validations[@]} -gt 0 ]; then
+        regex_json=$(printf '%s\n' "${validations[@]}" | jq -R '
+            if contains("##") then
+                split("##") | {pattern: .[0], message: .[1]}
+            else
+                {pattern: .}
+            end
+        ' | jq -s '.')
+    fi
+    
+    # Build the prompt object
+    local prompt_obj
+    prompt_obj=$(jq -n \
+        --arg module "$module" \
+        --arg var "$variable" \
+        --arg prompt "$prompt" \
+        --arg optional "$optional" \
+        --arg password "$password" \
+        --arg default "$default" \
+        --arg condition "$condition" \
+        --arg options "$options" \
+        --argjson regex "$regex_json" \
+        '{
+            module: $module,
+            variable: $var,
+            prompt: $prompt,
+            optional: ($optional == "true"),
+            password: ($password == "true"),
+        } |
+        if $default != "" then
+            . + {default: $default}
+        else . end |
+        if $condition != "" then
+            . + {condition: $condition}
+        else . end |
+        if $options != "" then
+            . + {options: ($options | split(",") | map(ltrimstr(" ") | rtrimstr(" ")))}
+        else . end |
+        if $regex != [] then
+            . + {regex: $regex}
+        else . end'
+    )
+    
+    # Add the prompt to JSON_OUT
+    JSON_OUTPUT=$(echo "$JSON_OUTPUT" | jq --argjson prompt "$prompt_obj" '
+        if has("prompts") then
+            .prompts += [$prompt]
+        else
+            . + {prompts: [$prompt]}
+        end
+    ')
+}
+
+###
 # Prompt user for a value and save to $ENV_FILE
 #
 # @param    $1 {string}     Variable name
 # @param    $2 {string}     Text prompt
 # @option   -i {flag}       Ignore existing value (i.e. do not offer as default)
+# @option   -a {string}     Use alternative value as default
 # @option   -e {flag}       Allow empty values
 # @option   -m {flag}       Mask the input (e.g. for passwords)
 # @option   -o {string}     Valid options (comma-separated list)
-# @option   -v {string}     Regex pattern to validate input against, or name of a validation function
-# @option   -E {message}    Custom error message when validation fails
+# @option   -v {string}     Regex pattern to validate input against, or name of a validation function, separated by ## from error message
 ###
 ask_for_env() {
     local env_variable=$1
     local prompt=$2
     local -a input_opts=()
+    local -a webui_opts=()
     local use_default=true
+    local default_value="${!${env_variable}_DEFAULT}"
     OPTIND=3
-    while getopts ":iemo:v:E:" opt; do
+    while getopts ":iemo:v:E:a:" opt; do
         case $opt in
             i) use_default=false ;;
+            a) default_value="$OPTARG" ;;
             e) input_opts+=("-e") ;;
             m) input_opts+=("-m") ;;
             o) input_opts+=("-o" "$OPTARG") ;;
@@ -258,6 +371,10 @@ ask_for_env() {
         esac
     done
 
+    if [[ "$use_default" = "true" ]]; then
+        input_opts+=("-d" "${!env_variable:-${default_value}}")
+    fi
+
     # If an override is specified in command line, that takes priority
     local value_override="${ENV_OVERRIDES["$env_variable"]}"
     if [ -n "$value_override" ]; then
@@ -267,12 +384,6 @@ ask_for_env() {
     # If resuming a previous install and there is a value already set, dismiss
     if [[ "$USE_DEFAULTS" = "true" && -n "${!env_variable}" && "$use_default" = "true" ]]; then 
         return 0
-    fi
-
-    # Choose the right default value to include in the prompt
-    if [[ "$use_default" = "true" ]]; then
-        local env_variable_default="${env_variable}_DEFAULT"
-        input_opts+=("-d" "${!env_variable:-${!env_variable_default}}")
     fi
 
     # Show the prompt to the use and save the result
