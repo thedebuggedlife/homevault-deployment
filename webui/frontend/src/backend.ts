@@ -1,5 +1,5 @@
 import config from "@/config";
-import { CheckResponse, GetModulesResponse, LoginResponse, SystemStatusResponse } from "@backend/types";
+import { CheckResponse, DeploymentConfig, DeploymentRequest, GetModulesResponse, LoginResponse, SystemStatusResponse } from "@backend/types";
 import axios, { AxiosRequestConfig } from "axios";
 
 class BackendServer {
@@ -37,6 +37,10 @@ class BackendServer {
     }
     async getModules(): Promise<GetModulesResponse> {
         const response = await this.client.get<GetModulesResponse>('/api/modules');
+        return response.data;
+    }
+    async getDeploymentConfig(request: DeploymentRequest): Promise<DeploymentConfig> {
+        const response = await this.client.post<DeploymentConfig>('/api/deployment/config', request);
         return response.data;
     }
     private setToken(token?: string) {

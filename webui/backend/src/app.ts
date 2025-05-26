@@ -13,6 +13,7 @@ import { check } from '@/handlers/check';
 import { logger } from '@/logger';
 import { startInstallation } from './handlers/startInstallation';
 import { getModules } from './handlers/modules';
+import { getDeploymentConfig } from './handlers/deploy';
 
 const app = express();
 const server = http.createServer(app);
@@ -34,6 +35,7 @@ app.post('/api/login', [
 app.get('/api/check', authenticateToken, check);
 app.get('/api/status', authenticateToken, getStatus);
 app.get('/api/modules', authenticateToken, getModules);
+app.post('/api/deployment/config', authenticateToken, getDeploymentConfig);
 
 // WebSocket connection handling
 io.on('connection', (socket) => {

@@ -12,6 +12,30 @@ export interface SystemResources {
     diskUsage: number;
 }
 
+export interface DeploymentRequest {
+    modules?: {
+        install?: string[];
+        remove?: string[];
+    }
+}
+
+export interface DeploymentConfig {
+    prompts: {
+        module: string;
+        variable: string;
+        prompt: string;
+        optional: boolean;
+        password: boolean;
+        default?: string;
+        condition?: string;
+        options?: string[];
+        regex?: {
+            pattern: string;
+            message?: string;
+        }[];
+    }[];
+}
+
 export interface SystemStatusResponse {
     version: string;
     resources: SystemResources;
