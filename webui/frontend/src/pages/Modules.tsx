@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router';
 import { Typography, Grid, Box, CircularProgress, Button } from '@mui/material';
 import { Add as AddIcon } from '@mui/icons-material';
 import { InstalledModulesCard } from '@/components/modules/InstalledModulesCard';
@@ -8,6 +9,7 @@ import { useModulesData } from '@/hooks/useModulesData';
 export default function Modules() {
     const [expandedModule, setExpandedModule] = useState<string | null>(null);
     const [installDialogOpen, setInstallDialogOpen] = useState(false);
+    const navigate = useNavigate();
     
     const {
         status,
@@ -32,9 +34,14 @@ export default function Modules() {
     };
 
     const handleInstallModules = async (modules: string[]) => {
-        // TODO: Implement actual installation logic
-        console.log('Installing modules:', modules);
         handleCloseInstallDialog();
+        navigate('/deployment', {
+            state: { 
+                modules,
+                backPath: '/modules',
+                backTitle: 'Modules'
+            }
+        });
     };
 
     if (error) {

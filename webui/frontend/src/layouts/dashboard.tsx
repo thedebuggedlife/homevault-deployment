@@ -1,6 +1,6 @@
 import { Navigate, Outlet, useLocation } from "react-router";
 import { DashboardLayout } from "@toolpad/core/DashboardLayout";
-import { PageContainer } from "@toolpad/core/PageContainer";
+import { Container, Typography } from "@mui/material";
 import { useSession } from "@/contexts/SessionContext";
 import { LinearProgress } from "@mui/material";
 
@@ -24,9 +24,12 @@ export default function Layout() {
 
     return (
         <DashboardLayout>
-            <PageContainer>
+            <Container maxWidth="xl" sx={{ py: 3 }}>
+                <Typography variant="h4" component="h1" gutterBottom>
+                    {location.pathname.split('/').pop()?.charAt(0).toUpperCase() + location.pathname.split('/').pop()?.slice(1) || 'Dashboard'}
+                </Typography>
                 <Outlet />
-            </PageContainer>
+            </Container>
         </DashboardLayout>
     );
 }
