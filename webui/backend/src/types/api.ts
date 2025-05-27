@@ -56,6 +56,11 @@ export interface CheckResponse {
     user: User;
 }
 
+export interface ErrorInstance {
+    message: string;
+    context?: any;
+}
+
 export interface ErrorResponse {
-    errors: string[];
+    errors: ErrorInstance[];
 }

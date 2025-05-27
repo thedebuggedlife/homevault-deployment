@@ -41,7 +41,7 @@ class InstallerService {
         const args = this.getDeploymentArgs(request);
         const output = await this.executeCommand("deploy", "--webui-config", ...args);
         if (!output?.config) {
-            throw new Error("Invalid command line output received");
+            throw new ServiceError("Invalid output received from installer", { request, output });
         }
         return output.config;
     }
@@ -59,21 +59,18 @@ class InstallerService {
 
     private async executeCommand(...args: string[]): Promise<InstallerOutput|undefined> {
         try {
-            const command = await system.executeCommand<InstallerOutput>("bash", ["hv", "--json", ...args], {
+            args = ["hv", "--json", ...args];
+            this.logger.info("Executing command: " + args.join(' '));
+            const result = await system.executeCommand<InstallerOutput>("bash", args, {
                 cwd: INSTALLER_PATH,
                 jsonOutput: true,
             });
-            if (!command.data) {
-                this.logger.error("Installer command did not return valid data", {
-                    args
-                });
+            if (!result.data) {
+                throw new ServiceError("Installer command did not return valid data", { args: args.join(' '), result });
             }
-            return command.data;
+            return result.data;
         } catch (error) {
-            this.logger.error("Failed to execute installer command", {
-                args,
-                error
-            });
+            throw new ServiceError("Failed to execute installer command", { args });
         }
     }
 }

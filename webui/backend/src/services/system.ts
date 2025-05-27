@@ -94,7 +94,6 @@ class SystemService {
         try {
             if (asArray) {
                 const lines = data.trim().split('\n').filter(line => line.trim());
-                this.logger.info(`Parsing output as array from ${lines.length} lines`);
                 return lines.map(line => JSON.parse(line)) as T;
             }
             return JSON.parse(data);

@@ -43,7 +43,6 @@ export const onAuthStateChanged = (callback: (user: User | null) => void) => {
     return emitter.on("authStateChanged", callback);
 };
 
-
 export interface Session {
   user: User;
 }

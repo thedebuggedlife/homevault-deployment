@@ -329,10 +329,14 @@ webui_add_prompt() {
     
     # Add the prompt to JSON_OUT
     JSON_OUTPUT=$(echo "$JSON_OUTPUT" | jq --argjson prompt "$prompt_obj" '
-        if has("prompts") then
-            .prompts += [$prompt]
+        if has("config") then
+            if .config | has("prompts") then
+                .config.prompts += [$prompt]
+            else
+                .config.prompts = [$prompt]
+            end
         else
-            . + {prompts: [$prompt]}
+            .config = {prompts: [$prompt]}
         end
     ')
 }

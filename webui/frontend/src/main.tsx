@@ -7,6 +7,7 @@ import Dashboard from "./pages/Dashboard";
 import Login from "./pages/Login";
 import Modules from "./pages/Modules";
 import Deployment from "./pages/Deployment";
+import ProtectedRoute from "./components/ProtectedRoute";
 
 const router = createBrowserRouter([
     {
@@ -36,7 +37,7 @@ const router = createBrowserRouter([
             },
             {
                 path: "/deployment",
-                Component: Deployment,
+                element: <ProtectedRoute><Deployment/></ProtectedRoute>,
             }
         ],
     },

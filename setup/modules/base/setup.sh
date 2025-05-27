@@ -335,13 +335,12 @@ base_config_webui() {
     webui_add_prompt base CF_TUNNEL_NAME "Cloudflare Tunnel Name" -v "$RE_VALID_TUNNEL_NAME"
     webui_add_prompt base USE_SMTP2GO "Do you want to configure SMTP2GO for outgoing email?" -o "true,false"
     webui_add_prompt base SMTP_SENDER "SMTP Email From (username only)" -v "$RE_VALID_EMAIL_NAME"
-    webui_add_prompt base SMTP_USERNAME "SMTP Server Username" -v "$RE_VALID_EMAIL_NAME" -c "USE_SMTP2GO==false"
+    webui_add_prompt base SMTP_USERNAME "SMTP Server Username" -c "USE_SMTP2GO==false"
     webui_add_prompt base SMTP_PASSWORD "SMTP Server Password" -c "USE_SMTP2GO==false"
     webui_add_prompt base SMTP_SERVER "SMTP Server Address" -v "$RE_VALID_HOSTNAME" -c "USE_SMTP2GO==false"
     webui_add_prompt base SMTP_PORT "SMTP Server Port" -v "$RE_VALID_PORT_NUMBER" -c "USE_SMTP2GO==false"
     webui_add_prompt base SMTP_SECURE "SMTP Security Protocol (optional)" -e -o "tls,ssl" -c "USE_SMTP2GO==false"
     webui_add_prompt base SMTP2GO_API_KEY "SMTP2GO API Key" -c "USE_SMTP2GO==true"
-    webui_add_prompt base SMTP_USERNAME "SMTP Server Username" -a "selfhost@{CF_DOMAIN_NAME}" -c "USE_SMTP2GO==true"
     webui_add_prompt base AUTHELIA_THEME "Authelia admin website theme" -o "dark,light"
 }
 
@@ -380,7 +379,7 @@ base_config_env() {
         ask_for_env SMTP_SECURE "SMTP Security Protocol (optional)" -e -o "tls,ssl"
     else
         ask_for_env SMTP2GO_API_KEY "SMTP2GO API Key"
-        ask_for_env SMTP_USERNAME "SMTP Server Username" -a "selfhost@${CF_DOMAIN_NAME}"
+        ask_for_env SMTP_USERNAME "SMTP Server Username" -a "homevault@${CF_DOMAIN_NAME}"
     fi
 
     # Authelia Settings

@@ -12,13 +12,13 @@ export async function login(req: Request, res: Response<LoginResponse|ErrorRespo
     exec(`echo '${password}' | sudo -S -l -U ${username}`, (error, stdout, stderr) => {
         if (error) {
             logger.error(`Authentication failed for user ${username}: ${error.message}`);
-            return res.status(401).json({ errors: ["Invalid credentials"] });
+            return res.status(401).json({ errors: [{ message: "Invalid credentials" }] });
         }
 
         // Check if user has sudo privileges
         if (!stdout.includes("(ALL : ALL)") && !stdout.includes("(ALL) ALL")) {
             logger.warn(`User ${username} attempted login without sudo privileges`);
-            return res.status(403).json({ errors: ["User does not have required privileges"] });
+            return res.status(403).json({ errors: [{ message: "User does not have required privileges" }] });
         }
 
         // Generate JWT token
