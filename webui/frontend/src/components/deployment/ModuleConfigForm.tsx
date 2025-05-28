@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
     Card,
     CardContent,
@@ -12,12 +12,12 @@ import {
     InputAdornment,
     IconButton,
     Box,
-    Collapse,
 } from '@mui/material';
 import { Visibility, VisibilityOff } from '@mui/icons-material';
 import { DeploymentConfig } from '@backend/types';
 import { evaluateCondition } from '@/utils/prompts/conditionEvaluator';
 import { interpolateVariables } from '@/utils/prompts/variableInterpolator';
+import autoAnimate from '@formkit/auto-animate'
 
 interface ModuleConfigFormProps {
     moduleName: string;
@@ -39,8 +39,13 @@ export default function ModuleConfigForm({
     const [showPassword, setShowPassword] = useState<Record<string, boolean>>({});
     const [touched, setTouched] = useState<Record<string, boolean>>({});
     const [userModified, setUserModified] = useState<Record<string, boolean>>({});
+    const parent = useRef(null);
 
     const modulePrompts = prompts.filter(p => p.module === moduleName);
+
+    useEffect(() => {
+        parent.current && autoAnimate(parent.current);
+    }, [parent])
 
     useEffect(() => {
         // Initialize default values
@@ -56,7 +61,6 @@ export default function ModuleConfigForm({
         });
 
         if (hasChanges) {
-            console.log("ModuleConfigForm: Has changes!!!");
             onValuesChange(newValues);
         }
     }, [modulePrompts, allValues, values, onValuesChange]);
@@ -158,16 +162,16 @@ export default function ModuleConfigForm({
         <Card sx={{ mb: 3 }}>
             <CardContent>
                 <Typography variant="h6" gutterBottom>
-                    {moduleName} Configuration
+                    Configuration for {moduleName}:
                 </Typography>
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }} ref={parent}>
                     {modulePrompts.map(prompt => {
                         const shouldShow = !prompt.condition || evaluateCondition(prompt.condition, allValues);
-                        
+                        if (!shouldShow) return null;
                         return (
-                            <Collapse key={prompt.variable} in={shouldShow}>
+                            <Box key={prompt.variable}>
                                 {renderField(prompt)}
-                            </Collapse>
+                            </Box>
                         );
                     })}
                 </Box>

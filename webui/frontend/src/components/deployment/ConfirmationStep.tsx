@@ -52,7 +52,7 @@ export default function ConfirmationStep({
             <Typography variant="h6" gutterBottom>
                 Review Configuration
             </Typography>
-            <Typography variant="body2" color="text.secondary" component="p">
+            <Typography variant="body2" color="text.secondary" component="p" sx={{ mb: 2 }}>
                 Please review your configuration before proceeding with the deployment:
             </Typography>
 

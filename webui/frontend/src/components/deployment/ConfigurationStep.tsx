@@ -108,9 +108,9 @@ export default function ConfigurationStep({ modules, config, onComplete }: Confi
     return (
         <Box>
             <Typography variant="h6" gutterBottom>
-                Configuration Required
+                Deployment Configuration
             </Typography>
-            <Typography variant="body2" color="text.secondary" component="p">
+            <Typography variant="body2" color="text.secondary" component="p" sx={{ mb: 2 }}>
                 Please provide the following configuration for the selected modules:
             </Typography>
 

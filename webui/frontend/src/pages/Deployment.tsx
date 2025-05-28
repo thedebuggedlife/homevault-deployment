@@ -7,6 +7,7 @@ import ConfigurationStep from '@/components/deployment/ConfigurationStep';
 import ConfirmationStep from '@/components/deployment/ConfirmationStep';
 import backend from '@/backend';
 import FullPageLayout from '@/layouts/fullpage';
+import { NavigationBlocker } from '@/components/NavigationBlocker';
 
 interface DeploymentState {
     modules: string[];
@@ -24,7 +25,12 @@ export default function Deployment() {
     const [error, setError] = useState<string | null>(null);
     const [deploymentComplete, setDeploymentComplete] = useState(false);
     
-    const deploymentSteps = ['Configuration', 'Confirmation', 'Running', 'Complete'];
+    const deploymentSteps = ['Configuration', 'Confirmation', 'Installing', 'Complete'];
+
+    const STEP_CONFIGURATION = 0;
+    const STEP_CONFIRMATION = 1;
+    const STEP_INSTALLATION = 2;
+    const STEP_COMPLETION = 3;
 
     // Get the state from navigation
     const { modules, backPath, backTitle } = useMemo(() => {
@@ -75,35 +81,11 @@ export default function Deployment() {
             const timer = setTimeout(() => {
                 setDeploymentComplete(true);
                 setActiveStep(3); // Move to "Complete"
-            }, 5000); // Simulate 5 seconds of deployment
+            }, 15000); // Simulate 15 seconds of deployment
 
             return () => clearTimeout(timer);
         }
     }, [activeStep, deploymentComplete]);
-
-    const handleExit = () => {
-        if (activeStep == 2) {
-            if (!window.confirm('Deployment is in progress. Are you sure you want to leave?')) {
-                return;
-            }
-        }
-        navigate(backPath);
-    }
-
-    const handleBack = () => {
-        if (activeStep == 2) {
-            if (!window.confirm('Deployment is in progress. Are you sure you want to leave?')) {
-                return;
-            }
-        }
-        if (activeStep === 0) {
-            navigate(backPath);
-        } else if (activeStep === 1) {
-            setActiveStep(0);
-        } else {
-            navigate(backPath);
-        }
-    };
 
     const handleConfigurationComplete = (values: Record<string, string>) => {
         setConfigValues(values);
@@ -136,7 +118,7 @@ export default function Deployment() {
     const headerContent = (
         <Button 
             startIcon={<ArrowBack />} 
-            onClick={handleExit}
+            onClick={() => navigate(backPath)}
             size="small"
         >
             Back to {backTitle}
@@ -199,7 +181,7 @@ export default function Deployment() {
                 </CardContent>
             </Card>
 
-            {activeStep === 0 && deploymentConfig && (
+            {activeStep === STEP_CONFIGURATION && deploymentConfig && (
                 <Card>
                     <CardContent>
                         <ConfigurationStep
@@ -211,7 +193,7 @@ export default function Deployment() {
                 </Card>
             )}
 
-            {activeStep === 1 && deploymentConfig && (
+            {activeStep === STEP_CONFIRMATION && deploymentConfig && (
                 <Card>
                     <CardContent>
                         <ConfirmationStep
@@ -219,13 +201,13 @@ export default function Deployment() {
                             config={deploymentConfig}
                             values={configValues}
                             onConfirm={handleConfirmDeployment}
-                            onBack={handleBack}
+                            onBack={() => setActiveStep(STEP_CONFIGURATION)}
                         />
                     </CardContent>
                 </Card>
             )}
 
-            {activeStep === 2 && (
+            {activeStep === STEP_INSTALLATION && (
                 <Card>
                     <CardContent>
                         <Typography variant="h6" gutterBottom>
@@ -248,10 +230,14 @@ export default function Deployment() {
                             Please wait while the deployment is in progress...
                         </Typography>
                     </CardContent>
+                    <NavigationBlocker
+                        title="Deployment in Progress"
+                        message="The deployment process will continue to run in the background. Are you sure you want to leave?"
+                    />
                 </Card>
             )}
 
-            {activeStep === 3 && (
+            {activeStep === STEP_COMPLETION && (
                 <Card>
                     <CardContent>
                         <Box textAlign="center">

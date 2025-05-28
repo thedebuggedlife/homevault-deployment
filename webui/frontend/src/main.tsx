@@ -7,7 +7,6 @@ import Dashboard from "./pages/Dashboard";
 import Login from "./pages/Login";
 import Modules from "./pages/Modules";
 import Deployment from "./pages/Deployment";
-import ProtectedRoute from "./components/ProtectedRoute";
 
 const router = createBrowserRouter([
     {
@@ -24,21 +23,32 @@ const router = createBrowserRouter([
                     {
                         path: "dashboard",
                         Component: Dashboard,
+                        handle: {
+                            title: "Dashboard",
+                        },
                     },
                     {
                         path: "modules",
                         Component: Modules,
+                        handle: {
+                            title: "Modules",
+                        },
                     },
+                    {
+                        path: "deployment",
+                        Component: Deployment,
+                        handle: {
+                            title: "Deployment",
+                            hideNavigation: true,
+                            fullPage: true,
+                        },
+                    }
                 ],
             },
             {
                 path: "/login",
                 Component: Login,
             },
-            {
-                path: "/deployment",
-                element: <ProtectedRoute><Deployment/></ProtectedRoute>,
-            }
         ],
     },
 ]);
