@@ -481,7 +481,10 @@ parse_global_option() {
             ;;
         --unattended)
             UNATTENDED=true
-            USE_DEFAULTS=true
+            return 1
+            ;;
+        --force)
+            FORCE=true
             return 1
             ;;
         --always-ask)

@@ -21,6 +21,7 @@ declare -g SECRETS_PATH=
 declare -g OVERRIDE_COMPOSE=true
 declare -g OVERRIDE_VERSIONS=false
 declare -g UNATTENDED=
+declare -g FORCE=
 declare -g NO_DOWNLOAD=
 declare -g USE_SMTP2GO
 declare -g USE_DEFAULTS=true
@@ -174,7 +175,7 @@ prepare_env_file() {
 # @return void
 ###
 download_appdata() {
-    if [ "$NO_DOWNLOAD" = true ]; then return 0; fi
+    if [[ "$NO_DOWNLOAD" = true || "$PROJECT_VERSION" = "test" ]]; then return 0; fi
     log_header "Downloading application data for modules"
     for module in "${ENABLED_MODULES[@]}"; do
         download_module_appdata "$module"
@@ -422,13 +423,15 @@ deploy_project() {
     fi
 
     local user_input=Y
-    if [ "$UNATTENDED" != true ]; then
-        log "\n\nProject ${Purple}$COMPOSE_PROJECT_NAME${COff} is ready for docker deployment. "
-        read -p "Do you want to proceed? [Y/n] " user_input </dev/tty
-        user_input=${user_input:-Y}
-    fi
-    if [[ ! "$user_input" =~ ^[Yy]$ ]]; then
-        abort_install
+    if [ "$FORCE" != true ]; then
+        if [ "$UNATTENDED" != true ]; then
+            log "\n\nProject ${Purple}$COMPOSE_PROJECT_NAME${COff} is ready for docker deployment. "
+            read -p "Do you want to proceed? [Y/n] " user_input </dev/tty
+            user_input=${user_input:-Y}
+        fi
+        if [[ ! "$user_input" =~ ^[Yy]$ ]]; then
+            abort_install
+        fi
     fi
 
     deploy_stop_backup
@@ -735,6 +738,8 @@ trap "abort_install" SIGINT
 trap "on_script_exit" EXIT
 
 parse_command_line "$@"
+
+if [ "$UNATTENDED" = true ]; then sudo -S -v; fi
 
 run_"${SELECTED_ACTION}" || exit 1
 

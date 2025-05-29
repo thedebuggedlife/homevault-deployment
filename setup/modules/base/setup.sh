@@ -105,10 +105,8 @@ pam_write_sssd_config() {
         local user_input
         if ! sudo grep -Fq "$CF_DOMAIN_NAME" "$_SSSD_CONFIG_PATH"; then
             log_warn "SSSD configuration file exists but does not seem to be configured for '$CF_DOMAIN_NAME'"
-            if [ "$UNATTENDED" = true ]; then return 1; fi
-            read -p "Do you want to override the existing configuration? [y/N] " user_input </dev/tty
-            user_input=${user_input:-N}
-            if [[ ! "$user_input" =~ ^[Yy]$ ]]; then
+
+            if ! ask_confirmation -p "Do you want to override the existing configuration?"; then
                 abort_install
             fi
         else

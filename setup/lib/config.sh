@@ -165,6 +165,7 @@ ask_value() {
 #   fi
 ###
 ask_confirmation() {
+    if [ "$FORCE" = true ]; then return 0; fi
     local prompt="Do you want to continue?"
     local default=N
     local options="y/N"
@@ -359,7 +360,7 @@ ask_for_env() {
     local -a input_opts=()
     local -a webui_opts=()
     local use_default=true
-    local default_value="${!${env_variable}_DEFAULT}"
+    local default_value=
     OPTIND=3
     while getopts ":iemo:v:E:a:" opt; do
         case $opt in

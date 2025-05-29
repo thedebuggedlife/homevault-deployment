@@ -56,12 +56,8 @@ configure_docker() {
     if [ "$_DOCKER_INSTALLED" != "true" ]; then
         log_header "Configuring Docker"
         log "\n${Yellow}Docker is not installed.${COff}"
-        local user_input=Y
-        if [ "$UNATTENDED" != "true" ]; then
-            read -p "Do you want to install Docker? [Y/n] " user_input </dev/tty
-            user_input=${user_input:-Y}
-        fi
-        if [[ "$user_input" =~ ^[Yy]$ ]]; then
+
+        if ask_confirmation -y -p "Do you want to install Docker?"; then
             log "Installing Docker..."
             if ! curl -fsSL https://get.docker.com | sudo sh; then
                 log_error "Docker installation failed"

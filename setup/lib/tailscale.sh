@@ -84,12 +84,8 @@ tailscale_disable_key_expiration() {
 tailscale_check_installed() {
     if ! command -v tailscale >/dev/null 2>&1; then
         log "\n${Yellow}Tailscale is not installed.${COff}"
-        local user_input=Y
-        if [ "$UNATTENDED" != "true" ]; then
-            read -p "Do you want to install tailscale? [Y/n] " user_input </dev/tty
-            user_input=${user_input:-Y}
-        fi
-        if [[ "$user_input" =~ ^[Yy]$ ]]; then
+
+        if ask_confirmation -y -p "Do you want to install tailscale?"; then
             log "Installing tailscale..."
             if ! curl -fsSL https://tailscale.com/install.sh | sh >/dev/null; then
                 log_error "Failed to install tailscale"
