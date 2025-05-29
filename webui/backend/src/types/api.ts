@@ -17,6 +17,10 @@ export interface DeploymentRequest {
         install?: string[];
         remove?: string[];
     }
+    config?: {
+        variables?: Record<string, string>;
+        password?: string;
+    }
 }
 
 export interface DeploymentConfig {
@@ -34,6 +38,16 @@ export interface DeploymentConfig {
             message?: string;
         }[];
     }[];
+}
+
+export interface DeploymentServerEvents {
+    output: (data: string) => void;
+    completed: () => void;
+    error: (message: string) => void;
+}
+
+export interface DeploymentClientEvents {
+    start: (request: DeploymentRequest) => void;
 }
 
 export interface SystemStatusResponse {

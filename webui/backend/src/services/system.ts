@@ -4,8 +4,9 @@ import { ChildProcess, spawn, SpawnOptionsWithoutStdio } from "child_process";
 import { SystemResources } from "@/types";
 import si from "systeminformation";
 import _ from "lodash";
+import { EmitterMixin, EventsMap } from "nanoevents";
 
-interface CommandResult<T = void> {
+export interface CommandResult<T = void> {
     success: boolean;
     output?: string;
     error?: string;
@@ -13,9 +14,18 @@ interface CommandResult<T = void> {
     code?: number;
 }
 
-interface CommandOptions extends SpawnOptionsWithoutStdio {
+export interface InputEvents extends EventsMap {
+    data: (data: string) => void;
+    close: () => void;
+}
+
+export interface CommandOptions extends SpawnOptionsWithoutStdio {
     jsonOutput?: boolean;
     jsonArray?: boolean;
+    sudo?: { password: string };
+    stdin?: EmitterMixin<InputEvents>;
+    stdout?: (data: string) => void;
+    stderr?: (data: string) => void;
 }
 
 class SystemService {
@@ -50,24 +60,36 @@ class SystemService {
                     ...options,
                     shell: true,
                 }
-                this.logger.debug("Spanning new process", {
-                    command, args, options
-                })
+
                 const process: ChildProcess = spawn(command, args, options);
+                this.logger.info(`Process [${process.pid}] started with command: ${command} ${args.join(" ")}`);
 
                 let output: string = "";
                 let error: string = "";
 
                 process.stdout?.on("data", (data: Buffer) => {
-                    output += data.toString();
+                    const text = data.toString();
+                    options?.stdout?.(text)
+                    output += text;
                 });
 
                 process.stderr?.on("data", (data: Buffer) => {
-                    error += data.toString();
+                    const text = data.toString();
+                    options?.stderr?.(text);
+                    error += text;
                 });
 
+                if (options.stdin) {
+                    options.stdin.on("data", data => {
+                        process.stdin?.write(data);
+                    });
+                    options.stdin.on("close", () => {
+                        process.stdin?.end();
+                    })
+                }
+
                 process.on("error", (error) => {
-                    this.logger.error("Failed to spawn new process", { command, args, options, error });
+                    this.logger.error(`Process [${process.pid}] failed to start`, { command, args, options, error });
                     reject({ success: false, error: "Failed to spawn new process" });
                 })
 
@@ -76,7 +98,8 @@ class SystemService {
                     if (options.jsonOutput) {
                         data = this.tryParseJson<T>(output, options.jsonArray);
                     }
-                    const result = { success: code == 0, data, output, error, code };
+                    const result = { success: code === 0, data, output, error, code };
+                    this.logger.info(`Process [${process.pid}] exits with code ${code}`);
                     if (code === 0) {
                         resolve(result);
                     } else {
