@@ -1,7 +1,7 @@
 "use client";
 import { SignInPage } from "@toolpad/core/SignInPage";
 import LinearProgress from "@mui/material/LinearProgress";
-import { Navigate, useNavigate } from "react-router";
+import { Navigate, useNavigate } from "react-router-dom";
 import { signIn, useSession } from "@/contexts/SessionContext";
 
 function Login() {

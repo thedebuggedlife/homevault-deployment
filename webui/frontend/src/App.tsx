@@ -3,9 +3,9 @@ import {
   Dashboard as DashboardIcon,
   Extension as ExtensionIcon,
 } from '@mui/icons-material';
-import { ReactRouterAppProvider } from '@toolpad/core/react-router';
-import { Outlet } from 'react-router';
-import type { Authentication, Navigation } from '@toolpad/core';
+import { AppProvider } from '@toolpad/core/AppProvider';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+import type { Authentication, Navigation, Router } from '@toolpad/core';
 import SessionContext, { type Session, onAuthStateChanged, restoreSession, signOut } from './contexts/SessionContext';
 import { User } from './types';
 
@@ -38,6 +38,19 @@ const AUTHENTICATION: Authentication = {
 export default function App() {
   const [session, setSession] = React.useState<Session | null>(null);
   const [loading, setLoading] = React.useState(true);
+  
+  // Get React Router hooks
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // Create router adapter for Toolpad
+  const router = React.useMemo<Router>(() => {
+    return {
+      pathname: location.pathname,
+      searchParams: new URLSearchParams(location.search),
+      navigate: (path: string | URL) => navigate(String(path)),
+    };
+  }, [location, navigate]);
 
   const sessionContextValue = React.useMemo(
     () => ({
@@ -63,15 +76,16 @@ export default function App() {
   }, []);
   
   return (
-    <ReactRouterAppProvider 
+    <AppProvider 
       navigation={NAVIGATION} 
       branding={BRANDING}
       session={session}
       authentication={AUTHENTICATION}
+      router={router}
     >
       <SessionContext.Provider value={sessionContextValue}>
         <Outlet />
       </SessionContext.Provider>
-    </ReactRouterAppProvider>
+    </AppProvider>
   );
 }

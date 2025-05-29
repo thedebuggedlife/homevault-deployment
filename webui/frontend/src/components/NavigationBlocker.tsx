@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useCallback } from 'react';
 import { useBlocker } from 'react-router-dom';
 import {
     Dialog,
@@ -28,6 +28,7 @@ export function NavigationBlocker({
     onConfirm,
     onCancel,
 }: NavigationBlockerProps) {
+    // Note: useBlocker is available in react-router-dom v6.4+
     const blocker = useBlocker(
         ({ currentLocation, nextLocation }) => 
             when && currentLocation.pathname !== nextLocation.pathname
@@ -38,7 +39,6 @@ export function NavigationBlocker({
         const handleBeforeUnload = (e: BeforeUnloadEvent) => {
             if (when) {
                 e.preventDefault();
-                e.returnValue = '';
                 return message;
             }
         };
@@ -47,15 +47,15 @@ export function NavigationBlocker({
         return () => window.removeEventListener('beforeunload', handleBeforeUnload);
     }, [when, message]);
 
-    const handleConfirm = () => {
+    const handleConfirm = useCallback(() => {
         onConfirm?.();
         blocker.proceed?.();
-    };
+    }, [blocker, onConfirm]);
 
-    const handleCancel = () => {
+    const handleCancel = useCallback(() => {
         onCancel?.();
         blocker.reset?.();
-    };
+    }, [blocker, onCancel]);
 
     return (
         <Dialog

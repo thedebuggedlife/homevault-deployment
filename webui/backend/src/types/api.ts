@@ -24,6 +24,7 @@ export interface DeploymentRequest {
 }
 
 export interface DeploymentConfig {
+    username: string;
     prompts: {
         module: string;
         variable: string;

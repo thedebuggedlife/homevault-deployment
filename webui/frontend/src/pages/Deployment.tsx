@@ -1,11 +1,12 @@
-import { useLocation, useNavigate } from 'react-router';
-import { Typography, Box, Card, CardContent, Button, Stepper, Step, StepLabel, Alert, CircularProgress } from '@mui/material';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { Typography, Box, Card, CardContent, Button, Stepper, Step, StepLabel, Alert, CircularProgress, StepIconProps, StepIcon, Dialog, DialogTitle, DialogContent, DialogActions, TextField } from '@mui/material';
 import { ArrowBack } from '@mui/icons-material';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DeploymentConfig } from '@backend/types';
 import ConfigurationStep from '@/components/deployment/ConfigurationStep';
 import ConfirmationStep from '@/components/deployment/ConfirmationStep';
-import backend from '@/backend';
+import Terminal from '@/components/deployment/Terminal';
+import backend, { DeploymentOperation } from '@/backend';
 import FullPageLayout from '@/layouts/fullpage';
 import { NavigationBlocker } from '@/components/NavigationBlocker';
 
@@ -23,14 +24,21 @@ export default function Deployment() {
     const [deploymentConfig, setDeploymentConfig] = useState<DeploymentConfig | null>(null);
     const [configLoading, setConfigLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [deploymentComplete, setDeploymentComplete] = useState(false);
+    const [deploymentError, setDeploymentError] = useState<string | null>(null);
+    const [installationOutput, setInstallationOutput] = useState<string[]>([]);
+    const [isInstalling, setIsInstalling] = useState(false);
+    const [operation, setOperation] = useState<DeploymentOperation | null>(null);
     
-    const deploymentSteps = ['Configuration', 'Confirmation', 'Installing', 'Complete'];
+    // Password dialog state
+    const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
+    const [password, setPassword] = useState('');
+    const [passwordError, setPasswordError] = useState('');
+    
+    const deploymentSteps = ['Configuration', 'Confirmation', 'Deployment'];
 
     const STEP_CONFIGURATION = 0;
     const STEP_CONFIRMATION = 1;
     const STEP_INSTALLATION = 2;
-    const STEP_COMPLETION = 3;
 
     // Get the state from navigation
     const { modules, backPath, backTitle } = useMemo(() => {
@@ -75,44 +83,84 @@ export default function Deployment() {
         }
     }, [modules, navigate, backPath]);
 
-    useEffect(() => {
-        if (activeStep === 2 && !deploymentComplete) {
-            // Simulate deployment progress when in "Running" step
-            const timer = setTimeout(() => {
-                setDeploymentComplete(true);
-                setActiveStep(3); // Move to "Complete"
-            }, 15000); // Simulate 15 seconds of deployment
-
-            return () => clearTimeout(timer);
-        }
-    }, [activeStep, deploymentComplete]);
-
     const handleConfigurationComplete = (values: Record<string, string>) => {
         setConfigValues(values);
-        setActiveStep(1); // Move to "Confirmation"
+        setActiveStep(STEP_CONFIRMATION);
     };
 
-    const handleConfirmDeployment = async () => {
-        setActiveStep(2); // Move to "Running"
+    const handleConfirmDeployment = () => {
+        // Open password dialog instead of directly starting deployment
+        setPasswordDialogOpen(true);
+        setPassword('');
+        setPasswordError('');
+    };
+
+    const handlePasswordSubmit = async () => {
+        if (!password.trim()) {
+            setPasswordError('Password is required');
+            return;
+        }
+
+        // Close dialog and start deployment
+        setPasswordDialogOpen(false);
+        setActiveStep(STEP_INSTALLATION);
         setError(null);
+        setDeploymentError(null);
+        setInstallationOutput([]);
+        setIsInstalling(true);
         
         try {
-            // TODO: Implement actual deployment API call here
-            // For now, we just simulate the deployment with the timer
-            
-            // Example of what the actual implementation might look like:
-            // const response = await backend.deployModules({
-            //     modules: { install: modules },
-            //     configuration: configValues
-            // });
-            
-            console.log('Starting deployment with config:', configValues);
+            const request = {
+                modules: {
+                    install: modules,
+                },
+                config: {
+                    variables: configValues,
+                    password: password
+                }
+            }
+            const operation = await backend.startDeployment(request);
+            operation.on("output", (output: string) => {
+                setInstallationOutput(prev => [...prev, output]);
+            });
+            operation.on("completed", () => {
+                setIsInstalling(false);
+                operation.close();
+            })
+            operation.on("error", (message: string) => {
+                setDeploymentError(message ?? "Something went wrong. Please try again.");
+                setIsInstalling(false);
+            })
+            setOperation(operation);
         } catch (err) {
-            setError('Deployment failed. Please try again.');
-            console.error('Deployment error:', err);
-            setActiveStep(1); // Go back to confirmation
+            setError('Failed to start deployment. Please try again.');
+            setActiveStep(STEP_CONFIRMATION);
+            setIsInstalling(false);
+        } finally {
+            // Clear password from memory
+            setPassword('');
         }
     };
+
+    const handlePasswordCancel = () => {
+        setPasswordDialogOpen(false);
+        setPassword('');
+        setPasswordError('');
+    };
+
+    const handlePasswordKeyPress = (event: React.KeyboardEvent) => {
+        if (event.key === 'Enter') {
+            handlePasswordSubmit();
+        }
+    };
+
+    useEffect(() => {
+        return () => {
+            if (operation) {
+                operation.close();
+            }
+        };
+    }, [operation]);
 
     // Header content with back button
     const headerContent = (
@@ -158,6 +206,8 @@ export default function Deployment() {
         );
     }
 
+    const stepIcon = (props: StepIconProps) => isInstalling && props.active ? <CircularProgress size={24} thickness={4} /> : <StepIcon {...props} />;
+
     return (
         <FullPageLayout
             headerContent={headerContent}
@@ -171,10 +221,14 @@ export default function Deployment() {
 
             <Card sx={{ mb: 3 }}>
                 <CardContent>
-                    <Stepper activeStep={activeStep}>
+                    <Stepper
+                        activeStep={activeStep}
+                    >
                         {deploymentSteps.map((label) => (
                             <Step key={label}>
-                                <StepLabel>{label}</StepLabel>
+                                <StepLabel StepIconComponent={stepIcon}>
+                                    {label}
+                                </StepLabel>
                             </Step>
                         ))}
                     </Stepper>
@@ -207,7 +261,7 @@ export default function Deployment() {
                 </Card>
             )}
 
-            {activeStep === STEP_INSTALLATION && (
+            {activeStep === STEP_INSTALLATION && isInstalling && (
                 <Card>
                     <CardContent>
                         <Typography variant="h6" gutterBottom>
@@ -223,12 +277,7 @@ export default function Deployment() {
                                 </li>
                             ))}
                         </Box>
-                        <Box display="flex" justifyContent="center" my={4}>
-                            <CircularProgress />
-                        </Box>
-                        <Typography variant="body2" color="text.secondary" align="center">
-                            Please wait while the deployment is in progress...
-                        </Typography>
+                        <Terminal output={installationOutput} />
                     </CardContent>
                     <NavigationBlocker
                         title="Deployment in Progress"
@@ -237,27 +286,91 @@ export default function Deployment() {
                 </Card>
             )}
 
-            {activeStep === STEP_COMPLETION && (
+            {activeStep === STEP_INSTALLATION && !isInstalling && (
                 <Card>
                     <CardContent>
-                        <Box textAlign="center">
-                            <Typography variant="h6" color="success.main" gutterBottom>
-                                Deployment Complete!
-                            </Typography>
-                            <Typography variant="body2" color="text.secondary" component="p">
-                                The selected modules have been successfully installed and configured.
-                            </Typography>
+                        <Box textAlign="center" sx={{ marginBottom: 2 }}>
+                            { !deploymentError && (
+                                <>
+                                    <Typography variant="h6" color="success.main" gutterBottom>
+                                        Deployment Complete!
+                                    </Typography>
+                                    <Typography variant="body2" color="text.secondary" component="p">
+                                        The selected modules have been successfully installed and configured.
+                                    </Typography>
+                                </>
+                            )}
+                            { deploymentError && (
+                                <>
+                                    <Typography variant="h6" color="error.main" gutterBottom>
+                                        Deployment Failed!
+                                    </Typography>
+                                    <Typography variant="body2" color="text.secondary" component="p">
+                                        {deploymentError}
+                                    </Typography>
+                                </>
+                            )}
+                        </Box>
+                        <Terminal output={installationOutput} />
+                        <Box display="flex" justifyContent="center" my={1}>
                             <Button 
-                                variant="contained" 
-                                onClick={() => navigate(backPath)}
-                                sx={{ mt: 2 }}
-                            >
-                                Return to {backTitle}
+                                    variant="contained" 
+                                    onClick={() => navigate(backPath)}
+                                    sx={{ mt: 2 }}
+                                >
+                                    Return to {backTitle}
                             </Button>
                         </Box>
                     </CardContent>
                 </Card>
             )}
+
+            {/* Password Dialog */}
+            <Dialog 
+                open={passwordDialogOpen} 
+                onClose={handlePasswordCancel}
+                maxWidth="sm"
+                fullWidth
+            >
+                <DialogTitle>
+                    Authentication Required
+                </DialogTitle>
+                <DialogContent>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                        Please enter the password for user <Box component="strong" sx={{ color: 'primary.main' }}>
+                        {deploymentConfig?.username ?? "installer"}
+                        </Box> to proceed with the deployment.
+                    </Typography>
+                    <TextField
+                        autoFocus
+                        margin="dense"
+                        label="Password"
+                        type="password"
+                        fullWidth
+                        variant="outlined"
+                        value={password}
+                        onChange={(e) => {
+                            setPassword(e.target.value);
+                            if (passwordError) setPasswordError('');
+                        }}
+                        onKeyUp={handlePasswordKeyPress}
+                        error={!!passwordError}
+                        helperText={passwordError}
+                    />
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={handlePasswordCancel}>
+                        Cancel
+                    </Button>
+                    <Button 
+                        onClick={handlePasswordSubmit} 
+                        variant="contained"
+                        disabled={!password.trim()}
+                    >
+                        Continue
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </FullPageLayout>
     );
 }

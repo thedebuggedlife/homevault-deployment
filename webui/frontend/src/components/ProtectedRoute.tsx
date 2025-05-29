@@ -1,5 +1,5 @@
 import React from 'react';
-import { Navigate, useLocation } from "react-router";
+import { Navigate, useLocation } from "react-router-dom";
 import { LinearProgress } from "@mui/material";
 import { useSession } from "@/contexts/SessionContext";
 

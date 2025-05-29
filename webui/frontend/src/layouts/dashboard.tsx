@@ -1,4 +1,4 @@
-import { Outlet, useMatches } from "react-router";
+import { Outlet, useMatches } from "react-router-dom";
 import { DashboardLayout } from "@toolpad/core/DashboardLayout";
 import { Container, Typography } from "@mui/material";
 import ProtectedRoute from "@/components/ProtectedRoute";

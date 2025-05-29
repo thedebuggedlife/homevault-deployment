@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate } from 'react-router-dom';
 import { Typography, Grid, Box, CircularProgress, Button } from '@mui/material';
 import { Add as AddIcon } from '@mui/icons-material';
 import { InstalledModulesCard } from '@/components/modules/InstalledModulesCard';
