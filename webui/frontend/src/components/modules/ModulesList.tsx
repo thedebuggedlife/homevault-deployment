@@ -1,4 +1,4 @@
-import { List, ListItem, ListItemText } from '@mui/material';
+import { Box, Typography } from '@mui/material';
 import { DockerContainer } from '@backend/types';
 import { isContainerRelatedToModule, ModuleContainerInfo } from '@/utils/docker';
 import ModuleListItem from './ModuleListItem';
@@ -30,28 +30,32 @@ export default function ModulesList({
         };
     };
 
+    const handleAccordionChange = (moduleName: string) => 
+        (event: React.SyntheticEvent, isExpanded: boolean) => {
+            onModuleClick(isExpanded ? moduleName : '');
+        };
+
     if (modules.length === 0) {
         return (
-            <List>
-                <ListItem>
-                    <ListItemText primary="No modules installed" />
-                </ListItem>
-            </List>
+            <Box sx={{ p: 2, textAlign: 'center' }}>
+                <Typography variant="body1" color="text.secondary">
+                    No modules installed
+                </Typography>
+            </Box>
         );
     }
 
     return (
-        <List>
-            {modules.map((module, index) => (
+        <Box>
+            {modules.map((module) => (
                 <ModuleListItem
                     key={module}
                     moduleName={module}
                     containerInfo={getModuleContainers(module)}
                     isExpanded={expandedModule === module}
-                    isLast={index === modules.length - 1}
-                    onClick={() => onModuleClick(module)}
+                    onChange={handleAccordionChange(module)}
                 />
             ))}
-        </List>
+        </Box>
     );
 }
