@@ -2,15 +2,14 @@ import {
     Accordion,
     AccordionSummary,
     AccordionDetails,
-    Chip,
     Box,
     Typography,
-    Tooltip
 } from '@mui/material';
-import { ExpandMore, Lock as LockIcon } from '@mui/icons-material';
-import { FaDocker as DockerIcon } from 'react-icons/fa';
+import { ExpandMore } from '@mui/icons-material';
 import { ModuleContainerInfo } from '@/utils/docker';
 import ContainerTable from '@/components/docker/ContainerTable';
+import CoreModuleChip from './CoreModuleChip';
+import { DockerContainerInfoChip } from './DockerContainerInfoChip';
 
 interface ModuleListItemProps {
     moduleName: string;
@@ -49,41 +48,9 @@ export default function ModuleListItem({
                         {moduleName}
                     </Typography>
                     {isBaseModule && (
-                        <Tooltip title="This module cannot be removed">
-                            <Chip
-                                icon={<LockIcon />}
-                                label="Core"
-                                size="small"
-                                variant="filled"
-                                color="info"
-                                sx={{
-                                    '& .MuiChip-label': {
-                                        paddingX: 1,
-                                    },
-                                    '& .MuiChip-icon': {
-                                        marginLeft: 1,
-                                        fontSize: '0.875rem'
-                                    },
-                                }}
-                            />
-                        </Tooltip>
+                        <CoreModuleChip tooltip="This module cannot be removed" />
                     )}
-                    <Chip
-                        icon={<DockerIcon />}
-                        label={`${containerInfo.running}/${containerInfo.total} containers`}
-                        color={containerInfo.running === containerInfo.total ? "success" : "warning"}
-                        size="small"
-                        variant="outlined"
-                        sx={{
-                            '& .MuiChip-label': {
-                                paddingX: 1,
-                            },
-                            '& .MuiChip-icon': {
-                                marginLeft: 1,
-                                marginRight: 0,
-                            },
-                        }}
-                    />
+                    <DockerContainerInfoChip containerInfo={containerInfo} />
                 </Box>
             </AccordionSummary>
             <AccordionDetails>

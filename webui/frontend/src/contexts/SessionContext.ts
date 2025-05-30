@@ -19,10 +19,15 @@ async function refreshSession() {
     if (token) {
         try {
             const response = await backend.refreshToken(token);
+            localStorage.setItem("token", response.token);
             scheduleRefresh(response.expiresInSec);
         } catch (error) {
-            if (error.status in [401, 403]) {
+            console.error("Failed to refresh token", error);
+            if ([401, 403].includes(error.status)) {
                 signOut();
+            } else {
+                // Retry in a minute
+                scheduleRefresh(60);
             }
         }
     }

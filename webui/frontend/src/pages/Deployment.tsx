@@ -55,7 +55,7 @@ export default function Deployment() {
             // If there's an ongoing deployment, jump to installation step
             setActiveStep(STEP_INSTALLATION);
         }
-        else if (activeStep == STEP_CONFIGURATION && hasModules) {
+        else if (activeStep == STEP_CONFIGURATION && !hasModules) {
             setActiveStep(STEP_CONFIRMATION);
         }
     }, [hasModules, activeStep, operation?.isInstalling]);
