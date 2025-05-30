@@ -78,6 +78,7 @@ export default function Terminal({
             xtermRef.current = null;
             fitAddonRef.current = null;
         };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentTheme]); // Re-create terminal when theme changes
 
     // Handle theme changes
