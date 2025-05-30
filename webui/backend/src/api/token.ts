@@ -9,11 +9,17 @@ export async function refreshToken(req: AuthenticatedRequest, res: Response<Refr
         logger.warn("Provided token is missing expiration time");
         return res.status(403).json({ errors: [{ message: "Invalid token" }] });
     }
-    const result = await tokenGenerator.refresh(req.token);
-    const response = {
-        user: req.token.user,
-        token: result?.token,
-        expiresInSec: result ? result.expiresInSec : getExpiresInSec(req.token.exp),
+    try{
+        const result = await tokenGenerator.refresh(req.token);
+        const response = {
+            user: req.token.user,
+            token: result?.token,
+            expiresInSec: result ? result.expiresInSec : getExpiresInSec(req.token.exp),
+        }
+        return res.json(response);
     }
-    res.json(response);
+    catch (error) {
+        logger.warn("Failed to refresh token.", { token: req.token, error });
+        return res.status(403).json({ errors: [{ message: "Failed to refresh token." }]});
+    }
 }
