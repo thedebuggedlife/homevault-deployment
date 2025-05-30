@@ -1,6 +1,5 @@
 import { AuthenticatedRequest } from "@/middleware/auth";
 import { Response } from "express";
-import { logger } from "@/logger";
 import { ErrorResponse, SystemStatusResponse } from "@/types";
 import docker from "@/services/docker";
 import installer from "@/services/installer";

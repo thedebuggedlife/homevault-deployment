@@ -12,6 +12,19 @@ export interface SystemResources {
     diskUsage: number;
 }
 
+export type CurrentActivity = DeploymentActivity | BackupActivity | { type: 'none' }
+
+export interface DeploymentActivity {
+    id: string;
+    type: 'deployment';
+    request: DeploymentRequest;
+}
+
+export interface BackupActivity {
+    id: string;
+    type: 'backup';
+}
+
 export interface DeploymentRequest {
     modules?: {
         install?: string[];
@@ -42,13 +55,16 @@ export interface DeploymentConfig {
 }
 
 export interface DeploymentServerEvents {
-    output: (data: string) => void;
+    started: (activityId: string) => void;
+    output: (data: string, offset: number) => void;
+    backfill: (data: string[]) => void;
     completed: () => void;
     error: (message: string) => void;
 }
 
 export interface DeploymentClientEvents {
     start: (request: DeploymentRequest) => void;
+    attach: (id: string) => void;
 }
 
 export interface SystemStatusResponse {

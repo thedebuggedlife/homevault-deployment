@@ -1,9 +1,10 @@
 import winston from "winston";
 import { logger as rootLog } from "@/logger";
 import system, { InputEvents } from "./system";
-import { DeploymentConfig, DeploymentRequest } from "@/types";
+import { CurrentActivity, DeploymentConfig, DeploymentRequest } from "@/types";
 import { createNanoEvents, Emitter, EmitterMixin } from "nanoevents";
 import { ServiceError } from "@/errors";
+import { v4 as uuid } from "uuid";
 
 export const INSTALLER_PATH = process.env.INSTALLER_PATH ?? "~/homevault/workspace";
 
@@ -23,12 +24,15 @@ interface CommandOptions {
 }
 
 export interface DeploymentEvents {
-    output: (data: string) => void;
+    output: (data: string, offset: number) => void;
+    completed: (error?: any) => void;
 }
 
 export interface DeploymentInstance {
+    id: string;
     request: DeploymentRequest;
     events: Emitter<DeploymentEvents>;
+    output: string[];
 }
 
 class InstallerService {
@@ -37,6 +41,16 @@ class InstallerService {
 
     constructor() {
         this.logger = rootLog.child({ source: 'InstallerService' });
+    }
+
+    getCurrentActivity(): CurrentActivity|undefined {
+        if (this.currentDeployment) {
+            return {
+                id: this.currentDeployment.id,
+                type: 'deployment',
+                request: this.currentDeployment.request,
+            };
+        }
     }
 
     getCurrentDeployment(): DeploymentInstance | undefined {
@@ -67,7 +81,7 @@ class InstallerService {
         return output.config;
     }
 
-    async startDeployment(request: DeploymentRequest): Promise<void> {
+    startDeployment(request: DeploymentRequest): DeploymentInstance {
         if (this.currentDeployment) {
             this.logger.warn("There is already an ongoing deployment");
             throw new ServiceError("There is already an ongoing deployment");
@@ -77,23 +91,39 @@ class InstallerService {
             this.logger.warn("Deployment request missing password for sudo");
             throw new ServiceError("Deployment requires password for sudo");
         }
-        const events = createNanoEvents<DeploymentEvents>();
+        delete request.config?.password; // Avoid leaking password - remove it from persisted request
         const input = createNanoEvents<InputEvents>();
-        this.currentDeployment = { request, events };
-        try {
-            const args = this.getDeploymentArgs(request);
-            const output = (data: string) => {
-                if (data.startsWith("[sudo]")) {
-                    input.emit("data", password + "\n");
-                }
-                events.emit('output', data);
+        const instance: DeploymentInstance = this.currentDeployment = { 
+            id: uuid(),
+            request,
+            events: createNanoEvents<DeploymentEvents>(),
+            output: [],
+        };
+        const args = this.getDeploymentArgs(request);
+        const output = (data: string) => {
+            if (data.startsWith("[sudo]")) {
+                input.emit("data", password + "\n");
             }
-            const options = { output, input }
-            await this.executeCommand([...args, "--unattended", "--force"], options);
+            instance.events.emit('output', data, instance.output.length);
+            instance.output.push(data);
         }
-        finally {
-            delete this.currentDeployment;
-        }
+        const options = { output, input }
+        this.executeCommand([...args, "--unattended", "--force"], options).then(
+            () => {
+                // Delete current deployment first to avoid race conditions when attaching to ongoing deployment
+                delete this.currentDeployment;
+                instance.events.emit("completed");
+            },
+            error => {
+                // Delete current deployment first to avoid race conditions when attaching to ongoing deployment
+                delete this.currentDeployment;
+                instance.events.emit("completed", error);
+            }
+        ).finally(() => {
+            input.events = {};
+            instance.events.events = {};
+        });
+        return instance;
     }
 
     private getDeploymentArgs(request: DeploymentRequest) {

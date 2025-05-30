@@ -11,9 +11,10 @@ import { authenticateToken } from '@/middleware/auth';
 import { getStatus } from '@/api/status';
 import { check } from '@/api/check';
 import { getModules } from './api/modules';
-import { getDeploymentConfig, startDeployment } from './api/deployment';
+import { getDeploymentConfig, deploymentSocket } from './api/deployment';
 import { socketAuth } from './middleware/socketAuth';
 import { logger } from '@/logger';
+import { getActivity } from './api/activity';
 
 const app = express();
 const server = http.createServer(app);
@@ -24,7 +25,7 @@ const io = new SocketIOServer(server, {
   }
 });
 
-io.of("/deployment").use(socketAuth).on("connection", startDeployment);
+io.of("/deployment").use(socketAuth).on("connection", deploymentSocket);
 
 app.use(cors());
 app.use(express.json());
@@ -35,6 +36,7 @@ app.post('/api/login', [
   handleValidationErrors
 ], login);
 app.get('/api/check', authenticateToken, check);
+app.get('/api/activity', authenticateToken, getActivity);
 app.get('/api/status', authenticateToken, getStatus);
 app.get('/api/modules', authenticateToken, getModules);
 app.post('/api/deployment/config', authenticateToken, getDeploymentConfig);
