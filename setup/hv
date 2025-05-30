@@ -739,7 +739,12 @@ trap "on_script_exit" EXIT
 
 parse_command_line "$@"
 
-if [ "$UNATTENDED" = true ]; then sudo -S -v; fi
+if [ "$UNATTENDED" = true ]; then 
+    sudo -S -v || {
+        log_error "Failed to authenticate with sudo as $USER"
+        exit 1
+    }
+fi
 
 run_"${SELECTED_ACTION}" || exit 1
 
