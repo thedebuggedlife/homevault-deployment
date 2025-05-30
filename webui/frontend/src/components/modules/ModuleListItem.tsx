@@ -5,9 +5,10 @@ import {
     Box,
     Collapse,
     Typography,
-    Divider
+    Divider,
+    Tooltip
 } from '@mui/material';
-import { ExpandMore, ExpandLess } from '@mui/icons-material';
+import { ExpandMore, ExpandLess, Lock as LockIcon } from '@mui/icons-material';
 import { FaDocker as DockerIcon } from 'react-icons/fa';
 import { ModuleContainerInfo } from '@/utils/docker';
 import ContainerTable from '@/components/docker/ContainerTable';
@@ -27,6 +28,8 @@ export default function ModuleListItem({
     isLast,
     onClick
 }: ModuleListItemProps) {
+    const isBaseModule = moduleName === 'base';
+
     return (
         <>
             <ListItem
@@ -43,6 +46,26 @@ export default function ModuleListItem({
                         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                 {moduleName}
+                                {isBaseModule && (
+                                    <Tooltip title="This module cannot be removed">
+                                        <Chip
+                                            icon={<LockIcon />}
+                                            label="Core"
+                                            size="small"
+                                            variant="filled"
+                                            color="info"
+                                            sx={{
+                                                '& .MuiChip-label': {
+                                                    paddingX: 1,
+                                                },
+                                                '& .MuiChip-icon': {
+                                                    marginLeft: 1,
+                                                    fontSize: '0.875rem'
+                                                },
+                                            }}
+                                        />
+                                    </Tooltip>
+                                )}
                                 <Chip
                                     icon={<DockerIcon />}
                                     label={`${containerInfo.running}/${containerInfo.total} containers`}
@@ -55,7 +78,7 @@ export default function ModuleListItem({
                                         },
                                         '& .MuiChip-icon': {
                                             marginLeft: 1,
-                                            marginRight: 0.2,
+                                            marginRight: 0,
                                         },
                                     }}
                                 />

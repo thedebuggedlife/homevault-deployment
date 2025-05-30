@@ -1,8 +1,9 @@
+import { DeployModules } from '@/types';
 import { useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 
 interface DeploymentState {
-    modules: string[];
+    modules: DeployModules;
     backPath?: string;
     backTitle?: string;
 }
@@ -10,12 +11,15 @@ interface DeploymentState {
 export function useDeploymentState() {
     const location = useLocation();
     
-    return useMemo(() => {
+    return useMemo<DeploymentState>(() => {
         const state = location.state as DeploymentState;
         return {
-            modules: state?.modules || [],
-            backPath: state?.backPath || '/',
-            backTitle: state?.backTitle || 'Home'
+            modules: {
+                install: state?.modules?.install ?? [],
+                remove: state?.modules?.remove ?? [],
+            },
+            backPath: state?.backPath ?? '/',
+            backTitle: state?.backTitle ?? 'Home'
         };
     }, [location.state]);
 }

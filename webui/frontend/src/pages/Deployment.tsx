@@ -24,7 +24,7 @@ const deploymentSteps = ["Configuration", "Confirmation", "Deployment"];
 export default function Deployment() {
     const navigate = useNavigate();
     const { modules, backPath, backTitle } = useDeploymentState();
-    const { config, loading: configLoading, error: configError, reload: reloadConfig } = useDeploymentConfig(modules);
+    const { config, loading: configLoading, error: configError, reload: reloadConfig } = useDeploymentConfig(modules.install);
     const {
         output,
         operation,
@@ -39,17 +39,31 @@ export default function Deployment() {
     const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
+    // Determine which output to show (existing deployment or new deployment)
+    const displayError = deploymentError || error;
+    const displayModules = activity?.request?.modules ? {
+        install: activity?.request?.modules.install ?? [],
+        remove: activity?.request?.modules.remove ?? [],
+    } : modules;
+    const hasInstallations = displayModules.install.length > 0;
+    const hasRemovals = displayModules.remove.length > 0;
+    const hasModules = hasInstallations || hasRemovals;
+
     // Check for ongoing deployment on mount
     useEffect(() => {
         if (operation?.isInstalling) {
             // If there's an ongoing deployment, jump to installation step
             setActiveStep(STEP_INSTALLATION);
         }
-    }, [operation?.isInstalling]);
+        else if (activeStep == STEP_CONFIGURATION && hasModules) {
+            setActiveStep(STEP_CONFIRMATION);
+        }
+    }, [hasModules, activeStep, operation?.isInstalling]);
 
     // Redirect if no modules and no active deployment
     useEffect(() => {
-        if (modules.length === 0 && !deploymentLoading && !deploymentError && !operation) {
+        const modulesProvided = modules.install.length + modules.remove.length;
+        if (modulesProvided === 0 && !deploymentLoading && !deploymentError && !operation) {
             navigate(backPath);
         }
     }, [modules, deploymentLoading, deploymentError, operation, navigate, backPath]);
@@ -70,7 +84,7 @@ export default function Deployment() {
 
         try {
             await startDeployment({
-                modules: { install: modules },
+                modules: modules,
                 config: {
                     variables: configValues,
                     password,
@@ -89,10 +103,6 @@ export default function Deployment() {
     const handleBack = () => {
         setActiveStep((prev) => Math.max(0, prev - 1));
     };
-
-    // Determine which output to show (existing deployment or new deployment)
-    const displayError = deploymentError || error;
-    const displayModules =  activity?.request?.modules?.install ?? modules;
 
     // Show loading state
     if (configLoading || deploymentLoading) {
@@ -143,12 +153,12 @@ export default function Deployment() {
             {activeStep === STEP_CONFIGURATION && config && (
                 <Card>
                     <CardContent>
-                        <ConfigurationStep modules={modules} config={config} onComplete={handleConfigurationComplete} />
+                        <ConfigurationStep modules={modules.install} config={config} onComplete={handleConfigurationComplete} />
                     </CardContent>
                 </Card>
             )}
 
-            {activeStep === STEP_CONFIRMATION && config && (
+            {activeStep === STEP_CONFIRMATION && (
                 <Card>
                     <CardContent>
                         <ConfirmationStep

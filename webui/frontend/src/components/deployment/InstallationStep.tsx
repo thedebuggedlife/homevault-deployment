@@ -1,9 +1,10 @@
 import { Card, CardContent, Typography, Box, Button } from '@mui/material';
 import Terminal from './Terminal';
 import { NavigationBlocker } from '@/components/NavigationBlocker';
+import { DeployModules } from '@/types';
 
 interface InstallationStepProps {
-    modules: string[];
+    modules: DeployModules;
     isInstalling: boolean;
     output: string[];
     error: string | null;
@@ -27,16 +28,34 @@ export default function InstallationStep({
                         <Typography variant="h6" gutterBottom>
                             Deployment in Progress
                         </Typography>
-                        <Typography variant="body2" color="text.secondary" component="p">
-                            Installing and configuring the following modules:
-                        </Typography>
-                        <Box component="ul" sx={{ mt: 1, mb: 3 }}>
-                            {modules.map((module) => (
-                                <li key={module}>
-                                    <Typography variant="body2">{module}</Typography>
-                                </li>
-                            ))}
-                        </Box>
+                        { modules.install.length > 0 &&
+                        <>
+                            <Typography variant="body2" color="text.secondary" component="p">
+                                Installing the following modules:
+                            </Typography>
+                            <Box component="ul" sx={{ mt: 1, mb: 3 }}>
+                                {modules.install.map((module) => (
+                                    <li key={module}>
+                                        <Typography variant="body2">{module}</Typography>
+                                    </li>
+                                ))}
+                            </Box>
+                        </>
+                        }
+                        { modules.remove.length > 0 &&
+                        <>
+                            <Typography variant="body2" color="text.secondary" component="p">
+                                Removing the following modules:
+                            </Typography>
+                            <Box component="ul" sx={{ mt: 1, mb: 3 }}>
+                                {modules.remove.map((module) => (
+                                    <li key={module}>
+                                        <Typography variant="body2">{module}</Typography>
+                                    </li>
+                                ))}
+                            </Box>
+                        </>
+                        }
                     </>
                 ) : (
                     <Box textAlign="center" sx={{ marginBottom: 2 }}>
@@ -44,9 +63,6 @@ export default function InstallationStep({
                             <>
                                 <Typography variant="h6" color="success.main" gutterBottom>
                                     Deployment Complete!
-                                </Typography>
-                                <Typography variant="body2" color="text.secondary" component="p">
-                                    The selected modules have been successfully installed and configured.
                                 </Typography>
                             </>
                         ) : (

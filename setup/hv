@@ -269,10 +269,7 @@ find_missing_modules() {
         printf "  - %s\n" "${missing_modules[@]}"
         log "\nIf this was unintentional, exit and re-run the script, including them with the -m option."
         log
-        local user_input
-        read -p "Do you want to proceed? [y/N] " user_input </dev/tty
-        user_input=${user_input:-N}
-        if [[ ! "$user_input" =~ ^[Yy]$ ]]; then
+        if ! ask_confirmation; then
             abort_install
         fi
     fi

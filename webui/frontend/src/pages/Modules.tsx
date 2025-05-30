@@ -1,15 +1,17 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Typography, Grid, Box, CircularProgress, Button } from '@mui/material';
-import { Add as AddIcon } from '@mui/icons-material';
+import { Add as AddIcon, Remove as RemoveIcon } from '@mui/icons-material';
 import { InstalledModulesCard } from '@/components/modules/InstalledModulesCard';
 import { InstallModuleDialog } from '@/components/modules/InstallModuleDialog';
+import { RemoveModuleDialog } from '@/components/modules/RemoveModuleDialog';
 import { useModulesData } from '@/hooks/useModulesData';
 import { useDeployment } from '@/hooks/useDeployment';
 
 export default function Modules() {
     const [expandedModule, setExpandedModule] = useState<string | null>(null);
     const [installDialogOpen, setInstallDialogOpen] = useState(false);
+    const [removeDialogOpen, setRemoveDialogOpen] = useState(false);
     const navigate = useNavigate();
     const { isDeploying } = useDeployment();
     
@@ -39,7 +41,32 @@ export default function Modules() {
         handleCloseInstallDialog();
         navigate('/deployment', {
             state: { 
-                modules,
+                modules: {
+                    install: modules
+                },
+                backPath: '/modules',
+                backTitle: 'Modules'
+            }
+        });
+    };
+
+    const handleOpenRemoveDialog = () => {
+        setRemoveDialogOpen(true);
+    };
+
+    const handleCloseRemoveDialog = () => {
+        setRemoveDialogOpen(false);
+    };
+
+    const handleRemoveModules = async (modules: string[]) => {
+        handleCloseRemoveDialog();
+        // Navigate to deployment page with removal action
+        navigate('/deployment', {
+            state: { 
+                modules: {
+                    remove: modules
+                },
+                action: 'remove',
                 backPath: '/modules',
                 backTitle: 'Modules'
             }
@@ -62,6 +89,9 @@ export default function Modules() {
         );
     }
 
+    const hasRemovableModules = status?.installedModules && 
+        status.installedModules.filter(m => m !== 'base').length > 0;
+
     return (
         <>
             <Grid container spacing={3}>
@@ -75,14 +105,27 @@ export default function Modules() {
                 </Grid>
                 
                 <Grid size={{ xs: 12 }}>
-                    <Button
-                        variant="contained"
-                        startIcon={<AddIcon />}
-                        onClick={handleOpenInstallDialog}
-                        disabled={isDeploying}
-                    >
-                        Add Module
-                    </Button>
+                    <Box display="flex" gap={2}>
+                        <Button
+                            variant="contained"
+                            startIcon={<AddIcon />}
+                            onClick={handleOpenInstallDialog}
+                            disabled={isDeploying}
+                        >
+                            Add Modules
+                        </Button>
+                        {hasRemovableModules && (
+                            <Button
+                                variant="outlined"
+                                color="error"
+                                startIcon={<RemoveIcon />}
+                                onClick={handleOpenRemoveDialog}
+                                disabled={isDeploying}
+                            >
+                                Remove Modules
+                            </Button>
+                        )}
+                    </Box>
                 </Grid>
             </Grid>
 
@@ -92,6 +135,13 @@ export default function Modules() {
                 onInstall={handleInstallModules}
                 modulesData={modulesData}
                 loading={loadingModules}
+            />
+
+            <RemoveModuleDialog
+                open={removeDialogOpen}
+                onClose={handleCloseRemoveDialog}
+                onRemove={handleRemoveModules}
+                installedModules={status?.installedModules || []}
             />
         </>
     );
