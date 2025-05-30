@@ -1,6 +1,6 @@
 import config from "@/config";
 import {
-    CheckResponse,
+    RefreshResponse,
     CurrentActivity,
     DeploymentClientEvents,
     DeploymentConfig,
@@ -21,6 +21,7 @@ export interface DeploymentOperationEvents {
     output: (data: string, offset: number) => void;
     completed: () => void;
     error: (message: string) => void;
+    closed: () => void;
 }
 
 export class DeploymentOperation implements EmitterMixin<DeploymentOperationEvents> {
@@ -64,6 +65,7 @@ export class DeploymentOperation implements EmitterMixin<DeploymentOperationEven
     }
 
     close() {
+        this.emitter.emit("closed");
         this.emitter.events = {};
         try {
             this.socket?.disconnect();
@@ -81,11 +83,19 @@ export class DeploymentOperation implements EmitterMixin<DeploymentOperationEven
     }
 }
 
-class BackendServer {
+interface BackendServerEvents {
+    deployment: (operation: DeploymentOperation) => void;
+}
+
+class BackendServer implements EmitterMixin<BackendServerEvents> {
     private token: string;
     private readonly client = axios.create({
         baseURL: config.backendUrl,
     });
+    private readonly emitter = createNanoEvents<BackendServerEvents>();
+    on<E extends keyof BackendServerEvents>(event: E, callback: BackendServerEvents[E]) {
+        return this.emitter.on(event, callback)
+      }
     async login(username: string, password: string): Promise<LoginResponse> {
         const response = await this.client.post<LoginResponse>("/api/login", {
             username,
@@ -97,15 +107,13 @@ class BackendServer {
         this.setToken(response.data.token);
         return response.data;
     }
-    async check(token?: string): Promise<CheckResponse> {
+    async refreshToken(token: string): Promise<RefreshResponse> {
         const reqConfig: AxiosRequestConfig = {};
-        if (token) {
-            reqConfig.headers = {
-                Authorization: `Bearer ${token}`,
-            };
-        }
-        const response = await this.client.get<CheckResponse>("/api/check", reqConfig);
-        this.setToken(token);
+        reqConfig.headers = {
+            Authorization: `Bearer ${token}`,
+        };
+        const response = await this.client.post<RefreshResponse>("/api/token/refresh", null, reqConfig);
+        this.setToken(response.data.token ?? token);
         return response.data;
     }
     async logout() {
@@ -131,6 +139,7 @@ class BackendServer {
         const socket = await this.connectDeployment();
         const operation = new DeploymentOperation(socket);
         socket.emit("start", request);
+        this.emitter.emit("deployment", operation);
         return operation;
     }
     async attachDeployment(id: string): Promise<DeploymentOperation> {

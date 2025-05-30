@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import backend, { DeploymentOperation } from '@/backend';
 import { DeploymentActivity } from '@backend/types';
+import { useSession } from '@/contexts/SessionContext';
 
 interface DeploymentRequest {
     modules: {
@@ -14,15 +15,30 @@ interface DeploymentRequest {
 
 interface UseDeploymentOperationOptions {
     autoAttach?: boolean;
+    autoDetect?: boolean;
 }
 
-export function useDeploymentOperation(options: UseDeploymentOperationOptions = { autoAttach: true }) {
+export function useDeploymentOperation(options: UseDeploymentOperationOptions = { autoAttach: true, autoDetect: false }) {
+    const { session } = useSession();
     const [loading, setLoading] = useState(true);
     const [output, setOutput] = useState<string[]>([]);
     const [operation, setOperation] = useState<DeploymentOperation>(null);
     const [activity, setActivity] = useState<DeploymentActivity>(null);
     const [error, setError] = useState<string | null>(null);
     const operationRef = useRef<DeploymentOperation>(null);
+
+    useEffect(() => {
+        if (options.autoDetect) {
+            return backend.on("deployment", newOp => {
+                setOperation(newOp);
+                if (newOp) {
+                    newOp.on("closed", () => {
+                        setOperation(null);
+                    });
+                }
+            });
+        }
+    }, [options.autoDetect])
 
     const attachOperation = (operation: DeploymentOperation) => {
         setOperation(operation);
@@ -59,6 +75,9 @@ export function useDeploymentOperation(options: UseDeploymentOperationOptions = 
             setActivity(null);
             setLoading(true);
             setError(null);
+            if (session == null) {
+                return;
+            }
             console.log("Getting current activity...");
             const currentActivity = await backend.getCurrentActivity();
             console.log("Current activity: ", currentActivity);
@@ -83,7 +102,7 @@ export function useDeploymentOperation(options: UseDeploymentOperationOptions = 
         finally {
             setLoading(false);
         }
-    }, [options.autoAttach]);
+    }, [options.autoAttach, session]);
 
     useEffect(() => {
         checkCurrentDeployment();

@@ -1,9 +1,8 @@
 import { logger } from "@/logger";
 import { exec, spawn } from "child_process";
 import { Request, Response } from "express";
-import jwt from "jsonwebtoken";
-import { JWT_SECRET } from "@/middleware/auth";
-import { ErrorResponse, LoginResponse } from "@/types";
+import tokenGenerator, { JWT_EXPIRES } from "@/tokenGenerator";
+import { ErrorResponse, LoginResponse, User } from "@/types";
 import { readFile } from "fs/promises";
 import { promisify } from "util";
 
@@ -30,9 +29,9 @@ export async function login(req: Request, res: Response<LoginResponse|ErrorRespo
         return res.status(500).json({ errors: [{ message: "Failed to check for user access" }] });
     }
 
-    // Generate JWT token
-    const token = jwt.sign({ username }, JWT_SECRET, { expiresIn: "1h" });
-    return res.json({ token });
+    const user: User = { username };
+    const token = await tokenGenerator.sign({ user });
+    return res.json({ token, expiresInSec: JWT_EXPIRES });
 }
 
 function isValidUsername(username: string): boolean {

@@ -2,6 +2,7 @@ import { DockerContainer } from "./docker";
 
 export interface User {
     username: string;
+    token?: string;
 }
 
 export interface SystemResources {
@@ -81,10 +82,13 @@ export interface GetModulesResponse {
 
 export interface LoginResponse {
     token: string;
+    expiresInSec: number;
 }
 
-export interface CheckResponse {
+export interface RefreshResponse {
     user: User;
+    token?: string;
+    expiresInSec: number;
 }
 
 export interface ErrorInstance {

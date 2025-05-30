@@ -5,11 +5,13 @@ import { Add as AddIcon } from '@mui/icons-material';
 import { InstalledModulesCard } from '@/components/modules/InstalledModulesCard';
 import { InstallModuleDialog } from '@/components/modules/InstallModuleDialog';
 import { useModulesData } from '@/hooks/useModulesData';
+import { useDeployment } from '@/hooks/useDeployment';
 
 export default function Modules() {
     const [expandedModule, setExpandedModule] = useState<string | null>(null);
     const [installDialogOpen, setInstallDialogOpen] = useState(false);
     const navigate = useNavigate();
+    const { isDeploying } = useDeployment();
     
     const {
         status,
@@ -77,6 +79,7 @@ export default function Modules() {
                         variant="contained"
                         startIcon={<AddIcon />}
                         onClick={handleOpenInstallDialog}
+                        disabled={isDeploying}
                     >
                         Add Module
                     </Button>

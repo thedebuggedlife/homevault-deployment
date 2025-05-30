@@ -7,12 +7,11 @@ import { body } from 'express-validator';
 import { login } from '@/api/login';
 import { handleValidationErrors } from '@/middleware/validation';
 import { errorHandler } from '@/middleware/error';
-import { authenticateToken } from '@/middleware/auth';
+import { authenticateToken, socketAuth } from '@/middleware/auth';
 import { getStatus } from '@/api/status';
-import { check } from '@/api/check';
+import { refreshToken } from '@/api/token';
 import { getModules } from './api/modules';
 import { getDeploymentConfig, deploymentSocket } from './api/deployment';
-import { socketAuth } from './middleware/socketAuth';
 import { logger } from '@/logger';
 import { getActivity } from './api/activity';
 
@@ -35,7 +34,7 @@ app.post('/api/login', [
   body('password').notEmpty(),
   handleValidationErrors
 ], login);
-app.get('/api/check', authenticateToken, check);
+app.post('/api/token/refresh', authenticateToken, refreshToken);
 app.get('/api/activity', authenticateToken, getActivity);
 app.get('/api/status', authenticateToken, getStatus);
 app.get('/api/modules', authenticateToken, getModules);

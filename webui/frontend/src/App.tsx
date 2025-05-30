@@ -7,6 +7,7 @@ import { AppProvider } from '@toolpad/core/AppProvider';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import type { Authentication, Navigation, Router } from '@toolpad/core';
 import SessionContext, { type Session, onAuthStateChanged, restoreSession, signOut } from './contexts/SessionContext';
+import { DeploymentProvider } from './contexts/DeploymentProvider';
 import { User } from './types';
 
 const NAVIGATION: Navigation = [
@@ -76,16 +77,18 @@ export default function App() {
   }, []);
   
   return (
-    <AppProvider 
-      navigation={NAVIGATION} 
-      branding={BRANDING}
-      session={session}
-      authentication={AUTHENTICATION}
-      router={router}
-    >
-      <SessionContext.Provider value={sessionContextValue}>
-        <Outlet />
-      </SessionContext.Provider>
-    </AppProvider>
+    <SessionContext.Provider value={sessionContextValue}>
+      <DeploymentProvider>
+        <AppProvider
+          authentication={AUTHENTICATION}
+          navigation={NAVIGATION}
+          branding={BRANDING}
+          session={session}
+          router={router}
+        >
+          <Outlet />
+        </AppProvider>
+      </DeploymentProvider>
+    </SessionContext.Provider>
   );
 }
