@@ -14,7 +14,6 @@ const defaultSignOptions: SignOptions = {
 
 export interface RefreshOptions extends SignOptions {
     validate?: VerifyOptions;
-    jwtid?: string;
 }
 
 export interface RefreshResult {
