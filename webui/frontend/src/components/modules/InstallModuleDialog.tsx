@@ -36,10 +36,10 @@ export function InstallModuleDialog({
 
     // Pre-select base module if not installed
     useEffect(() => {
-        if (open && !isBaseInstalled) {
+        if (!loading && open && !isBaseInstalled) {
             setSelectedModules(new Set(['base']));
         }
-    }, [open, isBaseInstalled]);
+    }, [loading, open, isBaseInstalled]);
 
     const handleClose = () => {
         setSelectedModules(new Set());
@@ -48,7 +48,7 @@ export function InstallModuleDialog({
 
     const handleToggleModule = (moduleName: string) => {
         // Prevent unselecting base module if it's not installed
-        if (moduleName === 'base' && !isBaseInstalled) {
+        if (moduleName === 'base') {
             return;
         }
 
@@ -89,7 +89,7 @@ export function InstallModuleDialog({
         }, {} as Record<string, string>);
 
         // Add base module synthetically if it's not installed
-        if (!installed.has('base')) {
+        if (!isBaseInstalled) {
             return {
                 base: BASE_MODULE_DESCRIPTION,
                 ...uninstalledModules

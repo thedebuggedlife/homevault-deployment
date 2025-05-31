@@ -47,8 +47,6 @@ export default function Deployment() {
         remove: activity?.request?.modules.remove ?? [],
     } : modules;
     const hasInstallations = displayModules.install.length > 0;
-    const hasRemovals = displayModules.remove.length > 0;
-    const hasModules = hasInstallations || hasRemovals;
 
     // Check for ongoing deployment on mount
     useEffect(() => {
@@ -56,10 +54,10 @@ export default function Deployment() {
             // If there's an ongoing deployment, jump to installation step
             setActiveStep(STEP_INSTALLATION);
         }
-        else if (activeStep == STEP_CONFIGURATION && !hasModules) {
+        else if (activeStep == STEP_CONFIGURATION && !hasInstallations) {
             setActiveStep(STEP_CONFIRMATION);
         }
-    }, [hasModules, activeStep, operation?.isInstalling]);
+    }, [hasInstallations, activeStep, operation?.isInstalling]);
 
     // Redirect if no modules and no active deployment
     useEffect(() => {
@@ -206,6 +204,7 @@ export default function Deployment() {
                             modules={modules}
                             config={config}
                             values={configValues}
+                            showBack={hasInstallations}
                             onConfirm={handleConfirmDeployment}
                             onBack={handleBack}
                         />

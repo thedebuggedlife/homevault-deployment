@@ -18,7 +18,7 @@ export default function DeploymentStepper({ activeStep, isInstalling, steps }: D
         <Stepper activeStep={activeStep}>
             {steps.map((label) => (
                 <Step key={label}>
-                    <StepLabel StepIconComponent={stepIcon}>
+                    <StepLabel slots={{stepIcon}}>
                         {label}
                     </StepLabel>
                 </Step>
