@@ -55,7 +55,7 @@ export function deploymentSocket(socket: Socket<DeploymentClientEvents, Deployme
         if (!checkAttached()) {
             logger.info("Starting new deployment");
             try {
-                const instance = installer.startDeployment(request);
+                const instance = await installer.startDeployment(request);
                 attach(instance);
                 socket.emit("started", instance.id);
                 attached = true;

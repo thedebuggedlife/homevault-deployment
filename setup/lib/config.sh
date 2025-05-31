@@ -408,6 +408,48 @@ ask_for_env() {
     save_env "$env_variable" "$user_input"
 }
 
+###
+# Read a file in .env format and place all the keys and values into ENV_OVERRIDES
+#
+# @param    $1 {string}     Name of the file to read
+###
+read_overrides() {
+    local file=$1
+    # Check if file exists and is readable
+    [[ -r "$file" ]] || { log_error "Cannot read file '$file'"; return 1; }
+    
+    local line key value
+    
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        # Skip empty lines and comments
+        [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+        
+        # Check if line contains '='
+        if [[ "$line" != *=* ]]; then
+            continue
+        fi
+        
+        # Extract key (everything before first '=')
+        key="${line%%=*}"
+        
+        # Extract value (everything after first '=')
+        value="${line#*=}"
+        
+        # Trim leading/trailing whitespace from key
+        key="${key#"${key%%[![:space:]]*}"}"
+        key="${key%"${key##*[![:space:]]}"}"
+        
+        # Check if key is valid (non-empty after trimming)
+        if [[ -z "$key" ]]; then
+            continue
+        fi
+        
+        # Store in array (value can contain any character including spaces)
+        ENV_OVERRIDES["$key"]="$value"
+        
+    done < "$file"
+}
+
 ################################################################################
 #                           MANIPULATING SECRETS
 

@@ -28,6 +28,7 @@ print_usage() {
         log "      --module all                 Enables all available modules."
         log "  --rm <module>                    Removes a module that had been previously installed. ${IRed}Use with caution!${COff}" 
         log "  -o, --override <var>=<value>     Override environment variable. Can be specified multiple times."
+        log "      --override <file>            Override environment variables with those in specified file (.env format)"
         log "  --keep-compose                   Do not override previously deployed docker-compose files. ${IRed}Use with caution!${COff}"
         log "  --override-versions              Override running versions with those specified in compose files. ${IRed}Use with caution!${COff}"
         log "  --dry-run                        Execute docker compose in dry run mode."
@@ -118,6 +119,8 @@ parse_env_override() {
         if echo "$2" | grep -q '='; then
             # shellcheck disable=SC2034
             overrides["$(echo "$2" | cut -d '=' -f 1)"]="$(echo "$2" | cut -d '=' -f 2-)"
+        elif [ -f "$2" ]; then
+            read_overrides "$2" || return 1
         else
             log_invalid "$1 requires an assignment in the form VARIABLE_NAME=VALUE."
             return 1

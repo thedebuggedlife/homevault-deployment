@@ -5,6 +5,8 @@ import { CurrentActivity, DeploymentConfig, DeploymentRequest } from "@/types";
 import { createNanoEvents, Emitter, EmitterMixin } from "nanoevents";
 import { ServiceError } from "@/errors";
 import { v4 as uuid } from "uuid";
+import { file } from 'tmp-promise';
+import * as fs from "fs/promises";
 
 export const INSTALLER_PATH = process.env.INSTALLER_PATH ?? "~/homevault/workspace";
 
@@ -35,6 +37,11 @@ export interface DeploymentInstance {
     events: Emitter<DeploymentEvents>;
     output: string[];
     abort?: () => void;
+}
+
+interface ConfigFile {
+    path: string;
+    cleanup: () => Promise<void>;
 }
 
 class InstallerService {
@@ -83,7 +90,7 @@ class InstallerService {
         return output.config;
     }
 
-    startDeployment(request: DeploymentRequest): DeploymentInstance {
+    async startDeployment(request: DeploymentRequest): Promise<DeploymentInstance> {
         if (this.currentDeployment) {
             this.logger.warn("There is already an ongoing deployment");
             throw new ServiceError("There is already an ongoing deployment");
@@ -109,6 +116,12 @@ class InstallerService {
             instance.events.emit("output", data, instance.output.length);
             instance.output.push(data);
         };
+        const variables = request.config?.variables ?? {};
+        let configFile: ConfigFile;
+        if (Object.entries(variables).length > 0) {
+            configFile = await this.generateConfFile(variables);
+            args.push("--override", configFile.path);
+        }
         const cancellable = this.executeCommand([...args, "--unattended", "--force"], {
             output,
             input,
@@ -130,12 +143,31 @@ class InstallerService {
             .finally(() => {
                 input.events = {};
                 instance.events.events = {};
+                configFile?.cleanup();
             });
         instance.abort = () => {
             this.logger.warn("Cancelling deployment instance: " + instance.id);
             cancellable.cancel();
         };
         return instance;
+    }
+
+    private async generateConfFile(config: Record<string,string>): Promise<ConfigFile> {
+        const { path, cleanup } = await file();
+
+        this.logger.info("Created temporary file: " + path);
+        const content = Object.entries(config)
+            .map(([key, value]) => `${key}=${value}`)
+            .join('\n');
+
+        const fileHandle = await fs.open(path, 'w');
+        try {
+            await fileHandle.write(content, 0, 'utf8');
+        } finally {
+            await fileHandle.close();
+        }
+
+        return { path, cleanup };
     }
 
     private getDeploymentArgs(request: DeploymentRequest) {
