@@ -87,7 +87,7 @@ lldap_bootstrap() {
         -e GROUP_CONFIGS_DIR=/data/bootstrap/group-configs \
         -e USER_SCHEMAS_DIR=/data/bootstrap/user-schemas \
         -e GROUP_SCHEMAS_DIR=/data/bootstrap/group-schemas \
-        -it lldap /data/bootstrap/bootstrap.sh" >/dev/null || \
+        lldap /data/bootstrap/bootstrap.sh" >/dev/null || \
     {
         log_error "Failed to bootstrap LLDAP users and groups"
         exit 1
