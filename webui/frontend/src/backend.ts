@@ -64,6 +64,10 @@ export class DeploymentOperation implements EmitterMixin<DeploymentOperationEven
         return !this.completed;
     }
 
+    abort() {
+        this.socket.emit("abort");
+    }
+
     close() {
         this.emitter.emit("closed");
         this.emitter.events = {};

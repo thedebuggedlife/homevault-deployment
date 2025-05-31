@@ -17,7 +17,7 @@ class DockerService {
             const result = await system.executeCommand<DockerContainer[]>("docker", ["compose", "-p", COMPOSE_PROJECT, "ps", "--all", "--format", "json"], {
                 jsonOutput: true,
                 jsonArray: true,
-            });
+            }).promise;
             return result.data ?? [];
         }
         catch (error) {

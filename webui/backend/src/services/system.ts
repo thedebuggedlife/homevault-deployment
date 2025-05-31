@@ -5,6 +5,7 @@ import { SystemResources } from "@/types";
 import si from "systeminformation";
 import _ from "lodash";
 import { EmitterMixin, EventsMap } from "nanoevents";
+import kill from "tree-kill";
 
 export interface CommandResult<T = void> {
     success: boolean;
@@ -28,6 +29,11 @@ export interface CommandOptions extends SpawnOptionsWithoutStdio {
     stderr?: (data: string) => void;
 }
 
+export interface Cancellable<T> {
+    promise: Promise<T>;
+    cancel: () => void;
+}
+
 class SystemService {
     private logger: winston.Logger;
 
@@ -49,19 +55,20 @@ class SystemService {
         }
     }
 
-    async executeCommand<T = void>(
+    executeCommand<T = void>(
         command: string,
         args: string[] = [],
         options: CommandOptions = {}
-    ): Promise<CommandResult<T>> {
-        return new Promise((resolve, reject) => {
+    ): Cancellable<CommandResult<T>> {
+        let process: ChildProcess;
+        const promise = new Promise<CommandResult<T>>((resolve, reject) => {
             try {
                 options = {
                     ...options,
                     shell: true,
                 }
 
-                const process: ChildProcess = spawn(command, args, options);
+                process = spawn(command, args, options);
                 this.logger.info(`Process [${process.pid}] started with command: ${command} ${args.join(" ")}`);
 
                 let output: string = "";
@@ -111,6 +118,17 @@ class SystemService {
                 reject({ success: false, error: "Failed to spawn new process" });
             }
         });
+        const cancel = () => {
+            this.logger.warn(`Sending SIGINT signal to process: [${process?.pid}]`);
+            if (process.pid) {
+                kill(process.pid, "SIGINT", err => {
+                    if (err) {
+                        this.logger.error(`Failed to send SIGINT signal to process: [${process.pid}]`, err);
+                    }
+                })
+            }
+        }
+        return { promise, cancel };
     }
 
     tryParseJson<T>(data: string, asArray?: boolean): T | undefined {

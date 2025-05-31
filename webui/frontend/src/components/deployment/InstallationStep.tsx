@@ -2,12 +2,14 @@ import { Card, CardContent, Typography, Box, Button } from '@mui/material';
 import Terminal from './Terminal';
 import { NavigationBlocker } from '@/components/NavigationBlocker';
 import { DeployModules } from '@/types';
+import { ConfirmOptions, useDialogs } from '@toolpad/core';
 
 interface InstallationStepProps {
     modules: DeployModules;
     isInstalling: boolean;
     output: string[];
     error: string | null;
+    handleAbort: () => void;
     onReturn: () => void;
     backTitle: string;
 }
@@ -17,9 +19,31 @@ export default function InstallationStep({
     isInstalling, 
     output, 
     error, 
+    handleAbort,
     onReturn, 
     backTitle 
 }: InstallationStepProps) {
+    const { confirm } = useDialogs();
+    const showAbortDialog = async () => {
+        const message = <>
+                <Typography component="p">
+                    This will terminate the running process on the server.
+                </Typography>
+                <Typography component="p" sx={{marginTop: 2}}>
+                    Do you want to continue?
+                </Typography>
+            </>
+        const options: ConfirmOptions = {
+            title: "Abort Deployment",
+            okText: "Abort",
+            cancelText: "Cancel",
+            severity: "error"
+        };
+        const result = await confirm(message, options);
+        if (result) {
+            handleAbort();
+        }
+    }
     return (
         <Card>
             <CardContent>
@@ -79,6 +103,19 @@ export default function InstallationStep({
                 )}
                 
                 <Terminal output={output} />
+                
+                {isInstalling && (
+                    <Box display="flex" justifyContent="center" my={1}>
+                        <Button 
+                            color="error"
+                            variant="contained" 
+                            onClick={showAbortDialog}
+                            sx={{ mt: 2 }}
+                        >
+                            Abort Deployment
+                        </Button>
+                    </Box>
+                )}
                 
                 {!isInstalling && (
                     <Box display="flex" justifyContent="center" my={1}>

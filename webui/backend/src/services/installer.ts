@@ -1,6 +1,6 @@
 import winston from "winston";
 import { logger as rootLog } from "@/logger";
-import system, { InputEvents } from "./system";
+import system, { Cancellable, CommandResult, InputEvents } from "./system";
 import { CurrentActivity, DeploymentConfig, DeploymentRequest } from "@/types";
 import { createNanoEvents, Emitter, EmitterMixin } from "nanoevents";
 import { ServiceError } from "@/errors";
@@ -21,6 +21,7 @@ interface InstallerOutput {
 interface CommandOptions {
     output?: (data: string) => void;
     input?: EmitterMixin<InputEvents>;
+    cancellable?: boolean;
 }
 
 export interface DeploymentEvents {
@@ -33,21 +34,22 @@ export interface DeploymentInstance {
     request: DeploymentRequest;
     events: Emitter<DeploymentEvents>;
     output: string[];
+    abort?: () => void;
 }
 
 class InstallerService {
     private logger: winston.Logger;
-    private currentDeployment?: DeploymentInstance
+    private currentDeployment?: DeploymentInstance;
 
     constructor() {
-        this.logger = rootLog.child({ source: 'InstallerService' });
+        this.logger = rootLog.child({ source: "InstallerService" });
     }
 
-    getCurrentActivity(): CurrentActivity|undefined {
+    getCurrentActivity(): CurrentActivity | undefined {
         if (this.currentDeployment) {
             return {
                 id: this.currentDeployment.id,
-                type: 'deployment',
+                type: "deployment",
                 request: this.currentDeployment.request,
             };
         }
@@ -58,17 +60,17 @@ class InstallerService {
     }
 
     async getVersion(): Promise<string> {
-        const output = await this.executeCommand([ "-v" ]);
+        const output = await this.executeCommand(["-v"]);
         return output?.version ?? "";
     }
 
     async getInstalledModules(): Promise<string[]> {
-        const output = await this.executeCommand([ "modules" ]);
+        const output = await this.executeCommand(["modules"]);
         return output?.modules?.installed ?? [];
     }
 
     async getAvailableModules(): Promise<Record<string, string>> {
-        const output = await this.executeCommand([ "modules", "--all" ]);
+        const output = await this.executeCommand(["modules", "--all"]);
         return output?.modules?.available ?? {};
     }
 
@@ -93,65 +95,88 @@ class InstallerService {
         }
         delete request.config?.password; // Avoid leaking password - remove it from persisted request
         const input = createNanoEvents<InputEvents>();
-        const instance: DeploymentInstance = this.currentDeployment = { 
+        const instance: DeploymentInstance = (this.currentDeployment = {
             id: uuid(),
             request,
             events: createNanoEvents<DeploymentEvents>(),
             output: [],
-        };
+        });
         const args = this.getDeploymentArgs(request);
         const output = (data: string) => {
             if (data.startsWith("[sudo]")) {
                 input.emit("data", password + "\n");
             }
-            instance.events.emit('output', data, instance.output.length);
+            instance.events.emit("output", data, instance.output.length);
             instance.output.push(data);
-        }
-        const options = { output, input }
-        this.executeCommand([...args, "--unattended", "--force"], options).then(
-            () => {
-                // Delete current deployment first to avoid race conditions when attaching to ongoing deployment
-                delete this.currentDeployment;
-                instance.events.emit("completed");
-            },
-            error => {
-                // Delete current deployment first to avoid race conditions when attaching to ongoing deployment
-                delete this.currentDeployment;
-                instance.events.emit("completed", error);
-            }
-        ).finally(() => {
-            input.events = {};
-            instance.events.events = {};
+        };
+        const cancellable = this.executeCommand([...args, "--unattended", "--force"], {
+            output,
+            input,
+            cancellable: true,
         });
+        cancellable.promise
+            .then(
+                () => {
+                    // Delete current deployment first to avoid race conditions when attaching to ongoing deployment
+                    delete this.currentDeployment;
+                    instance.events.emit("completed");
+                },
+                (error) => {
+                    // Delete current deployment first to avoid race conditions when attaching to ongoing deployment
+                    delete this.currentDeployment;
+                    instance.events.emit("completed", error);
+                }
+            )
+            .finally(() => {
+                input.events = {};
+                instance.events.events = {};
+            });
+        instance.abort = () => {
+            this.logger.warn("Cancelling deployment instance: " + instance.id);
+            cancellable.cancel();
+        };
         return instance;
     }
 
     private getDeploymentArgs(request: DeploymentRequest) {
-        const args = [ "deploy" ];
-        request?.modules?.install?.forEach(m => {
+        const args = ["deploy"];
+        request?.modules?.install?.forEach((m) => {
             args.push("-m", m);
         });
-        request?.modules?.remove?.forEach(m => {
+        request?.modules?.remove?.forEach((m) => {
             args.push("--rm", m);
         });
         return args;
     }
 
-    private async executeCommand(args: string[], options?: CommandOptions): Promise<InstallerOutput|undefined> {
-        let lastError: string|undefined;
+    private executeCommand(
+        args: string[],
+        options: CommandOptions & { cancellable: true }
+    ): Cancellable<CommandResult<InstallerOutput>>;
+
+    private executeCommand(
+        args: string[],
+        options?: CommandOptions & { cancellable?: false | undefined }
+    ): Promise<InstallerOutput | undefined>;
+
+    private executeCommand(
+        args: string[],
+        options?: CommandOptions
+    ): Promise<InstallerOutput | undefined> | Cancellable<CommandResult<InstallerOutput>> {
+        let lastError: string | undefined;
         try {
             const jsonOutput = !options?.output;
             if (jsonOutput) {
                 args.unshift("--json");
             }
             args.unshift("hv");
-            const result = await system.executeCommand<InstallerOutput>("bash", args, {
+            const cancellable = system.executeCommand<InstallerOutput>("bash", args, {
                 cwd: INSTALLER_PATH,
                 jsonOutput,
                 stdin: options?.input,
                 stdout: options?.output,
                 stderr: (data: string) => {
-                    const lines = data.split('\n');
+                    const lines = data.split("\n");
                     for (const line of lines) {
                         // TODO: Does not always catch the last error
                         if (line.startsWith("🔴 ERROR: ")) {
@@ -161,14 +186,27 @@ class InstallerService {
                     options?.output?.(data);
                 },
             });
-            if (jsonOutput) {
-                if (!result.data) {
-                    throw new ServiceError("Installer command did not return valid data", { args: args.join(' '), result });
-                }
-                return result.data;
+            if (options?.cancellable) {
+                return cancellable;
             }
+            return cancellable.promise.then(
+                (result) => {
+                    if (jsonOutput) {
+                        if (!result.data) {
+                            throw new ServiceError("Installer command did not return valid data", {
+                                args: args.join(" "),
+                                result,
+                            });
+                        }
+                        return result.data;
+                    }
+                },
+                (error) => {
+                    throw new ServiceError(lastError ?? "Failed to execute installer command", { args, error });
+                }
+            );
         } catch (error) {
-            throw new ServiceError(lastError ?? "Failed to execute installer command", { args, error });
+            throw new ServiceError("Failed to execute installer command", { args, error });
         }
     }
 }

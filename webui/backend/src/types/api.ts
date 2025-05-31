@@ -66,6 +66,7 @@ export interface DeploymentServerEvents {
 export interface DeploymentClientEvents {
     start: (request: DeploymentRequest) => void;
     attach: (id: string) => void;
+    abort: () => void;
 }
 
 export interface SystemStatusResponse {

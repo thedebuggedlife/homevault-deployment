@@ -27,6 +27,10 @@ export function deploymentSocket(socket: Socket<DeploymentClientEvents, Deployme
         return false;
     }
     const attach = (instance: DeploymentInstance) => {
+        socket.on("abort", () => {
+            logger.warn(`Received "abort" message for deployment: ${instance.id}`);
+            instance.abort?.();
+        });
         callbacks.push(
             instance.events.on("output", (data: string, offset: number) => {
                 socket.emit("output", data, offset);
@@ -79,7 +83,7 @@ export function deploymentSocket(socket: Socket<DeploymentClientEvents, Deployme
             attach(instance);
             socket.emit("backfill", instance.output);
         }
-    })
+    });
 
     socket.on('disconnect', () => {
         detach();

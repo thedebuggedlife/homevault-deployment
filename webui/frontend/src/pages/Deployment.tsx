@@ -104,6 +104,10 @@ export default function Deployment() {
         setActiveStep((prev) => Math.max(0, prev - 1));
     };
 
+    const handleAbort = () => {
+        operation?.abort();
+    }
+
     // Show loading state
     if (configLoading || deploymentLoading) {
         return <LoadingState title="Module Deployment" backPath={backPath} backTitle={backTitle} />;
@@ -179,6 +183,7 @@ export default function Deployment() {
                     output={output}
                     error={displayError}
                     onReturn={() => navigate(backPath)}
+                    handleAbort={handleAbort}
                     backTitle={backTitle}
                 />
             )}
