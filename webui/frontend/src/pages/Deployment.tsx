@@ -14,6 +14,7 @@ import ErrorState from "@/components/deployment/ErrorState";
 import { useDeploymentState } from "@/hooks/useDeploymentState";
 import { useDeploymentConfig } from "@/hooks/useDeploymentConfig";
 import { useDeploymentOperation } from "@/hooks/useDeploymentOperation";
+import { evaluateCondition } from "@/utils/prompts/conditionEvaluator";
 
 const STEP_CONFIGURATION = 0;
 const STEP_CONFIRMATION = 1;
@@ -77,6 +78,25 @@ export default function Deployment() {
         setPasswordDialogOpen(true);
     };
 
+    const filterConfigValues = () => {
+        const filteredConfigValues: Record<string, string> = {};
+        
+        // Only include values for prompts that meet their conditions
+        if (config) {
+            config.prompts.forEach(prompt => {
+                // Check if this prompt meets its condition
+                if (!prompt.condition || evaluateCondition(prompt.condition, configValues)) {
+                    // Only include the value if the condition is met
+                    if (configValues[prompt.variable] !== undefined) {
+                        filteredConfigValues[prompt.variable] = configValues[prompt.variable];
+                    }
+                }
+            });
+        }
+
+        return filteredConfigValues;
+    }
+
     const handlePasswordSubmit = async (password: string) => {
         setPasswordDialogOpen(false);
         setActiveStep(STEP_INSTALLATION);
@@ -86,7 +106,7 @@ export default function Deployment() {
             await startDeployment({
                 modules: modules,
                 config: {
-                    variables: configValues,
+                    variables: filterConfigValues(),
                     password,
                 },
             });
