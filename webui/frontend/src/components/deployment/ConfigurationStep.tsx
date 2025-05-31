@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { Box, Button, Typography } from '@mui/material';
 import { DeploymentConfig } from '@backend/types';
 import ModuleConfigForm from './ModuleConfigForm';
@@ -10,28 +10,37 @@ interface ConfigurationStepProps {
     modules: string[];
     config: DeploymentConfig;
     onComplete: (values: Record<string, string>) => void;
+    onUserModified: (variable: string) => void;
+    initialValues?: Record<string, string>;
+    userModified: Record<string, boolean>;
 }
 
-export default function ConfigurationStep({ modules, config, onComplete }: ConfigurationStepProps) {
-    const [values, setValues] = useState<Record<string, string>>({});
-    const [errors, setErrors] = useState<Record<string, string>>({});
+export default function ConfigurationStep({ modules, config, onComplete, initialValues, userModified, onUserModified }: ConfigurationStepProps) {
+    const [values, setValues] = useState<Record<string, string>>(() => {
+        // If we have initial values (from navigating back), use those
+        if (initialValues && Object.keys(initialValues).length > 0) {
+            console.log("We have initial values", initialValues)
+            return initialValues;
+        }
 
-    // Check if base module is being installed
-    const isInstallingBase = modules.includes('base');
-
-    // Initialize values with defaults from ALL prompts in the config, not just selected modules
-    useEffect(() => {
-        const initialValues: Record<string, string> = {};
+        console.log("Using default values");
+        
+        // Otherwise, initialize with defaults from config
+        const defaultValues: Record<string, string> = {};
         
         config.prompts.forEach(prompt => {
             if (prompt.default !== undefined) {
                 // For now, set the raw default. It will be interpolated later in ModuleConfigForm
-                initialValues[prompt.variable] = prompt.default;
+                defaultValues[prompt.variable] = prompt.default;
             }
         });
         
-        setValues(initialValues);
-    }, [config]);
+        return defaultValues;
+    });
+    const [errors, setErrors] = useState<Record<string, string>>({});
+
+    // Check if base module is being installed
+    const isInstallingBase = modules.includes('base');
 
     const handleModuleValuesChange = useCallback((moduleValues: Record<string, string>) => {
         setValues(prev => ({
@@ -179,7 +188,8 @@ export default function ConfigurationStep({ modules, config, onComplete }: Confi
                         values={values}
                         errors={errors} 
                         onValuesChange={handleModuleValuesChange}
-                        allValues={values}
+                        userModified={userModified}
+                        onUserModified={onUserModified}
                     />
                     
                     {/* Show Administrator form after base module */}

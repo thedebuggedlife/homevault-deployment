@@ -484,6 +484,7 @@ parse_global_option() {
             ;;
         --unattended)
             UNATTENDED=true
+            COMPOSE_OPTIONS="${COMPOSE_OPTIONS} --ansi never"
             return 1
             ;;
         --force)

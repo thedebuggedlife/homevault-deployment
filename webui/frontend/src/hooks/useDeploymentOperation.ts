@@ -78,10 +78,9 @@ export function useDeploymentOperation(options: UseDeploymentOperationOptions = 
             if (session == null) {
                 return;
             }
-            console.log("Getting current activity...");
             const currentActivity = await backend.getCurrentActivity();
-            console.log("Current activity: ", currentActivity);
             if (currentActivity && currentActivity.type === 'deployment') {
+                console.log("Current activity: ", currentActivity);
                 setActivity(currentActivity);
                 if (options.autoAttach) {
                     try {

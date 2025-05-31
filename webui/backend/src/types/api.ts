@@ -37,22 +37,24 @@ export interface DeploymentRequest {
     }
 }
 
+export interface DeploymentPrompt {
+    module: string;
+    variable: string;
+    prompt: string;
+    optional: boolean;
+    password: boolean;
+    default?: string;
+    condition?: string;
+    options?: string[];
+    regex?: {
+        pattern: string;
+        message?: string;
+    }[];
+}
+
 export interface DeploymentConfig {
     username: string;
-    prompts: {
-        module: string;
-        variable: string;
-        prompt: string;
-        optional: boolean;
-        password: boolean;
-        default?: string;
-        condition?: string;
-        options?: string[];
-        regex?: {
-            pattern: string;
-            message?: string;
-        }[];
-    }[];
+    prompts: DeploymentPrompt[];
 }
 
 export interface DeploymentServerEvents {

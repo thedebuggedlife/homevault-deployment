@@ -37,6 +37,7 @@ export default function Deployment() {
     } = useDeploymentOperation();
     const [activeStep, setActiveStep] = useState(STEP_CONFIGURATION);
     const [configValues, setConfigValues] = useState<Record<string, string>>({});
+    const [userModified, setUserModified] = useState<Record<string, boolean>>({});
     const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -110,6 +111,10 @@ export default function Deployment() {
         }
 
         return filteredConfigValues;
+    }
+
+    const handleUserModified = (variable: string) => {
+        setUserModified(prev => ({ ...prev, [variable]: true }));
     }
 
     const handlePasswordSubmit = async (password: string) => {
@@ -192,7 +197,13 @@ export default function Deployment() {
             {activeStep === STEP_CONFIGURATION && config && (
                 <Card>
                     <CardContent>
-                        <ConfigurationStep modules={modules.install} config={config} onComplete={handleConfigurationComplete} />
+                        <ConfigurationStep 
+                            modules={modules.install} 
+                            config={config} 
+                            initialValues={configValues} 
+                            userModified={userModified}
+                            onUserModified={handleUserModified}
+                            onComplete={handleConfigurationComplete} />
                     </CardContent>
                 </Card>
             )}
