@@ -55,6 +55,11 @@ export function useDeploymentOperation(options: UseDeploymentOperationOptions = 
         operation.on("error", (message: string) => {
             setError(message ?? "Something went wrong. Please try again.");
         });
+
+        operation.on("completed", () => {
+            // Force a re-render by setting the operation again
+            setOperation(operation);
+        });
     }
 
     const startDeployment = useCallback(async (request: DeploymentRequest) => {
