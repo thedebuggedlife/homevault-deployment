@@ -5,5 +5,5 @@ export class ServiceError extends Error {
 }
 
 export function getErrorMessage(error: any) {
-    return error?.message ?? error?.toString?.() ?? "" + error;
+    return error?.message ?? "" + error;
 }

@@ -96,9 +96,20 @@ ask_value() {
     if [ -n "$options" ]; then prompt="$prompt ($options)"; fi
     if [ -n "$display" ]; then prompt="$prompt [$display]"; fi
 
+    local first=true
+
     while true; do
         log
-        read "${args[@]}" -p "$prompt: " user_input </dev/tty
+        if [ "$UNATTENDED" = true ]; then
+            if [ "$first" != true ]; then
+                log_error "Unattended installation - cannot make blocking prompt to user"
+                exit 1
+            fi
+            log "$prompt"
+            first=false
+        else
+            read "${args[@]}" -p "$prompt: " user_input </dev/tty
+        fi
         if [ "$masked" = true ]; then log; fi
         user_input=${user_input:-${default}}
         if [ -z "$user_input" ]; then
@@ -393,7 +404,7 @@ ask_for_env() {
 
     # Show the prompt to the use and save the result
     local user_input
-    user_input=$(ask_value "$prompt" "${input_opts[@]}")
+    user_input=$(ask_value "$prompt" "${input_opts[@]}") || exit 1
     save_env "$env_variable" "$user_input"
 }
 

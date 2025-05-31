@@ -6,13 +6,11 @@ import si from "systeminformation";
 import _ from "lodash";
 import { EmitterMixin, EventsMap } from "nanoevents";
 import kill from "tree-kill";
+import { ServiceError } from "@/errors";
 
 export interface CommandResult<T = void> {
-    success: boolean;
     output?: string;
-    error?: string;
     data?: T;
-    code?: number;
 }
 
 export interface InputEvents extends EventsMap {
@@ -32,6 +30,11 @@ export interface CommandOptions extends SpawnOptionsWithoutStdio {
 export interface Cancellable<T> {
     promise: Promise<T>;
     cancel: () => void;
+}
+
+export class ProcessError {
+    pid?: number;
+    code?: number;
 }
 
 class SystemService {
@@ -97,7 +100,7 @@ class SystemService {
 
                 process.on("error", (error) => {
                     this.logger.error(`Process [${process.pid}] failed to start`, { command, args, options, error });
-                    reject({ success: false, error: "Failed to spawn new process" });
+                    reject(new ServiceError("Process failed to start", { command, args, options, error }));
                 })
 
                 process.on("close", (code: number | undefined) => {
@@ -105,17 +108,17 @@ class SystemService {
                     if (options.jsonOutput) {
                         data = this.tryParseJson<T>(output, options.jsonArray);
                     }
-                    const result = { success: code === 0, data, output, error, code };
+                    const result = { data, output };
                     this.logger.info(`Process [${process.pid}] exits with code ${code}`);
                     if (code === 0) {
                         resolve(result);
                     } else {
-                        reject(result);
+                        reject(new ServiceError(`Process exited with code ${code}`));
                     }
                 });
             } catch (error) {
                 this.logger.error("Failed to spawn new process", { command, args, options, error });
-                reject({ success: false, error: "Failed to spawn new process" });
+                reject(new ServiceError("Failed to spawn new process", { command, args, options, error }));
             }
         });
         const cancel = () => {

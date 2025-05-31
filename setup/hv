@@ -499,12 +499,12 @@ configure_admin_account() {
         log "The following user will be created and configured with ${Yellow}administrator privileges${COff} across all applications."
         log
 
-        ADMIN_USERNAME=$(ask_value "Username" -d "$ADMIN_USERNAME" -v "$RE_VALID_USERNAME")
-        ADMIN_EMAIL=$(ask_value "Email address" -d "$ADMIN_EMAIL" -v "$RE_VALID_EMAIL")
+        ADMIN_USERNAME=$(ask_value "Username" -d "$ADMIN_USERNAME" -v "$RE_VALID_USERNAME") || exit 1
+        ADMIN_EMAIL=$(ask_value "Email address" -d "$ADMIN_EMAIL" -v "$RE_VALID_EMAIL") || exit 1
         while true; do
             local confirm_pass
-            ADMIN_PASSWORD=$(ask_value "Password" -m)
-            confirm_pass=$(ask_value "Confirm password" -m)
+            ADMIN_PASSWORD=$(ask_value "Password" -m) || exit 1
+            confirm_pass=$(ask_value "Confirm password" -m) || exit 1
             if [ "$ADMIN_PASSWORD" != "$confirm_pass" ]; then
                 log_warn "Passwords do not match. Please try again."
             else
