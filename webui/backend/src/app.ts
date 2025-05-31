@@ -11,9 +11,10 @@ import { authenticateToken, socketAuth } from '@/middleware/auth';
 import { getStatus } from '@/api/status';
 import { refreshToken } from '@/api/token';
 import { getModules } from './api/modules';
-import { getDeploymentConfig, deploymentSocket } from './api/deployment';
+import { getDeploymentConfig } from './api/deployment';
 import { logger } from '@/logger';
 import { getActivity } from './api/activity';
+import { deploymentSocket } from './socket/deployment';
 
 const app = express();
 const server = http.createServer(app);
@@ -28,7 +29,7 @@ io.of("/deployment").use(socketAuth).on("connection", deploymentSocket);
 
 app.use(cors());
 app.use(express.json());
-app.use(errorHandler);
+
 app.post('/api/login', [
   body('username').notEmpty(),
   body('password').notEmpty(),
@@ -39,6 +40,9 @@ app.get('/api/activity', authenticateToken, getActivity);
 app.get('/api/status', authenticateToken, getStatus);
 app.get('/api/modules', authenticateToken, getModules);
 app.post('/api/deployment/config', authenticateToken, getDeploymentConfig);
+
+// Error handler MUST be last
+app.use(errorHandler);
 
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {

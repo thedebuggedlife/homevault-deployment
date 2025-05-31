@@ -18,6 +18,7 @@ print_usage() {
         log "  snapshots    List and/or manage existing recovery snapshots."
         log "  restore      Recovers the state of the project from a previous snapshot."
         log "  modules      Shows information about installed or available modules."
+        log "  webui        Manage the WebUI installation."
         log "\nTo display help for an action:\n"
         log "  $0 <action> --help"
 
@@ -94,6 +95,11 @@ print_usage() {
         log "\nUsage: $0 [global options] modules [modules options]"
         log "\Modules options:\n"
         log "  -a, --all                    Show information for all modules available. Otherwise only installed modules are shown."
+
+    elif [ "$SELECTED_ACTION" = "webui" ]; then
+        log "\nUsage: $0 [global options] webui <action> [webui options]"
+        log "\nWebUI actions:\n"
+        log "  install                  Download and install the WebUI"
     fi
 
     log "\nGlobal options:\n"
@@ -458,10 +464,36 @@ parse_modules_option() {
 }
 
 ################################################################################
+#                              WEBUI OPTIONS
+
+is_valid_webui_action() {
+    local -a valid_actions=("install")
+    array_contains "$1" "${valid_actions[@]}" || return 1
+}
+
+parse_webui_option() {
+    local action
+    if [ -z "$WEBUI_ACTION" ]; then
+        action=$(echo "$1" | tr '[:upper:]' '[:lower:]')
+        if is_valid_webui_action "$action"; then
+            WEBUI_ACTION="$action"
+            return 1
+        fi
+    fi
+}
+
+check_webui_options() {
+    if [ -z "$WEBUI_ACTION" ]; then
+        log_invalid "A webui action was not specified"
+        return 1
+    fi
+}
+
+################################################################################
 #                              GLOBAL OPTIONS
 
 is_valid_action() {
-    local -a valid_actions=("deploy" "backup" "snapshots" "restore" "modules")
+    local -a valid_actions=("deploy" "backup" "snapshots" "restore" "modules" "webui")
     array_contains "$1" "${valid_actions[@]}" || return 1
 }
 

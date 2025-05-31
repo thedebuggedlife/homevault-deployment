@@ -17,7 +17,7 @@ export interface RefreshOptions extends SignOptions {
 }
 
 export interface RefreshResult {
-    token: string;
+    token?: string;
     expiresInSec: number;
 }
 
@@ -64,15 +64,15 @@ class TokenGenerator<T extends JwtPayload> {
             });
         })
     }
-    async refresh(token: T, refreshOptions?: RefreshOptions): Promise<RefreshResult|undefined> {
+    async refresh(token: T, refreshOptions?: RefreshOptions): Promise<RefreshResult> {
         if (!token.exp) {
             logger.warn("Invalid token is missing expiration time");
-            throw new ServiceError("Invalid token is missing expiration time");
+            throw new ServiceError("Invalid token is missing expiration time", null, 403);
         }
         const expiresInSec = getExpiresInSec(token.exp);
         if (expiresInSec > MIN_EXPIRES_IN) {
             logger.warn("Attempted to refresh token before minimum expiration time", { token })
-            return;
+            return { expiresInSec };
         }
         logger.info("Refreshing token", { token, expiresInSec });
         const payload = { ...token };

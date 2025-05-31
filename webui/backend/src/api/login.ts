@@ -1,37 +1,33 @@
 import { logger } from "@/logger";
 import { exec, spawn } from "child_process";
-import { Request, Response } from "express";
+import { NextFunction, Request, Response } from "express";
 import tokenGenerator, { JWT_EXPIRES } from "@/tokenGenerator";
-import { ErrorResponse, LoginResponse, User } from "@/types";
+import { LoginResponse, User } from "@/types";
 import { readFile } from "fs/promises";
 import { promisify } from "util";
+import { ServiceError } from "@/errors";
 
 const execAsync = promisify(exec);
 
-export async function login(req: Request, res: Response<LoginResponse|ErrorResponse>) {
+export async function login(req: Request, res: Response<LoginResponse>, next: NextFunction) {
     const { username, password } = req.body;
-
-    if (!isValidUsername(username)) {
-        return res.status(400).json({ errors: [{ message: "Invalid username format" }] });
-    }
-
     try {
+        if (!isValidUsername(username)) {
+            throw new ServiceError("Invalid username format", { username }, 400);
+        }
         if (! await checkSudo(username)) {
-            logger.warn(`User ${username} attempted login without sudo privileges`);
-            return res.status(403).json({ errors: [{ message: "User does not have required privileges" }] });
+            throw new ServiceError("User does not have required privileges", { username }, 403);
         }
         if (! await checkPassword(username, password)) {
-            logger.error(`Authentication failed for user ${username}`);
-            return res.status(401).json({ errors: [{ message: "Invalid credentials" }] });
+            throw new ServiceError("Authentication failed. Invalid credentials.", { username }, 401);
         }
-    } catch (error) {
-        logger.error("Failed to check for user access", { username, error });
-        return res.status(500).json({ errors: [{ message: "Failed to check for user access" }] });
-    }
 
-    const user: User = { username };
-    const token = await tokenGenerator.sign({ user });
-    return res.json({ token, expiresInSec: JWT_EXPIRES });
+        const user: User = { username };
+        const token = await tokenGenerator.sign({ user });
+        return res.json({ token, expiresInSec: JWT_EXPIRES });
+    } catch (error) {
+        next(error);
+    }
 }
 
 function isValidUsername(username: string): boolean {

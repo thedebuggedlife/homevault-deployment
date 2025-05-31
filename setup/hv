@@ -12,6 +12,7 @@ source "$PROJECT_ROOT/lib/cmdline.sh"
 source "$PROJECT_ROOT/lib/smtp2go.sh"
 source "$PROJECT_ROOT/lib/docker.sh"
 source "$PROJECT_ROOT/lib/backup.sh"
+source "$PROJECT_ROOT/lib/webui.sh"
 
 declare -g SELECTED_ACTION=
 declare -g SHOW_ALL=false
@@ -31,6 +32,9 @@ declare -g COMPOSE_PROJECT_NAME=homevault
 declare -g COMPOSE_OPTIONS=
 declare -g COMPOSE_UP_OPTIONS=
 declare -g JSON_OUTPUT={}
+
+# WebUI configuration
+declare -g WEBUI_ACTION=
 declare -g WEBUI_CONFIG=false
 
 # Defaults to false, if set to true, docker and restic operations will be passed the --dry-run parameter
@@ -724,6 +728,22 @@ run_modules() {
     else
         find_installed_modules
         log
+    fi
+}
+
+webui_action_install() {
+    log_header "Installing WebUI"
+    download_webui || return 1
+    install_webui_services || return 1
+    log "\n${BIGreen}WebUI installed successfully${COff}"
+}
+
+run_webui() {
+    if [ "$WEBUI_ACTION" = "install" ]; then
+        webui_action_install || return 1
+    else
+        log_error "Unknown webui action: $WEBUI_ACTION"
+        return 1
     fi
 }
 

@@ -79,7 +79,7 @@ smtp2go_validate_domain() {
 smtp2go_add_user() {
     local username=$1
     local password json_payload user response
-    password=$(tr -cd '[:alnum:]' </dev/urandom | fold -w 20 | head -n 1 | tr -d '\n')
+    password=$(generate_secret 20)
     json_payload=$(jq -n \
         --arg username "$username" \
         --arg password "$password" \

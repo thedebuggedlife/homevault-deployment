@@ -231,6 +231,16 @@ save_env() {
 }
 
 ###
+# Generate a random string with the specified length
+#
+# @param    $1 {string}     Length of the generated secret
+###
+generate_secret() {
+    local secret_length=$1
+    tr -cd '[:alnum:]' </dev/urandom | fold -w "${secret_length}" | head -n 1 | tr -d '\n'
+}
+
+###
 # Generate a random id and save it to the env file
 # @param    $1 {string} Variable name
 # @option   -l {number} Length (in chars) of value [default=20]
@@ -251,7 +261,7 @@ save_env_id() {
     done
     local env_value="${!env_variable}"
     if [ -z "$env_value" ]; then
-        env_value=$(tr -cd '[:alnum:]' </dev/urandom | fold -w "${id_length}" | head -n 1 | tr -d '\n')
+        env_value=$(generate_secret "$id_length")
     fi
     save_env "$env_variable" "$env_value" "$env_file"
 }
@@ -477,7 +487,7 @@ create_secret() {
         log "Secret file ${Cyan}$secret_filename${COff} already exists."
     else
         local secret_value
-        secret_value=$(tr -cd '[:alnum:]' </dev/urandom | fold -w "${SECRET_LENGTH}" | head -n 1 | tr -d '\n')
+        secret_value=$(generate_secret "$SECRET_LENGTH")
         write_file "$secret_value" "$secret_filename"
     fi
 }

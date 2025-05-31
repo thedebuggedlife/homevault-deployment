@@ -1,25 +1,22 @@
-import { logger } from "@/logger";
+import { ServiceError } from "@/errors";
 import { AuthenticatedRequest } from "@/middleware/auth";
-import tokenGenerator, { getExpiresInSec } from "@/tokenGenerator";
-import { ErrorResponse, RefreshResponse } from "@/types";
-import { Response } from "express";
+import tokenGenerator from "@/tokenGenerator";
+import { RefreshResponse } from "@/types";
+import { NextFunction, Response } from "express";
 
-export async function refreshToken(req: AuthenticatedRequest, res: Response<RefreshResponse|ErrorResponse>) {
-    if (!req.token?.exp) {
-        logger.warn("Provided token is missing expiration time");
-        return res.status(403).json({ errors: [{ message: "Invalid token" }] });
-    }
-    try{
+export async function refreshToken(req: AuthenticatedRequest, res: Response<RefreshResponse>, next: NextFunction) {
+    try {
+        if (!req.token) {
+            throw new ServiceError("Missing token in request", null, 403);
+        }
         const result = await tokenGenerator.refresh(req.token);
         const response = {
             user: req.token.user,
-            token: result?.token,
-            expiresInSec: result ? result.expiresInSec : getExpiresInSec(req.token.exp),
-        }
+            token: result.token,
+            expiresInSec: result.expiresInSec,
+        };
         return res.json(response);
-    }
-    catch (error) {
-        logger.warn("Failed to refresh token.", { token: req.token, error });
-        return res.status(403).json({ errors: [{ message: "Failed to refresh token." }]});
+    } catch (error) {
+        next(error);
     }
 }

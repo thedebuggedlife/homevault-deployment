@@ -1,5 +1,5 @@
 export class ServiceError extends Error {
-    constructor(message: string, public context?: any) {
+    constructor(message: string, public context?: any, public status = 500) {
         super(message);
     }
 }

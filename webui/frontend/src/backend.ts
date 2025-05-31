@@ -30,7 +30,6 @@ export class DeploymentOperation implements EmitterMixin<DeploymentOperationEven
 
     constructor(private socket: DeploymentSocket, public id?: string) {
         socket.on("disconnect", () => {
-            console.log("Received `disconnect` event");
             if (!this.completed) {
                 this.completed = true;
                 this.emitter.emit("error", "Disconnected from backend");
@@ -39,7 +38,6 @@ export class DeploymentOperation implements EmitterMixin<DeploymentOperationEven
         });
         socket.on("started", id => this.id = id);
         socket.on("completed", () => {
-            console.log("Received `completed` event from server");
             this.completed = true;
             this.emitter.emit("completed");
             this.close();
@@ -51,11 +49,9 @@ export class DeploymentOperation implements EmitterMixin<DeploymentOperationEven
             this.close();
         });
         socket.on("output", (data, offset) => {
-            console.log("Received `output` event from server", data);
             this.emitter.emit("output", data, offset);
         });
         socket.on("backfill", (data) => {
-            console.log("Received `backfill` event from server", data);
             this.emitter.emit("backfill", data);
         });
     }
