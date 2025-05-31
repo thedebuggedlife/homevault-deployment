@@ -92,6 +92,23 @@ export default function Deployment() {
                     }
                 }
             });
+        }        
+        
+        // Add administrator fields if base module is being installed
+        if (modules.install.includes('base')) {
+            if (configValues.ADMIN_USERNAME) {
+                filteredConfigValues.ADMIN_USERNAME = configValues.ADMIN_USERNAME;
+            }
+            if (configValues.ADMIN_EMAIL) {
+                filteredConfigValues.ADMIN_EMAIL = configValues.ADMIN_EMAIL;
+            }
+            if (configValues.ADMIN_PASSWORD) {
+                filteredConfigValues.ADMIN_PASSWORD = configValues.ADMIN_PASSWORD;
+            }
+            if (configValues.ADMIN_DISPLAY_NAME) {
+                filteredConfigValues.ADMIN_DISPLAY_NAME = configValues.ADMIN_DISPLAY_NAME;
+            }
+            // Note: ADMIN_PASSWORD_CONFIRM is intentionally not included
         }
 
         return filteredConfigValues;

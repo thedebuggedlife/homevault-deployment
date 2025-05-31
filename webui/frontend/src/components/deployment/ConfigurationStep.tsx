@@ -2,6 +2,7 @@ import { useState, useCallback, useMemo, useEffect } from 'react';
 import { Box, Button, Typography } from '@mui/material';
 import { DeploymentConfig } from '@backend/types';
 import ModuleConfigForm from './ModuleConfigForm';
+import AdministratorConfigForm from './AdministratorConfigForm';
 import { validateTimezone } from '@/utils/prompts/validators';
 import { evaluateCondition } from '@/utils/prompts/conditionEvaluator';
 
@@ -14,6 +15,9 @@ interface ConfigurationStepProps {
 export default function ConfigurationStep({ modules, config, onComplete }: ConfigurationStepProps) {
     const [values, setValues] = useState<Record<string, string>>({});
     const [errors, setErrors] = useState<Record<string, string>>({});
+
+    // Check if base module is being installed
+    const isInstallingBase = modules.includes('base');
 
     // Initialize values with defaults from ALL prompts in the config, not just selected modules
     useEffect(() => {
@@ -36,10 +40,18 @@ export default function ConfigurationStep({ modules, config, onComplete }: Confi
         }));
     }, []);
 
+    const handleAdminValuesChange = useCallback((adminValues: Record<string, string>) => {
+        setValues(prev => ({
+            ...prev,
+            ...adminValues
+        }));
+    }, []);
+
     const validateAllFields = useCallback((): boolean => {
         const newErrors: Record<string, string> = {};
         let isValid = true;
 
+        // Validate module prompts
         config.prompts.forEach(prompt => {
             const value = values[prompt.variable] || '';
 
@@ -80,20 +92,65 @@ export default function ConfigurationStep({ modules, config, onComplete }: Confi
             }
         });
 
+        // Validate administrator fields if base module is being installed
+        if (isInstallingBase) {
+            // Validate username
+            if (!values.ADMIN_USERNAME) {
+                newErrors.ADMIN_USERNAME = 'Username is required';
+                isValid = false;
+            }
+
+            // Validate email
+            if (!values.ADMIN_EMAIL) {
+                newErrors.ADMIN_EMAIL = 'Email is required';
+                isValid = false;
+            } else {
+                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                if (!emailRegex.test(values.ADMIN_EMAIL)) {
+                    newErrors.ADMIN_EMAIL = 'Invalid email format';
+                    isValid = false;
+                }
+            }
+
+            // Validate display name
+            if (!values.ADMIN_DISPLAY_NAME) {
+                newErrors.ADMIN_DISPLAY_NAME = 'Display name is required';
+                isValid = false;
+            }
+
+            // Validate password
+            if (!values.ADMIN_PASSWORD) {
+                newErrors.ADMIN_PASSWORD = 'Password is required';
+                isValid = false;
+            }
+
+            // Validate password confirmation
+            if (!values.ADMIN_PASSWORD_CONFIRM) {
+                newErrors.ADMIN_PASSWORD_CONFIRM = 'Password confirmation is required';
+                isValid = false;
+            } else if (values.ADMIN_PASSWORD !== values.ADMIN_PASSWORD_CONFIRM) {
+                newErrors.ADMIN_PASSWORD_CONFIRM = 'Passwords do not match';
+                isValid = false;
+            }
+        }
+
         setErrors(newErrors);
         return isValid;
-    }, [config, values]);
+    }, [config, values, isInstallingBase]);
 
     // Calculate if all fields are valid without setting errors
     const allFieldsValid = useMemo(() => validateAllFields(), [validateAllFields]);
 
     const handleContinue = () => {
         if (validateAllFields()) {
-            onComplete(values);
+            // Remove password confirmation from final values
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            const { ADMIN_PASSWORD_CONFIRM, ...finalValues } = values;
+            onComplete(finalValues);
         }
     };
 
-    if (!config || config.prompts.length === 0) {
+    if (!config || (config.prompts.length === 0 && !isInstallingBase)) {
         // No configuration needed, proceed directly
         onComplete({});
         return null;
@@ -115,15 +172,25 @@ export default function ConfigurationStep({ modules, config, onComplete }: Confi
             </Typography>
 
             {moduleGroups.map(({ moduleName }) => (
-                <ModuleConfigForm
-                    key={moduleName}
-                    moduleName={moduleName}
-                    prompts={config.prompts}
-                    values={values}
-                    errors={errors} 
-                    onValuesChange={handleModuleValuesChange}
-                    allValues={values}
-                />
+                <Box key={moduleName}>
+                    <ModuleConfigForm
+                        moduleName={moduleName}
+                        prompts={config.prompts}
+                        values={values}
+                        errors={errors} 
+                        onValuesChange={handleModuleValuesChange}
+                        allValues={values}
+                    />
+                    
+                    {/* Show Administrator form after base module */}
+                    {moduleName === 'base' && isInstallingBase && (
+                        <AdministratorConfigForm
+                            values={values}
+                            errors={errors}
+                            onValuesChange={handleAdminValuesChange}
+                        />
+                    )}
+                </Box>
             ))}
 
             <Box mt={3} display="flex" justifyContent="flex-end">

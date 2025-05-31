@@ -37,6 +37,9 @@ export default function ConfirmationStep({
     onConfirm,
     onBack,
 }: ConfirmationStepProps) {
+    // Check if base module is being installed
+    const isInstallingBase = modules.install.includes('base');
+    
     // Group configuration by module for installations
     const moduleConfigs = modules.install.map(moduleName => {
         const modulePrompts = config.prompts.filter(p => p.module === moduleName);
@@ -54,6 +57,14 @@ export default function ConfirmationStep({
         };
     }).filter(mc => mc.values.length > 0);
 
+    // Prepare administrator values if base module is being installed
+    const adminValues = isInstallingBase ? [
+        { label: 'Username', variable: 'ADMIN_USERNAME', value: values.ADMIN_USERNAME || '' },
+        { label: 'Email', variable: 'ADMIN_EMAIL', value: values.ADMIN_EMAIL || '' },
+        { label: 'Display Name', variable: 'ADMIN_DISPLAY_NAME', value: values.ADMIN_DISPLAY_NAME || '' },
+        { label: 'Password', variable: 'ADMIN_PASSWORD', value: '••••••••' }
+    ].filter(v => v.value) : [];
+
     const hasInstallations = modules.install.length > 0;
     const hasRemovals = modules.remove && modules.remove.length > 0;
 
@@ -69,7 +80,7 @@ export default function ConfirmationStep({
             {/* Modules to Install Section */}
             {hasInstallations && (
                 <>
-                    {!hasRemovals && moduleConfigs.length === 0 && (
+                    {!hasRemovals && moduleConfigs.length === 0 && adminValues.length === 0 && (
                         <Card sx={{ mb: 3 }}>
                             <CardContent>
                                 <Typography variant="h6" gutterBottom>
@@ -90,29 +101,61 @@ export default function ConfirmationStep({
                     )}
 
                     {moduleConfigs.map(({ moduleName, values: moduleValues }) => (
-                        <Card key={moduleName} sx={{ mb: 3 }}>
-                            <CardContent>
-                                <Typography variant="h6" gutterBottom>
-                                    {moduleName}
-                                </Typography>
-                                <TableContainer component={Paper} variant="outlined">
-                                    <Table size="small">
-                                        <TableBody>
-                                            {moduleValues.map(({ label, variable, value }) => (
-                                                <TableRow key={variable}>
-                                                    <TableCell component="th" scope="row" sx={{ fontWeight: 500 }}>
-                                                        {interpolateVariables(label, values)}
-                                                    </TableCell>
-                                                    <TableCell align="right" sx={{ fontFamily: 'monospace' }}>
-                                                        {value}
-                                                    </TableCell>
-                                                </TableRow>
-                                            ))}
-                                        </TableBody>
-                                    </Table>
-                                </TableContainer>
-                            </CardContent>
-                        </Card>
+                        <Box key={moduleName}>
+                            <Card sx={{ mb: 3 }}>
+                                <CardContent>
+                                    <Typography variant="h6" gutterBottom>
+                                        {moduleName}
+                                    </Typography>
+                                    <TableContainer component={Paper} variant="outlined">
+                                        <Table size="small">
+                                            <TableBody>
+                                                {moduleValues.map(({ label, variable, value }) => (
+                                                    <TableRow key={variable}>
+                                                        <TableCell component="th" scope="row" sx={{ fontWeight: 500 }}>
+                                                            {interpolateVariables(label, values)}
+                                                        </TableCell>
+                                                        <TableCell align="right" sx={{ fontFamily: 'monospace' }}>
+                                                            {value}
+                                                        </TableCell>
+                                                    </TableRow>
+                                                ))}
+                                            </TableBody>
+                                        </Table>
+                                    </TableContainer>
+                                </CardContent>
+                            </Card>
+                            
+                            {/* Show Administrator Account after base module */}
+                            {moduleName === 'base' && adminValues.length > 0 && (
+                                <Card sx={{ mb: 3 }}>
+                                    <CardContent>
+                                        <Typography variant="h6" gutterBottom>
+                                            Administrator Account
+                                        </Typography>
+                                        <Alert severity="info" sx={{ mb: 2 }}>
+                                            This user will have administrator privileges across all applications
+                                        </Alert>
+                                        <TableContainer component={Paper} variant="outlined">
+                                            <Table size="small">
+                                                <TableBody>
+                                                    {adminValues.map(({ label, variable, value }) => (
+                                                        <TableRow key={variable}>
+                                                            <TableCell component="th" scope="row" sx={{ fontWeight: 500 }}>
+                                                                {label}
+                                                            </TableCell>
+                                                            <TableCell align="right" sx={{ fontFamily: 'monospace' }}>
+                                                                {value}
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    ))}
+                                                </TableBody>
+                                            </Table>
+                                        </TableContainer>
+                                    </CardContent>
+                                </Card>
+                            )}
+                        </Box>
                     ))}
                 </>
             )}
