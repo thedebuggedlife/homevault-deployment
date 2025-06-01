@@ -207,6 +207,13 @@ save_env() {
     local env_value=$2
     local env_file=${3:-$ENV_FILE}
     log "Saving ${Purple}$env_variable${COff} in ${Cyan}$env_file${COff}"
+
+    if [ ! -f "${env_file}" ]; then
+        touch "${env_file}" || {
+            log_error "Failed to create file '${env_file}'"
+            exit 1
+        }
+    fi
     
     # Check if the variable exists in the file
     if grep -q "^${env_variable}=" "$env_file"; then
@@ -720,16 +727,16 @@ remove_from_array() {
 ###
 # Makes sure a given path exists, if not, it is created with $AS_USER:docker ownership
 #
-# Parameters:
-#   $1 {string} Path to create
-#
-# @return void
+# @param    $1  {string}    Path to create
+# @param    $2  {string}    Identity to set as owner (default: $USER:docker)
 ###
 ensure_path_exists() {
-    if [ ! -d "$1" ]; then
-        sudo mkdir -p "$1" && \
-        sudo chown "$AS_USER:docker" "$1" || {
-            log_error "Failed to create path '$1'"
+    local path=$1
+    local owner=${2:-"$AS_USER:docker"}
+    if [ ! -d "$path" ]; then
+        sudo mkdir -p "$path" && \
+        sudo chown "$owner" "$path" || {
+            log_error "Failed to create path '$path'"
             return 1
         }
     fi

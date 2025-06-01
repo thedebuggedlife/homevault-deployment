@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node -r dotenv/config dist/app.js",
     "dev": "ts-node-dev --respawn --transpile-only -r dotenv/config src/app.ts",
-    "build": "tsc && tsc-alias && mkdir -p ../dist/backend && cp -r package.json package-lock.json dist/* ../dist/backend/",
+    "build": "tsc && tsc-alias && cp askpass.sh package.json package-lock.json dist/ && mkdir -p ../dist/backend && cp -r dist/* ../dist/backend/",
     "dist": "npm run build && cd ../dist/backend/ && npm install --omit=dev",
     "clean": "rimraf dist ../dist/backend"
   },

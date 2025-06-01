@@ -13,7 +13,7 @@ import { refreshToken } from '@/api/token';
 import { getModules } from './api/modules';
 import { getDeploymentConfig } from './api/deployment';
 import { logger } from '@/logger';
-import { getActivity } from './api/activity';
+import { getActivity, postActivitySudo } from './api/activity';
 import { deploymentSocket } from './socket/deployment';
 
 const app = express();
@@ -37,6 +37,7 @@ app.post('/api/login', [
 ], login);
 app.post('/api/token/refresh', authenticateToken, refreshToken);
 app.get('/api/activity', authenticateToken, getActivity);
+app.post('/api/activity/sudo', postActivitySudo);
 app.get('/api/status', authenticateToken, getStatus);
 app.get('/api/modules', authenticateToken, getModules);
 app.post('/api/deployment/config', authenticateToken, getDeploymentConfig);

@@ -24,6 +24,7 @@ interface CommandOptions {
     output?: (data: string) => void;
     input?: EmitterMixin<InputEvents>;
     cancellable?: boolean;
+    env?: Record<string, string>
 }
 
 export interface DeploymentEvents {
@@ -36,6 +37,7 @@ export interface DeploymentInstance {
     request: DeploymentRequest;
     events: Emitter<DeploymentEvents>;
     output: string[];
+    sudo: () => string;
     abort?: () => void;
 }
 
@@ -60,6 +62,16 @@ class InstallerService {
                 request: this.currentDeployment.request,
             };
         }
+    }
+
+    sudoForActivity(id: string): string {
+        if (this.currentDeployment) {
+            if (this.currentDeployment.id !== id) {
+                throw new ServiceError("The activity current activity id does not match the sudo request", null, 403);
+            }
+            return this.currentDeployment.sudo();
+        }
+        throw new ServiceError("There is no activity that requires sudo access", null, 400);
     }
 
     getCurrentDeployment(): DeploymentInstance | undefined {
@@ -101,18 +113,15 @@ class InstallerService {
             throw new ServiceError("Deployment requires password for sudo");
         }
         delete request.config?.password; // Avoid leaking password - remove it from persisted request
-        const input = createNanoEvents<InputEvents>();
         const instance: DeploymentInstance = (this.currentDeployment = {
             id: uuid(),
             request,
             events: createNanoEvents<DeploymentEvents>(),
             output: [],
+            sudo: () => password,
         });
         const args = this.getDeploymentArgs(request);
         const output = (data: string) => {
-            if (data.startsWith("[sudo]")) {
-                input.emit("data", password + "\n");
-            }
             instance.events.emit("output", data, instance.output.length);
             instance.output.push(data);
         };
@@ -124,9 +133,14 @@ class InstallerService {
         }
         const cancellable = this.executeCommand([...args, "--unattended", "--force"], {
             output,
-            input,
             cancellable: true,
+            env: {
+                ...process.env,
+                SUDO_NONCE: instance.id,
+                SUDO_ASKPASS: `${INSTALLER_PATH}/webui/backend/askpass.sh`,
+            }
         });
+        this.logger.info(`Deployment instance ${instance.id} started`);
         cancellable.promise
             .then(
                 () => {
@@ -141,7 +155,6 @@ class InstallerService {
                 }
             )
             .finally(() => {
-                input.events = {};
                 instance.events.events = {};
                 configFile?.cleanup();
             });
@@ -217,6 +230,7 @@ class InstallerService {
                     }
                     options?.output?.(data);
                 },
+                env: options?.env,
             });
             if (options?.cancellable) {
                 return cancellable;

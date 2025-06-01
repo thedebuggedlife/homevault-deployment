@@ -10,6 +10,17 @@ source "$PROJECT_ROOT/lib/http.sh"
 source "$PROJECT_ROOT/lib/config.sh"
 
 ###
+# Replacement for sudo that uses the askpass helper when running unattended
+###
+sudo() {
+    if [ "$UNATTENDED" = true ]; then
+        command sudo -A "$@"
+    else
+        command sudo "$@"
+    fi
+}
+
+###
 # Downloads the webui files (overrides existing files!)
 ###
 webui_download() {
@@ -19,7 +30,7 @@ webui_download() {
     local webui_path="$PROJECT_ROOT/webui"
     
     # Create webui directory if it doesn't exist
-    ensure_path_exists "$webui_path" || {
+    ensure_path_exists "$webui_path" "$AS_USER" || {
         log_error "Failed to create webui directory"
         return 1
     }
@@ -285,6 +296,7 @@ EOF
     sudo systemctl restart "$service_name"
     
     # Wait a moment and check if service started successfully
+    log "Waiting for frontend service activation..."
     sleep 2
     if sudo systemctl is-active --quiet "$service_name"; then
         log "Frontend service ${Purple}$service_name${COff} installed and started on port ${Cyan}$port${COff}"

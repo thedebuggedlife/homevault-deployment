@@ -87,11 +87,6 @@ jobs:
             exit 1
           fi
           
-          # Also copy backend's package.json and package-lock.json to backend folder
-          # (based on your backend build script, these are needed)
-          cp ./webui/backend/package.json ./webui_temp/backend/
-          cp ./webui/backend/package-lock.json ./webui_temp/backend/
-          
           # Create the webui.zip
           cd webui_temp
           zip -r ../webui.zip .

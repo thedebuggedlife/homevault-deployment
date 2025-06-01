@@ -1,6 +1,6 @@
 import winston from "winston";
 import { logger as rootLog } from "@/logger";
-import { ChildProcess, spawn, SpawnOptionsWithoutStdio } from "child_process";
+import { ChildProcess, spawn, SpawnOptions } from "child_process";
 import { SystemResources } from "@/types";
 import si from "systeminformation";
 import _ from "lodash";
@@ -18,7 +18,7 @@ export interface InputEvents extends EventsMap {
     close: () => void;
 }
 
-export interface CommandOptions extends SpawnOptionsWithoutStdio {
+export interface CommandOptions extends SpawnOptions {
     jsonOutput?: boolean;
     jsonArray?: boolean;
     sudo?: { password: string };

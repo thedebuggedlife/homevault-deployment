@@ -391,7 +391,6 @@ base_config_env() {
 }
 
 base_config_secrets() {
-    save_env_id OIDC_GRAFANA_CLIENT_ID
     save_env_secret "${SECRETS_PATH}cloudflare_dns_api_token" CF_DNS_API_TOKEN
     save_env_secret "${SECRETS_PATH}smtp_password" SMTP_PASSWORD
     create_secret "${SECRETS_PATH}ldap_admin_password"

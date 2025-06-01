@@ -582,6 +582,10 @@ abort_install() {
 }
 
 on_script_exit() {
+    if [ "$UNATTENDED" = true ]; then
+        # Forget the cached sudo credentials to force the next setup operation to revalidate them
+        sudo -k
+    fi
     if [ "$JSON_OUT" = true ]; then
         JSON_OUTPUT=$(echo "${JSON_OUTPUT}" | jq \
             --arg 'version' "$PROJECT_VERSION" \
@@ -766,7 +770,7 @@ trap "on_script_exit" EXIT
 parse_command_line "$@"
 
 if [ "$UNATTENDED" = true ]; then 
-    sudo -S -v || {
+    sudo -v || {
         log_error "Failed to authenticate with sudo as $USER"
         exit 1
     }
