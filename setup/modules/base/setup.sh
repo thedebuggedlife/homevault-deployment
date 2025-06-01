@@ -10,6 +10,8 @@ source "$PROJECT_ROOT/lib/config.sh"
 source "$PROJECT_ROOT/lib/tailscale.sh"
 #shellcheck source=../../lib/cloudflare.sh
 source "$PROJECT_ROOT/lib/cloudflare.sh"
+#shellcheck source=../../lib/webui.sh
+source "$PROJECT_ROOT/lib/webui.sh"
 
 _PAM_USER_CONFIG="lldap/bootstrap/user-configs/pam.json"
 _ADMIN_USER_CONFIG="lldap/bootstrap/user-configs/admin.json"
@@ -22,7 +24,11 @@ _SSSD_CONFIG_PATH="/etc/sssd/sssd.conf"
 # @return: {void}
 ###
 configure_traefik() {
-    merge_yaml_config "dynamic.yml" traefik
+    local -a extra_opts=()
+    if [ "$WEBUI_INSTALLED" = true ]; then
+        extra_opts+=("-f" "modules/base/traefik/dynamic.webui.yml")
+    fi
+    merge_yaml_config "dynamic.yml" traefik "${extra_opts[@]}"
 }
 
 ###
@@ -429,6 +435,11 @@ base_pre_install() {
 base_post_install() {
     log_header "Post-install steps for LLDAP"
     pam_post_install || return 1
+
+    if [ "$WEBUI_INSTALLED" = true ]; then
+        log_header "Post-install steps for WebUI"
+        webui_configure_dns || return 1
+    fi
 }
 
 base_backup_config() {

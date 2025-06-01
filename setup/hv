@@ -733,9 +733,18 @@ run_modules() {
 
 webui_action_install() {
     log_header "Installing WebUI"
-    download_webui || return 1
-    install_webui_services || return 1
-    log "\n${BIGreen}WebUI installed successfully${COff}"
+    webui_download || return 1
+    webui_install_services || return 1
+    local is_public=false
+    if compose_service_exists traefik; then
+        DEPLOY_SERVICES=traefik
+        NO_DOWNLOAD=true
+        OVERRIDE_COMPOSE=false
+        OVERRIDE_VERSIONS=false
+        run_deploy || return 1
+        is_public=true
+    fi
+    webui_print_status $is_public
 }
 
 run_webui() {

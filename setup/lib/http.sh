@@ -123,6 +123,29 @@ get_public_ip() {
     echo "$PUBLIC_IP"
 }
 
+###
+# Get the primary LAN IP address
+###
+get_lan_ip() {
+    local lan_ip
+    
+    # Method 1: Use ip route to find default interface and then get its IP
+    lan_ip=$(ip route get 1.1.1.1 2>/dev/null | grep -oP 'src \K[\d.]+' | head -1)
+    
+    # Method 2: If method 1 fails, try hostname -I
+    if [ -z "$lan_ip" ]; then
+        lan_ip=$(hostname -I 2>/dev/null | awk '{print $1}')
+    fi
+    
+    # Method 3: If still no IP, try ip addr
+    if [ -z "$lan_ip" ]; then
+        lan_ip=$(ip addr show | grep -oP 'inet \K[\d.]+' | grep -v '127.0.0.1' | head -1)
+    fi
+    
+    # Default to localhost
+    echo "${lan_ip:-localhost}"
+}
+
 
 ###
 # Function to start a temporary HTTP server and return an arbitrary string

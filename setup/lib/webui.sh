@@ -12,7 +12,7 @@ source "$PROJECT_ROOT/lib/config.sh"
 ###
 # Downloads the webui files (overrides existing files!)
 ###
-download_webui() {
+webui_download() {
     if [[ "$NO_DOWNLOAD" = true || "$PROJECT_VERSION" = "test" ]]; then return 0; fi
 
     local webui_url="$GH_IO_BASE_URL/webui.zip"
@@ -49,7 +49,7 @@ download_webui() {
 ###
 # Install nvm and Node.js v22 for the current user
 ###
-install_nvm_and_node() {
+webui_install_nvm_and_node() {
     local nvm_dir="${NVM_DIR:-"$HOME/.nvm"}"
     local node_version="22"
     
@@ -91,7 +91,7 @@ install_nvm_and_node() {
 ###
 # Install the backend service
 ###
-install_backend_service() {
+webui_install_backend_service() {
     local backend_path="$PROJECT_ROOT/webui/backend"
     local env_file="$backend_path/.env"
     local service_name="homevault-backend"
@@ -188,7 +188,7 @@ EOF
 ###
 # Install the frontend service using Python's http.server
 ###
-install_frontend_service() {
+webui_install_frontend_service() {
     local frontend_path="$PROJECT_ROOT/webui/frontend"
     local service_name="homevault-frontend"
     local port=3000
@@ -297,26 +297,50 @@ EOF
 ###
 # Install both frontend and backend services
 ###
-install_webui_services() {
+webui_install_services() {
     # Ensure Python3 is installed
     check_python3 || return 1
 
     # Ensure nvm and node are installed first
-    install_nvm_and_node || return 1
+    webui_install_nvm_and_node || return 1
     
     # Install backend
-    install_backend_service || return 1
+    webui_install_backend_service || return 1
     
     # Install frontend
-    install_frontend_service || return 1
-    
-    log_header "WebUI Services Status"
-    log "Frontend: ${Cyan}http://localhost:3000${COff}"
-    log "Backend: ${Cyan}http://localhost:3001${COff}"
-    log "\nTo check service status:"
+    webui_install_frontend_service || return 1
+
+    # Persist the fact that the WEBUI has been installed
+    save_env WEBUI_INSTALLED true
+
+    log "\n${BIGreen}WebUI installed successfully${COff}\n"
+}
+
+webui_configure_dns() {
+    if ! zone_id=$(cloudflare_get_zone_id "$CF_DOMAIN_NAME"); then
+        return 1
+    fi
+    cloudflare_add_or_update_record "$zone_id" A "$WEBUI_SUBDOMAIN.$CF_DOMAIN_NAME" "$TAILSCALE_IP" false || {
+        return 1
+    }
+}
+
+webui_print_status() {
+    local is_public=$1
+
+    # Get LAN IP for display
+    local lan_ip
+    lan_ip=$(get_lan_ip)
+
+    log_header "WebUI Location"
+    log "Internal: ${Cyan}http://$lan_ip:3000${COff}"
+    if [ "$is_public" = true ]; then
+        log "External: ${Cyan}https://$WEBUI_SUBDOMAIN.$CF_DOMAIN_NAME${COff}"
+    fi
+    log "\nTo check service status:\n"
     log "  ${Purple}sudo systemctl status homevault-frontend${COff}"
     log "  ${Purple}sudo systemctl status homevault-backend${COff}"
-    log "\nTo view logs:"
+    log "\nTo view logs:\n"
     log "  ${Purple}sudo journalctl -u homevault-frontend -f${COff}"
     log "  ${Purple}sudo journalctl -u homevault-backend -f${COff}"
 }

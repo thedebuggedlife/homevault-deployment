@@ -790,6 +790,7 @@ append_file() {
 # @option   -d  {string}    Destination path under '$APPDATA_LOCATION' where the output is saved (optional)
 # @option   -e  {string}    YQ expression to use for the merge operation (optional)
 # @option   -m  {string}    First module to load configuration for (optional)
+# @option   -f  {string}    Path to additional file to merge (relative to $PROJECT_ROOT) (optional) (can be specified multiple times)
 ###
 merge_yaml_config() {
     local filename="$1"
@@ -798,13 +799,15 @@ merge_yaml_config() {
     # shellcheck disable=SC2016
     local expression='. as $item ireduce({}; . *+ $item)'
     local -a modules=("${ENABLED_MODULES[@]}")
+    local -a extra_files=()
     OPTIND=3
-    while getopts ":d:e:m:" opt; do
+    while getopts ":d:e:m:f:" opt; do
         # shellcheck disable=SC2207
         case $opt in
             d) appdata_path="$OPTARG" ;;
             e) expression="$OPTARG" ;;
             m) modules=("$OPTARG" $(printf '%s\n' "${ENABLED_MODULES[@]}" | grep -v "^${OPTARG}\$")) ;;
+            f) extra_files+=("$OPTARG") ;;
             \?) log_warn "Invalid option: -$OPTARG" ;;
             :) log_warn "Option -$OPTARG requires an argument" ;;
         esac
@@ -815,6 +818,14 @@ merge_yaml_config() {
         if [[ -f "${PROJECT_ROOT%/}/modules/$module/$module_path/$filename" ]]; then
             file_list+=("modules/$module/$module_path/$filename")
         fi
+    done
+
+    for extra_file in "${extra_files[@]}"; do
+        if [ ! -f "${PROJECT_ROOT%/}/${extra_file#/}" ]; then
+            log_error "Additional yaml config file ${extra_file} not found."
+            return 1
+        fi
+        file_list+=("${extra_file#/}")
     done
 
     local configuration
