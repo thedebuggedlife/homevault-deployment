@@ -49,19 +49,21 @@ jobs:
 
       - name: Build Frontend
         run: |
-          cd frontend
+          cd webui/frontend
           npm ci
           npm run build
           # The build script already creates dist/frontend, but we'll verify
           ls -la dist/
+          cd ../..
 
       - name: Build Backend
         run: |
-          cd backend
+          cd webui/backend
           npm ci
           npm run build
           # The build script already creates dist/backend, but we'll verify
           ls -la dist/
+          cd ../..
 
       - name: Create webui.zip
         run: |
@@ -70,16 +72,16 @@ jobs:
           mkdir -p webui_temp/backend
           
           # Copy frontend dist contents (everything inside dist/)
-          if [ -d "./frontend/dist" ]; then
-            cp -r ./frontend/dist/* ./webui_temp/frontend/
+          if [ -d "./webui/frontend/dist" ]; then
+            cp -r ./webui/frontend/dist/* ./webui_temp/frontend/
           else
             echo "Frontend dist directory not found"
             exit 1
           fi
           
           # Copy backend dist contents (everything inside dist/)
-          if [ -d "./backend/dist" ]; then
-            cp -r ./backend/dist/* ./webui_temp/backend/
+          if [ -d "./webui/backend/dist" ]; then
+            cp -r ./webui/backend/dist/* ./webui_temp/backend/
           else
             echo "Backend dist directory not found"
             exit 1
@@ -87,8 +89,8 @@ jobs:
           
           # Also copy backend's package.json and package-lock.json to backend folder
           # (based on your backend build script, these are needed)
-          cp ./backend/package.json ./webui_temp/backend/
-          cp ./backend/package-lock.json ./webui_temp/backend/
+          cp ./webui/backend/package.json ./webui_temp/backend/
+          cp ./webui/backend/package-lock.json ./webui_temp/backend/
           
           # Create the webui.zip
           cd webui_temp
