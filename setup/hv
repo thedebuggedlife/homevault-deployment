@@ -35,7 +35,6 @@ declare -g JSON_OUTPUT={}
 
 # WebUI configuration
 declare -g WEBUI_ACTION=
-declare -g WEBUI_CONFIG=false
 
 # Defaults to false, if set to true, docker and restic operations will be passed the --dry-run parameter
 # Can be set with the --dry-run command line option
@@ -302,11 +301,7 @@ create_data_locations() {
 # @return void
 ###
 ask_for_variables() {
-    if [ "$WEBUI_CONFIG" = true ]; then
-        execute_hooks "${CONFIG_WEBUI_HOOKS[@]}" "config-webui" || exit 1
-    else
-        execute_hooks "${CONFIG_ENV_HOOKS[@]}" "config-env" || exit 1
-    fi
+    execute_hooks "${CONFIG_ENV_HOOKS[@]}" "config-env" || exit 1
     implicit_env_vars
 }
 
@@ -555,9 +550,8 @@ check_reboot_needed() {
     if [ "$REQUIRES_RESTART" = true ]; then
         log_warn "The system must be rebooted to complete the requested operation."
         if [ "$UNATTENDED" = true ]; then
-            log "\nThe system will reboot in 15 seconds..."
-            sleep 15
-            sudo shutdown -r now
+            log "\nThe system will reboot in 1 minute"
+            sudo shutdown -r +1
             exit
         else
             log ""
@@ -603,7 +597,6 @@ run_deploy() {
     configure_docker
     prepare_env_file
     ask_for_variables
-    if [ "$WEBUI_CONFIG" == true ]; then return 0; fi
     create_data_locations || return 1
     download_appdata
     configure_admin_account
@@ -736,7 +729,9 @@ run_modules() {
 }
 
 webui_action_install() {
+    configure_docker
     log_header "Installing WebUI"
+    prepare_env_file
     webui_download || return 1
     webui_install_services || return 1
     local is_public=false
@@ -751,9 +746,18 @@ webui_action_install() {
     webui_print_status $is_public
 }
 
+webui_action_config() {
+    find_installed_modules
+    load_modules
+    prepare_env_file
+    execute_hooks "${CONFIG_WEBUI_HOOKS[@]}" "config-webui" || exit 1
+}
+
 run_webui() {
     if [ "$WEBUI_ACTION" = "install" ]; then
         webui_action_install || return 1
+    elif [ "$WEBUI_ACTION" = "config" ]; then
+        webui_action_config || return 1
     else
         log_error "Unknown webui action: $WEBUI_ACTION"
         return 1

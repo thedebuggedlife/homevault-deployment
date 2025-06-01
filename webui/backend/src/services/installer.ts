@@ -94,8 +94,8 @@ class InstallerService {
     }
 
     async getDeploymentConfig(request: DeploymentRequest): Promise<DeploymentConfig> {
-        const args = this.getDeploymentArgs(request);
-        const output = await this.executeCommand([...args, "--webui-config"]);
+        const args = ["webui", "config", ...this.getDeploymentArgs(request)];
+        const output = await this.executeCommand(args);
         if (!output?.config) {
             throw new ServiceError("Invalid output received from installer", { request, output });
         }
@@ -120,7 +120,7 @@ class InstallerService {
             output: [],
             sudo: () => password,
         });
-        const args = this.getDeploymentArgs(request);
+        const args = ["deploy", ...this.getDeploymentArgs(request)];
         const output = (data: string) => {
             instance.events.emit("output", data, instance.output.length);
             instance.output.push(data);
@@ -184,7 +184,7 @@ class InstallerService {
     }
 
     private getDeploymentArgs(request: DeploymentRequest) {
-        const args = ["deploy"];
+        const args: string[] = [];
         request?.modules?.install?.forEach((m) => {
             args.push("-m", m);
         });

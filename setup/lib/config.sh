@@ -208,13 +208,6 @@ save_env() {
     local env_file=${3:-$ENV_FILE}
     log "Saving ${Purple}$env_variable${COff} in ${Cyan}$env_file${COff}"
 
-    if [ ! -f "${env_file}" ]; then
-        touch "${env_file}" || {
-            log_error "Failed to create file '${env_file}'"
-            exit 1
-        }
-    fi
-    
     # Check if the variable exists in the file
     if grep -q "^${env_variable}=" "$env_file"; then
         # Update existing variable

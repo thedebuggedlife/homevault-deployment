@@ -196,10 +196,6 @@ parse_deploy_option() {
             OVERRIDE_VERSIONS=true
             return 1
             ;;
-        --webui-config)
-            WEBUI_CONFIG=true
-            return 1
-            ;;
         --dry-run)
             DRY_RUN=true
             return 1
@@ -467,8 +463,34 @@ parse_modules_option() {
 #                              WEBUI OPTIONS
 
 is_valid_webui_action() {
-    local -a valid_actions=("install")
+    local -a valid_actions=("install" "config")
     array_contains "$1" "${valid_actions[@]}" || return 1
+}
+
+parse_webui_config_option() {
+    local module
+    case "$(echo "$1" | tr '[:upper:]' '[:lower:]')" in
+        ## WEBUI CONFIG OPTIONS
+        --module | -m)
+            if [ -z "$2" ]; then
+                log_invalid "$1 requires a value."
+                exit 1
+            fi
+            module=$(echo "$2" | tr '[:upper:]' '[:lower:]')
+            ENABLED_MODULES+=("$module")
+            dedup_modules
+            return 2
+            ;;
+        --rm)
+            if [ -z "$2" ]; then
+                log_invalid "$1 requires a value."
+                exit 1
+            fi
+            module=$(echo "$2" | tr '[:upper:]' '[:lower:]')
+            remove_from_array ENABLED_MODULES "$module"
+            return 2
+            ;;
+    esac
 }
 
 parse_webui_option() {
@@ -479,6 +501,11 @@ parse_webui_option() {
             WEBUI_ACTION="$action"
             return 1
         fi
+    else
+        type "parse_webui_${WEBUI_ACTION}_option" &>/dev/null && {
+            parse_webui_"${WEBUI_ACTION}"_option "$@"
+            return $?
+        } || return 0
     fi
 }
 

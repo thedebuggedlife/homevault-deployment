@@ -87,7 +87,7 @@ tailscale_check_installed() {
 
         if ask_confirmation -y -p "Do you want to install tailscale?"; then
             log "Installing tailscale..."
-            if ! curl -fsSL https://tailscale.com/install.sh | sh >/dev/null; then
+            if ! curl -fsSL https://tailscale.com/install.sh | sudo sh >/dev/null; then
                 log_error "Failed to install tailscale"
                 exit 1
             else
