@@ -3,15 +3,15 @@ import { User } from '@/types';
 import { createNanoEvents } from "nanoevents";
 import backend from "@/backend";
 
-let refreshTimeout: NodeJS.Timeout;
+let refreshTimeout: number;
 
 function scheduleRefresh(expiresInSec: number) {
     if (refreshTimeout) {
-        clearTimeout(refreshTimeout);
+        window.clearTimeout(refreshTimeout);
     }
     const timeoutInMs = (expiresInSec / 2) * 1000;
     console.debug("Refreshing token in " + timeoutInMs);
-    refreshTimeout = setTimeout(refreshSession, timeoutInMs);
+    refreshTimeout = window.setTimeout(refreshSession, timeoutInMs);
 }
 
 async function refreshSession() {

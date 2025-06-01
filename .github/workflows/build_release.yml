@@ -21,7 +21,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'  # Adjust based on your Node.js version requirement
+          node-version: '22'
 
       - name: Extract tag and version info
         id: extract_info
