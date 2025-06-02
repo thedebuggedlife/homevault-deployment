@@ -1,5 +1,6 @@
-![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/thedebuggedlife/homevault-deployment/build_release.yml?logo=githubactions&logoColor=white)
-![GitHub Tag](https://img.shields.io/github/v/tag/thedebuggedlife/homevault-deployment?logo=github&label=version)
+[![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/thedebuggedlife/homevault-deployment/build_release.yml?logo=githubactions&logoColor=white)](https://github.com/thedebuggedlife/homevault-deployment/actions/workflows/build_release.yml)
+[![GitHub Release](https://img.shields.io/github/v/release/thedebuggedlife/homevault-deployment?label=stable&color=blue)](https://github.com/thedebuggedlife/homevault-deployment/releases/latest)
+[![GitHub Release](https://img.shields.io/github/v/release/thedebuggedlife/homevault-deployment?include_prereleases&label=latest)](https://github.com/thedebuggedlife/homevault-deployment/releases)
 
 
 # HomeVault Project
