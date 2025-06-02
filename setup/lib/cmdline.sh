@@ -100,6 +100,8 @@ print_usage() {
         log "\nUsage: $0 [global options] webui <action> [webui options]"
         log "\nWebUI actions:\n"
         log "  install                  Download and install the WebUI"
+        log "\nWebUI 'install' options:\n"
+        log "  --skip-deploy            Do not trigger a deployment if traefik is detected to be running."
     fi
 
     log "\nGlobal options:\n"
@@ -465,6 +467,17 @@ parse_modules_option() {
 is_valid_webui_action() {
     local -a valid_actions=("install" "config")
     array_contains "$1" "${valid_actions[@]}" || return 1
+}
+
+parse_webui_install_option() {
+    local module
+    case "$(echo "$1" | tr '[:upper:]' '[:lower:]')" in
+        ## WEBUI INSTALL OPTIONS
+        --skip-deploy)
+            WEBUI_SKIP_DEPLOY=true
+            return 1
+            ;;
+    esac
 }
 
 parse_webui_config_option() {
