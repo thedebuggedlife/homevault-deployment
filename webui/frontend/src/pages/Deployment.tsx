@@ -34,12 +34,14 @@ export default function Deployment() {
         error: deploymentError,
         startDeployment,
         checkCurrentDeployment,
+        isCompleted,
     } = useDeploymentOperation();
     const [activeStep, setActiveStep] = useState(STEP_CONFIGURATION);
     const [configValues, setConfigValues] = useState<Record<string, string>>({});
     const [userModified, setUserModified] = useState<Record<string, boolean>>({});
     const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const isInstalling = operation && !isCompleted;
 
     // Determine which output to show (existing deployment or new deployment)
     const displayError = deploymentError || error;
@@ -51,22 +53,22 @@ export default function Deployment() {
 
     // Check for ongoing deployment on mount
     useEffect(() => {
-        if (operation?.isInstalling) {
+        if (isInstalling) {
             // If there's an ongoing deployment, jump to installation step
             setActiveStep(STEP_INSTALLATION);
         }
         else if (activeStep == STEP_CONFIGURATION && !hasInstallations) {
             setActiveStep(STEP_CONFIRMATION);
         }
-    }, [hasInstallations, activeStep, operation?.isInstalling]);
+    }, [hasInstallations, activeStep, isInstalling]);
 
     // Redirect if no modules and no active deployment
     useEffect(() => {
         const modulesProvided = modules.install.length + modules.remove.length;
-        if (modulesProvided === 0 && !deploymentLoading && !deploymentError && !operation) {
+        if (modulesProvided === 0 && !deploymentLoading && !deploymentError && !isInstalling) {
             navigate(backPath);
         }
-    }, [modules, deploymentLoading, deploymentError, operation, navigate, backPath]);
+    }, [modules, deploymentLoading, deploymentError, isInstalling, navigate, backPath]);
 
     const handleConfigurationComplete = (values: Record<string, string>) => {
         setConfigValues(values);
@@ -190,7 +192,7 @@ export default function Deployment() {
 
             <Card sx={{ mb: 3 }}>
                 <CardContent>
-                    <DeploymentStepper activeStep={activeStep} isInstalling={operation?.isInstalling} steps={deploymentSteps} />
+                    <DeploymentStepper activeStep={activeStep} isInstalling={isInstalling} steps={deploymentSteps} />
                 </CardContent>
             </Card>
 
@@ -226,7 +228,7 @@ export default function Deployment() {
             {activeStep === STEP_INSTALLATION && (
                 <InstallationStep
                     modules={displayModules}
-                    isInstalling={operation?.isInstalling}
+                    isInstalling={isInstalling}
                     output={output}
                     error={displayError}
                     onReturn={() => navigate(backPath)}

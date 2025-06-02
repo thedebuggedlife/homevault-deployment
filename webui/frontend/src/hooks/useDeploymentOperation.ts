@@ -25,6 +25,7 @@ export function useDeploymentOperation(options: UseDeploymentOperationOptions = 
     const [operation, setOperation] = useState<DeploymentOperation>(null);
     const [activity, setActivity] = useState<DeploymentActivity>(null);
     const [error, setError] = useState<string | null>(null);
+    const [isCompleted, setIsCompleted] = useState(false);
     const operationRef = useRef<DeploymentOperation>(null);
 
     useEffect(() => {
@@ -32,6 +33,7 @@ export function useDeploymentOperation(options: UseDeploymentOperationOptions = 
             return backend.on("deployment", newOp => {
                 setOperation(newOp);
                 if (newOp) {
+                    setIsCompleted(!newOp.isInstalling)
                     newOp.on("closed", () => {
                         setOperation(null);
                     });
@@ -42,6 +44,7 @@ export function useDeploymentOperation(options: UseDeploymentOperationOptions = 
 
     const attachOperation = (operation: DeploymentOperation) => {
         setOperation(operation);
+        setIsCompleted(!operation.isInstalling);
         operationRef.current = operation;
 
         operation.on("output", (outputLine: string) => {
@@ -57,15 +60,16 @@ export function useDeploymentOperation(options: UseDeploymentOperationOptions = 
         });
 
         operation.on("completed", () => {
-            // Force a re-render by setting the operation again
-            setOperation(operation);
+            setIsCompleted(true);
         });
     }
 
     const startDeployment = useCallback(async (request: DeploymentRequest) => {
         setError(null);
         setOutput([]);
-        
+        setOperation(null);
+        setIsCompleted(false);
+
         try {
             const operation = await backend.startDeployment(request);
             attachOperation(operation);
@@ -126,6 +130,7 @@ export function useDeploymentOperation(options: UseDeploymentOperationOptions = 
         activity,
         output,
         error,
+        isCompleted,
         startDeployment,
         checkCurrentDeployment
     };
