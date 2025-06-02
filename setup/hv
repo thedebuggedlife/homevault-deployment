@@ -729,7 +729,7 @@ run_modules() {
 }
 
 webui_action_install() {
-    configure_docker
+    configure_docker_group || return 1
     log_header "Installing WebUI"
     prepare_env_file
     webui_download || return 1

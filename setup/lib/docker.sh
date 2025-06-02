@@ -78,6 +78,36 @@ configure_docker() {
     fi
 }
 
+configure_docker_group() {
+    log_header "Configuring docker group"
+    local user="${AS_USER:-$(whoami)}"
+
+    # Create docker group if it doesn't exist
+    if ! getent group docker &>/dev/null; then
+        log "Creating docker group..."
+        if ! sudo groupadd docker; then
+            log_error "Failed to create docker group"
+            return 1
+        fi
+    fi
+    
+    # Check if user is already in docker group
+    if groups "$user" | grep -q '\bdocker\b'; then
+        log "User '$user' is already in the docker group"
+        return 0
+    fi
+    
+    # Add user to docker group
+    echo "Adding user '$user' to docker group..."
+    if sudo usermod -aG docker "$user"; then
+        log "Successfully added '$user' to docker group"
+        return 0
+    else
+        log_error "Failed to add user '$user' to docker group"
+        return 1
+    fi
+}
+
 ###
 # Reads the image version of service containers within a compose project and updates the
 # specified docker-compose file to match
