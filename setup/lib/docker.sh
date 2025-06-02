@@ -108,6 +108,70 @@ configure_docker_group() {
     fi
 }
 
+##
+# Function to get the tag of a Docker image by repository name
+# Usage: docker_get_image_tag "ghcr.io/immich-app/immich-server"
+#
+# @param    $1  {string}    Name of the repository to look up
+# @return       {string}    The tag of the image or empty
+###
+docker_get_image_tag() {
+    local repository="$1"
+    local tag
+    
+    # Get the tag using jq to filter by repository
+    tag=$(docker compose -p homevault images --format json | \
+          jq -r --arg repo "$repository" \
+          '.[] | select(.Repository == $repo) | .Tag // empty') || {
+            log_error "Failed to retrieve image tag for '$repository'"
+            return 1
+          }
+    
+    echo "$tag"
+}
+
+###
+# Function to compare two semver strings
+# Usage: is_version_newer "v1.132.3" "v1.133.0"
+#
+# @param    $1  {string}    The first semver to compare
+# @param    $2  {string}    The second semver to compare
+# @status   0 if second version is newer, 1 otherwise
+###
+docker_is_version_newer() {
+    local version1="$1"
+    local version2="$2"
+    
+    # Strip the 'v' prefix if present
+    version1="${version1#v}"
+    version2="${version2#v}"
+    
+    # Split versions into components
+    IFS='.' read -r -a v1_parts <<< "$version1"
+    IFS='.' read -r -a v2_parts <<< "$version2"
+    
+    # Compare major, minor, and patch versions
+    for i in {0..2}; do
+        # Default to 0 if part doesn't exist
+        local part1="${v1_parts[i]:-0}"
+        local part2="${v2_parts[i]:-0}"
+        
+        # Convert to integers for comparison
+        part1=$((10#$part1))
+        part2=$((10#$part2))
+        
+        if (( part2 > part1 )); then
+            return 0  # version2 is newer
+        elif (( part2 < part1 )); then
+            return 1  # version1 is newer
+        fi
+        # If equal, continue to next part
+    done
+    
+    # Versions are equal
+    return 1
+}
+
 ###
 # Reads the image version of service containers within a compose project and updates the
 # specified docker-compose file to match

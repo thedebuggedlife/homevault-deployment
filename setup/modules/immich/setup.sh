@@ -121,6 +121,34 @@ immich_update_system_config() {
 ################################################################################
 #                            IMMICH CONFIGURATION
 
+immich_check_version() {
+    local required_version="v1.133.0"
+    local repository="ghcr.io/immich-app/immich-server"
+    
+    log "Checking current immich version..."
+
+    local current_tag
+    current_tag=$(docker_get_image_tag "$repository") || return 1
+    if [ -n "$current_tag" ]; then
+        log "Current Immich version:    ${Purple}$current_tag${COff}"
+        log "Minimum required version:  ${Purple}$required_version${COff}"
+
+        if docker_is_version_newer "$current_tag" "$required_version"; then
+            log "\n${BRed}!!! Unsupported version of immich detected !!! ${COff}\n"
+            log "This version of HomeVault does not support updating systems running"
+            log "versions of Immich previous to ${Purple}$required_version${COff}."
+            log
+            log "You need to remove the current version of Immich and then install"
+            log "it again. Your data will migrate to the new version automatically."
+            log
+            log "To upgrade run the following:"
+            log
+            log "   ./hv deploy --rm immich && ./hv deploy -m immich"
+            exit 1
+        fi
+    fi
+}
+
 immich_configure_admin_account() {
     local is_onboarded
     if ! is_onboarded=$(immich_get_server_config | jq -r '.isInitialized'); then return 1; fi
@@ -231,7 +259,9 @@ immich_compose_extra() {
 }
 
 immich_pre_install() {
+    log_header "Configuring Immich"
     ensure_path_exists "$IMMICH_UPLOAD_LOCATION" || return 1
+    immich_check_version || return 1
 }
 
 immich_post_install() {
