@@ -57,6 +57,7 @@ export function useDeploymentOperation(options: UseDeploymentOperationOptions = 
         
         operation.on("error", (message: string) => {
             setError(message ?? "Something went wrong. Please try again.");
+            setIsCompleted(true);
         });
 
         operation.on("completed", () => {
