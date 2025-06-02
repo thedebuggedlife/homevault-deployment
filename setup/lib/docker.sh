@@ -55,19 +55,15 @@ docker() {
 configure_docker() {
     if [ "$_DOCKER_INSTALLED" != "true" ]; then
         log_header "Configuring Docker"
-        echo -e "\n${Yellow}Docker is not installed.${COff}"
-        local user_input=Y
-        if [ "$UNATTENDED" != "true" ]; then
-            read -p "Do you want to install Docker? [Y/n] " user_input </dev/tty
-            user_input=${user_input:-Y}
-        fi
-        if [[ "$user_input" =~ ^[Yy]$ ]]; then
-            echo "Installing Docker..."
+        log "\n${Yellow}Docker is not installed.${COff}"
+
+        if ask_confirmation -y -p "Do you want to install Docker?"; then
+            log "Installing Docker..."
             if ! curl -fsSL https://get.docker.com | sudo sh; then
                 log_error "Docker installation failed"
                 exit 1
             else
-                echo -e "\n✅ Docker installation completed successfully\n"
+                log "\n✅ Docker installation completed successfully\n"
             fi
             sudo systemctl enable --now docker > /dev/null
             if ! getent group docker > /dev/null 2>&1; then
@@ -79,6 +75,36 @@ configure_docker() {
             abort_install
             exit 1
         fi
+    fi
+}
+
+configure_docker_group() {
+    log_header "Configuring docker group"
+    local user="${AS_USER:-$(whoami)}"
+
+    # Create docker group if it doesn't exist
+    if ! getent group docker &>/dev/null; then
+        log "Creating docker group..."
+        if ! sudo groupadd docker; then
+            log_error "Failed to create docker group"
+            return 1
+        fi
+    fi
+    
+    # Check if user is already in docker group
+    if groups "$user" | grep -q '\bdocker\b'; then
+        log "User '$user' is already in the docker group"
+        return 0
+    fi
+    
+    # Add user to docker group
+    echo "Adding user '$user' to docker group..."
+    if sudo usermod -aG docker "$user"; then
+        log "Successfully added '$user' to docker group"
+        return 0
+    else
+        log_error "Failed to add user '$user' to docker group"
+        return 1
     fi
 }
 
@@ -100,7 +126,7 @@ compose_match_container_versions() {
         installed_services["$service"]="$version"
     done < <(docker compose -p "$compose_project" ps --format json | jq -s -r '.[] | "\(.Service) \(.Image)"')
 
-    echo "Matching container image tags ..."
+    log "Matching container image tags ..."
 
     local project_file
     for project_file in "$@"; do
@@ -115,7 +141,7 @@ compose_match_container_versions() {
         while read -r service version; do
             local installed_version=${installed_services["$service"]}
             if [[ -n "$installed_version" && "$version" != "null" && "$version" != "$installed_version" ]]; then
-                echo -e "Updating service definition for ${Cyan}$service${COff} with image: ${Purple}$installed_version${COff}"
+                log "Updating service definition for ${Cyan}$service${COff} with image: ${Purple}$installed_version${COff}"
                 yq "$temp_file_path" -i ".services.$service.image = \"$installed_version\"" "$temp_file_name" > /dev/null
                 any_replaced=true
             fi

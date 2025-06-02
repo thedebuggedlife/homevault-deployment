@@ -12,6 +12,7 @@ source "$PROJECT_ROOT/lib/cmdline.sh"
 source "$PROJECT_ROOT/lib/smtp2go.sh"
 source "$PROJECT_ROOT/lib/docker.sh"
 source "$PROJECT_ROOT/lib/backup.sh"
+source "$PROJECT_ROOT/lib/webui.sh"
 
 declare -g SELECTED_ACTION=
 declare -g SHOW_ALL=false
@@ -21,6 +22,7 @@ declare -g SECRETS_PATH=
 declare -g OVERRIDE_COMPOSE=true
 declare -g OVERRIDE_VERSIONS=false
 declare -g UNATTENDED=
+declare -g FORCE=
 declare -g NO_DOWNLOAD=
 declare -g USE_SMTP2GO
 declare -g USE_DEFAULTS=true
@@ -29,6 +31,10 @@ declare -g AS_USER="$USER"
 declare -g COMPOSE_PROJECT_NAME=homevault
 declare -g COMPOSE_OPTIONS=
 declare -g COMPOSE_UP_OPTIONS=
+declare -g JSON_OUTPUT={}
+
+# WebUI configuration
+declare -g WEBUI_ACTION=
 
 # Defaults to false, if set to true, docker and restic operations will be passed the --dry-run parameter
 # Can be set with the --dry-run command line option
@@ -64,6 +70,7 @@ declare -ga REMOVE_MODULES=()
 ################################################################################
 #                           SETUP MODULES
 
+declare -ga CONFIG_WEBUI_HOOKS=()
 declare -ga CONFIG_ENV_HOOKS=()
 declare -ga CONFIG_SECRETS_HOOKS=()
 declare -ga COMPOSE_EXTRA_HOOKS=()
@@ -99,7 +106,7 @@ load_modules() {
     log_header "Loading enabled modules"
     dedup_modules
     for module in "${ENABLED_MODULES[@]}"; do
-        echo -e "Loading module ${Purple}$module${COff}"
+        log "Loading module ${Purple}$module${COff}"
         local module_setup="$PROJECT_ROOT/modules/$module/setup.sh"
         if [ -f "$module_setup" ]; then
             # shellcheck source=/dev/null
@@ -125,7 +132,7 @@ execute_hooks() {
     local hook_name="${!#}"  # Get the last argument (hook name)
     local -a hooks=("${@:1:$#-1}")  # Get all arguments except the last one
     
-    echo -e "\nExecuting ${Purple}$hook_name${COff} hooks...\n" >&2
+    log "\nExecuting ${Purple}$hook_name${COff} hooks...\n"
     for hook in "${hooks[@]}"; do
         if ! $hook; then
             log_error "Hook '$hook' failed"
@@ -149,7 +156,7 @@ prepare_env_file() {
     log_header "Preparing environment files"
 
     if [ ! -f "$ENV_FILE" ]; then
-        echo -e "Creating environment file ${Cyan}$ENV_FILE${COff}"
+        log "Creating environment file ${Cyan}$ENV_FILE${COff}"
         touch "$ENV_FILE" && chmod 600 "$ENV_FILE" || {
             log_error "Failed to create environment file: '$ENV_FILE'"
             exit 1
@@ -171,7 +178,7 @@ prepare_env_file() {
 # @return void
 ###
 download_appdata() {
-    if [ "$NO_DOWNLOAD" = true ]; then return 0; fi
+    if [[ "$NO_DOWNLOAD" = true || "$PROJECT_VERSION" = "test" ]]; then return 0; fi
     log_header "Downloading application data for modules"
     for module in "${ENABLED_MODULES[@]}"; do
         download_module_appdata "$module"
@@ -179,10 +186,15 @@ download_appdata() {
 }
 
 load_module_help() {
+    local module_file module_name module_help
     for module_file in "$PROJECT_ROOT"/modules/*/help.txt; do
         module_name=$(basename "$(dirname "$module_file")")
+        module_help=$(cat "$module_file")
         #shellcheck disable=SC2034
-        MODULE_OPTIONS["$module_name"]=$(cat "$module_file")
+        MODULE_OPTIONS["$module_name"]="$module_help"
+        JSON_OUTPUT=$(echo "${JSON_OUTPUT}" | jq --arg name "$module_name" --arg help "$module_help" '
+            .modules.available[$name] = $help
+        ')
     done
 }
 
@@ -219,16 +231,23 @@ find_installed_modules() {
     done
 
     if [[ ${#INSTALLED_MODULES[@]} -eq 0 ]]; then
-        echo "There are no modules installed."
+        log "There are no modules installed."
+        JSON_OUTPUT=$(echo "${JSON_OUTPUT}" | jq '. + {
+            modules: {
+                installed: []
+            }
+        }')
         return 0
     fi
 
     # Remove duplicates from the array
     mapfile -t INSTALLED_MODULES < <(printf "%s\n" "${INSTALLED_MODULES[@]}" | sort -u)
 
+    JSON_OUTPUT=$(echo "${JSON_OUTPUT}" | jq --args '.modules.installed=$ARGS.positional' "${INSTALLED_MODULES[@]}")
+
     local module
     for module in "${INSTALLED_MODULES[@]}"; do
-        echo -e "Found installed module: ${Purple}$module${COff}"
+        log "Found installed module: ${Purple}$module${COff}"
         # Enable all installed modules except those marked for removal
         array_contains "$module" "${REMOVE_MODULES[@]}" || ENABLED_MODULES+=("$module")
     done
@@ -249,14 +268,11 @@ find_missing_modules() {
 
     if [ ${#missing_modules[@]} -gt 0 ]; then
         log_warn "Some modules will be removed by this operation. Please read the following carefully."
-        echo "The following modules are installed but were not included in this run:"
+        log "The following modules are installed but were not included in this run:"
         printf "  - %s\n" "${missing_modules[@]}"
-        echo -e "\nIf this was unintentional, exit and re-run the script, including them with the -m option."
-        echo
-        local user_input
-        read -p "Do you want to proceed? [y/N] " user_input </dev/tty
-        user_input=${user_input:-N}
-        if [[ ! "$user_input" =~ ^[Yy]$ ]]; then
+        log "\nIf this was unintentional, exit and re-run the script, including them with the -m option."
+        log
+        if ! ask_confirmation; then
             abort_install
         fi
     fi
@@ -306,7 +322,7 @@ DEPLOY_BACKUP_STOPPED=false
 
 deploy_stop_backup() {
     compose_service_exists "backup" --status running && {
-        echo -e "Stopping service ${Purple}backup${COff} during deployment"
+        log "Stopping service ${Purple}backup${COff} during deployment"
         docker compose -p "$COMPOSE_PROJECT_NAME" stop backup || {
             log_error "Failed to stop backup service"
             exit 1
@@ -317,7 +333,7 @@ deploy_stop_backup() {
 
 deploy_restart_backup() {
     if [ "$DEPLOY_BACKUP_STOPPED" = true ]; then
-        echo -e "Restarting ${Purple}backup${COff} service"
+        log "Restarting ${Purple}backup${COff} service"
         docker compose -p "$COMPOSE_PROJECT_NAME" start backup || {
             log_warn "Failed to restart backup service"
         }
@@ -377,9 +393,9 @@ deploy_project() {
             # Copy docker-compose files only if they do not currently exist under appdata (unless overridden)
             # This is important because, the files in appdata may be modified during container-update operations
             if [[ -f "$project_file" ]]; then
-                echo -e "Using existing compose file: ${Cyan}$project_file${COff}"
+                log "Using existing compose file: ${Cyan}$project_file${COff}"
             else
-                echo -e "Copying docker compose file for ${Purple}$target_project${COff} to ${Cyan}$project_file${COff}"
+                log "Copying docker compose file for ${Purple}$target_project${COff} to ${Cyan}$project_file${COff}"
                 ensure_path_exists "$( dirname "$project_file" )" || return 1
                 (cp -f "$original_file" "$project_file") || {
                     log_error "Failed to copy docker compose file for '$target_project'"
@@ -393,7 +409,7 @@ deploy_project() {
         fi
     done
 
-    echo
+    log
 
     if [ "$OVERRIDE_VERSIONS" != true ]; then
         if ! compose_match_container_versions "$COMPOSE_PROJECT_NAME" "${project_files[@]}"; then
@@ -403,13 +419,15 @@ deploy_project() {
     fi
 
     local user_input=Y
-    if [ "$UNATTENDED" != true ]; then
-        echo -en "\n\nProject ${Purple}$COMPOSE_PROJECT_NAME${COff} is ready for docker deployment. "
-        read -p "Do you want to proceed? [Y/n] " user_input </dev/tty
-        user_input=${user_input:-Y}
-    fi
-    if [[ ! "$user_input" =~ ^[Yy]$ ]]; then
-        abort_install
+    if [ "$FORCE" != true ]; then
+        if [ "$UNATTENDED" != true ]; then
+            log "\n\nProject ${Purple}$COMPOSE_PROJECT_NAME${COff} is ready for docker deployment. "
+            read -p "Do you want to proceed? [Y/n] " user_input </dev/tty
+            user_input=${user_input:-Y}
+        fi
+        if [[ ! "$user_input" =~ ^[Yy]$ ]]; then
+            abort_install
+        fi
     fi
 
     deploy_stop_backup
@@ -418,7 +436,7 @@ deploy_project() {
 
     log_header "Deploying services"
 
-    echo -e "Deploying project ${Purple}$COMPOSE_PROJECT_NAME${COff}..."
+    log "Deploying project ${Purple}$COMPOSE_PROJECT_NAME${COff}..."
     if ! sg docker -c "docker compose $COMPOSE_OPTIONS up $COMPOSE_UP_OPTIONS $DEPLOY_SERVICES"; then
         log_error "Docker Compose deployment failed"
         return 1
@@ -477,15 +495,15 @@ configure_admin_account() {
     # If already configured and the --resume flag was specified, skip the rest
     if [[ -z "$ADMIN_USERNAME" || -z "$ADMIN_EMAIL" || -z "$ADMIN_PASSWORD" || -z "$ADMIN_DISPLAY_NAME" || "$USE_DEFAULTS" != "true" ]]; then
 
-        echo -e "The following user will be created and configured with ${Yellow}administrator privileges${COff} across all applications."
-        echo
+        log "The following user will be created and configured with ${Yellow}administrator privileges${COff} across all applications."
+        log
 
-        ADMIN_USERNAME=$(ask_value "Username" -d "$ADMIN_USERNAME")
-        ADMIN_EMAIL=$(ask_value "Email address" -d "$ADMIN_EMAIL")
+        ADMIN_USERNAME=$(ask_value "Username" -d "$ADMIN_USERNAME" -v "$RE_VALID_USERNAME") || exit 1
+        ADMIN_EMAIL=$(ask_value "Email address" -d "$ADMIN_EMAIL" -v "$RE_VALID_EMAIL") || exit 1
         while true; do
             local confirm_pass
-            ADMIN_PASSWORD=$(ask_value "Password" -m)
-            confirm_pass=$(ask_value "Confirm password" -m)
+            ADMIN_PASSWORD=$(ask_value "Password" -m) || exit 1
+            confirm_pass=$(ask_value "Confirm password" -m) || exit 1
             if [ "$ADMIN_PASSWORD" != "$confirm_pass" ]; then
                 log_warn "Passwords do not match. Please try again."
             else
@@ -532,12 +550,11 @@ check_reboot_needed() {
     if [ "$REQUIRES_RESTART" = true ]; then
         log_warn "The system must be rebooted to complete the requested operation."
         if [ "$UNATTENDED" = true ]; then
-            echo -e "\nThe system will reboot in 15 seconds..."
-            sleep 15
-            sudo shutdown -r now
+            log "\nThe system will reboot in 1 minute"
+            sudo shutdown -r +1
             exit
         else
-            echo ""
+            log ""
             read -p "Do you want to reboot now? [Y/n] " user_input </dev/tty
             user_input=${user_input:-Y}
             if [[ "$user_input" =~ ^[Yy]$ ]]; then
@@ -550,11 +567,27 @@ check_reboot_needed() {
 
 # Terminate program
 abort_install() {
+    log
     log_warn "Setup aborted by user."
     # Restart any services that may have been stopped as part of the operation
     deploy_restart_backup
     backup_start_services
     exit 1
+}
+
+on_script_exit() {
+    if [ "$UNATTENDED" = true ]; then
+        # Forget the cached sudo credentials to force the next setup operation to revalidate them
+        sudo -k
+    fi
+    if [ "$JSON_OUT" = true ]; then
+        JSON_OUTPUT=$(echo "${JSON_OUTPUT}" | jq \
+            --arg 'version' "$PROJECT_VERSION" \
+            --args '.version = $version | .logs=$ARGS.positional' \
+            "${LOG_LINES[@]}"
+        )
+        echo "$JSON_OUTPUT"
+    fi
 }
 
 run_deploy() {
@@ -591,7 +624,7 @@ backup_action_run() {
     backup_check_requisites || return 1
     load_deployment_file || return 1
     backup_stop_services || return 1
-    echo "Running restic backup operation. This operation could take several minutes..."
+    log "Running restic backup operation. This operation could take several minutes..."
     restic_run_backup; exit_code=$?
     backup_start_services
     return $exit_code
@@ -612,7 +645,7 @@ backup_action_schedule() {
         backup_configure_enabled || return 1
     fi
     if [ "$BACKUP_ENABLED" = false ] && compose_service_exists backup; then
-        echo -e "Removing service ${Purple}backup${COff} from deployment\n"
+        log "Removing service ${Purple}backup${COff} from deployment\n"
         docker compose -p "$COMPOSE_PROJECT_NAME" down backup || {
             log_error "Failed to remove backup service"
             return 1
@@ -687,20 +720,65 @@ run_restore() {
 run_modules() {
     if [ "$SHOW_ALL" = true ]; then
         load_module_help
-        echo -e "\nAvailable modules:\n"
+        log "\nAvailable modules:\n"
         log_options MODULE_OPTIONS true
     else
         find_installed_modules
-        echo
+        log
+    fi
+}
+
+webui_action_install() {
+    configure_docker_group || return 1
+    log_header "Installing WebUI"
+    prepare_env_file
+    webui_download || return 1
+    webui_install_services || return 1
+    local is_public=false
+    if compose_service_exists traefik; then
+        DEPLOY_SERVICES=traefik
+        NO_DOWNLOAD=true
+        OVERRIDE_COMPOSE=false
+        OVERRIDE_VERSIONS=false
+        run_deploy || return 1
+        is_public=true
+    fi
+    webui_print_status $is_public
+}
+
+webui_action_config() {
+    find_installed_modules
+    load_modules
+    prepare_env_file
+    execute_hooks "${CONFIG_WEBUI_HOOKS[@]}" "config-webui" || exit 1
+}
+
+run_webui() {
+    if [ "$WEBUI_ACTION" = "install" ]; then
+        webui_action_install || return 1
+    elif [ "$WEBUI_ACTION" = "config" ]; then
+        webui_action_config || return 1
+    else
+        log_error "Unknown webui action: $WEBUI_ACTION"
+        return 1
     fi
 }
 
 ################################################################################
 #                           MAIN PROGRAM LOGIC
 
-trap "echo && abort_install" SIGINT
+trap "abort_install" SIGINT
+
+trap "on_script_exit" EXIT
 
 parse_command_line "$@"
+
+if [ "$UNATTENDED" = true ]; then 
+    sudo -v || {
+        log_error "Failed to authenticate with sudo as $USER"
+        exit 1
+    }
+fi
 
 run_"${SELECTED_ACTION}" || exit 1
 

@@ -4,6 +4,10 @@ if [ -n "$__LIB_LOGGING" ]; then return 0; fi
 
 __LIB_LOGGING=1
 
+declare -g JSON_OUT=false
+
+declare -a LOG_LINES=()
+
 ################################################################################
 #                               COLOR DEFINITIONS
 
@@ -60,6 +64,50 @@ BIPurple='\033[1;95m'     # Purple
 BICyan='\033[1;96m'       # Cyan
 BIWhite='\033[1;97m'      # White
 
+clear_logging_colors() {
+    COff=
+    Black=
+    Red=
+    Green=
+    Yellow=
+    Blue=
+    Purple=
+    Cyan=
+    White=
+    BBlack=
+    BRed=
+    BGreen=
+    BYellow=
+    BBlue=
+    BPurple=
+    BCyan=
+    BWhite=
+    UBlack=
+    URed=
+    UGreen=
+    UYellow=
+    UBlue=
+    UPurple=
+    UCyan=
+    UWhite=
+    IBlack=
+    IRed=
+    IGreen=
+    IYellow=
+    IBlue=
+    IPurple=
+    ICyan=
+    IWhite=
+    BIBlack=
+    BIRed=
+    BIGreen=
+    BIYellow=
+    BIBlue=
+    BIPurple=
+    BICyan=
+    BIWhite=
+}
+
 ################################################################################
 #                                   LOGGING
 
@@ -73,25 +121,37 @@ function stack_trace() {
   done
 }
 
+log_pipe() {
+    log "$@" "$(cat)"
+}
+
+log() {
+    if [ "$JSON_OUT" != true ]; then
+        echo -e "$@" >&2
+    else
+        LOG_LINES+=("${!#}")
+    fi
+}
+
 log_header() {
-    echo -e "\n${BWhite}================================================================================\n$1${COff}\n"
+    log "\n${BWhite}================================================================================\n$1${COff}\n"
 }
 
 log_warn() {
-    echo -en "\n🟡 ${BIYellow}WARN:${IYellow} $1${COff}\n\n" >&2
+    log -n "\n🟡 ${BIYellow}WARN:${IYellow} $1${COff}\n\n"
 
 }
 
 log_error() {
-    echo -en "\n🔴 ${BIRed}ERROR:${IRed} $1${COff}\n\n$(stack_trace)\n\n" >&2
+    log -n "\n🔴 ${BIRed}ERROR:${IRed} $1${COff}\n\n$(stack_trace)\n\n"
 }
 
 log_invalid() {
-    echo -en "\n${Red}$1${COff}\n" >&2
+    log -n "\n${Red}$1${COff}\n" >&2
 }
 
 log_done() {
-    echo -en "\n🎉 ${BWhite}All operations completed successfully${COff}\n\n"
+    log -n "\n🎉 ${BWhite}All operations completed successfully${COff}\n\n"
 }
 
 log_options() {
@@ -122,14 +182,14 @@ log_options() {
         local desc_indent=$((indent + display_width + 1))  # +1 for space after option
         
         # shellcheck disable=SC2183
-        if [ "$dividers" = true ]; then printf '%*s' "$terminal_width" | tr ' ' '-'; fi
+        if [ "$dividers" = true ]; then printf '%*s' "$terminal_width" | tr ' ' '-' | log_pipe; fi
 
         # Print option with padding to align all descriptions
-        printf "%${indent}s%s%${padding}s" "" "$option" ""
+        printf "%${indent}s%s%${padding}s" "" "$option" "" | log_pipe -n
         
         if [ -z "$description" ]; then
             # If description is empty, just print a newline
-            echo ""
+            log ""
             continue
         fi
         
@@ -145,23 +205,23 @@ log_options() {
                 echo "$line" | fold -s -w $((wrap_width - desc_indent)) | {
                     read -r first_wrapped || true
                     if [ -n "$first_wrapped" ]; then
-                        echo " $first_wrapped"
+                        log " $first_wrapped"
                         while read -r next_wrapped; do
-                            printf "%${desc_indent}s%s\n" "" "$next_wrapped"
+                            printf "%${desc_indent}s%s\n" "" "$next_wrapped" | log_pipe -e
                         done
                     else
                         # Empty first line
-                        echo ""
+                        log ""
                     fi
                 }
             else
                 # All subsequent lines get full indentation for each wrapped segment
                 echo "$line" | fold -s -w $((wrap_width - desc_indent)) | while IFS= read -r wrapped; do
-                    printf "%${desc_indent}s%s\n" "" "$wrapped"
+                    printf "%${desc_indent}s%s\n" "" "$wrapped" | log_pipe -e
                 done
             fi
             line_num=$((line_num + 1))
         done <<< "$description"
-        echo ""
+        log ""
     done
 }

@@ -18,6 +18,11 @@ jobs:
         with:
           fetch-depth: 0  # Fetch all history for tags and commits
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
       - name: Extract tag and version info
         id: extract_info
         run: |
@@ -42,6 +47,57 @@ jobs:
             echo "RELEASE_NAME=[$BRANCH_NAME] Release $TAG_NAME" >> $GITHUB_OUTPUT
           fi
 
+      - name: Build Frontend
+        run: |
+          cd webui/frontend
+          npm ci
+          npm run build
+          # The build script already creates dist/frontend, but we'll verify
+          ls -la dist/
+          cd ../..
+
+      - name: Build Backend
+        run: |
+          cd webui/backend
+          npm ci
+          npm run build
+          # The build script already creates dist/backend, but we'll verify
+          ls -la dist/
+          cd ../..
+
+      - name: Create webui.zip
+        run: |
+          # Create a temporary directory for webui contents
+          mkdir -p webui_temp/frontend
+          mkdir -p webui_temp/backend
+          
+          # Copy frontend dist contents (everything inside dist/)
+          if [ -d "./webui/frontend/dist" ]; then
+            cp -r ./webui/frontend/dist/* ./webui_temp/frontend/
+          else
+            echo "Frontend dist directory not found"
+            exit 1
+          fi
+          
+          # Copy backend dist contents (everything inside dist/)
+          if [ -d "./webui/backend/dist" ]; then
+            cp -r ./webui/backend/dist/* ./webui_temp/backend/
+          else
+            echo "Backend dist directory not found"
+            exit 1
+          fi
+          
+          # Create the webui.zip
+          cd webui_temp
+          zip -r ../webui.zip .
+          cd ..
+          
+          # Clean up
+          rm -rf webui_temp
+          
+          # Verify the ZIP was created
+          ls -la webui.zip
+
       - name: Prepare setup files
         run: |
           # Create version.txt file
@@ -54,6 +110,9 @@ jobs:
         run: |
           # Create output directories
           mkdir -p output_zips/appdata
+          
+          # Move webui.zip to output directory
+          mv webui.zip output_zips/
           
           # Create appdata ZIP files
           if [ -d "./appdata" ]; then
@@ -162,3 +221,4 @@ jobs:
           files: |
             release_files/appdata/*.zip
             release_files/setup.zip
+            release_files/webui.zip

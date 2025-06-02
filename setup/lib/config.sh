@@ -1,3 +1,5 @@
+# shellcheck disable=SC2034
+
 if [ -n "$__LIB_CONFIG" ]; then return 0; fi
 
 __LIB_CONFIG=1
@@ -9,32 +11,76 @@ _PYTHON_INSTALLED=
 _UPNPC_INSTALLED=
 
 ################################################################################
+#                           PARAMETER VALIDATION
+
+RE_VALID_PATH="^(?:\/?[a-zA-Z0-9._-]+)*\/?$"
+
+RE_VALID_LOCAL_HOSTNAME="^[a-zA-Z0-9][-a-zA-Z0-9]{0,62}$"
+
+RE_VALID_HOSTNAME="^([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])(\.([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]{0,61}[a-zA-Z0-9]))*$"
+
+RE_VALID_USERNAME="^[a-z_][a-z0-9_-]{0,31}$"
+
+RE_VALID_UID="^([0-9]|[1-9][0-9]{1,8})$"
+
+RE_VALID_NUMBER="^([0-9]|[1-9][0-9]{1,8})$"
+
+RE_MAIN_DOMAIN="^[a-zA-Z0-9][-a-zA-Z0-9]{0,61}[a-zA-Z0-9]\.[a-zA-Z][-a-zA-Z0-9]{0,61}[a-zA-Z]$"
+
+RE_VALID_TUNNEL_NAME="^[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$"
+
+RE_VALID_EMAIL="^(([A-Za-z0-9]+((\.|\-|\_|\+)?[A-Za-z0-9]?)*[A-Za-z0-9]+)|[A-Za-z0-9]+)@(([A-Za-z0-9]+)+((\.|\-|\_)?([A-Za-z0-9]+)+)*)+\.([A-Za-z]{2,})+$"
+
+RE_VALID_EMAIL_NAME="^[a-zA-Z0-9][-a-zA-Z0-9._]{0,62}[a-zA-Z0-9]$|^[a-zA-Z0-9]$"
+
+RE_VALID_PORT_NUMBER="^([1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$"
+
+RE_VALID_DURATION="^([0-9]+[smhdwy])+$"
+
+MSG_INVALID_DURATION="Not a valid duration. Units supported: y, w, d, h, m, s, ms. Ex: 7d"
+
+RE_VALID_STORAGE_SIZE="^[0-9]+([KMGTP]B|B)$"
+
+MSG_INVALID_STORAGE_SIZE="Not a valid size. Units supported: B, KB, MB, GB, TB, PB, EB. Ex: 100GB"
+
+is_valid_timezone() {
+  local timezone="$1"
+  if [ -f "/usr/share/zoneinfo/$timezone" ]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+################################################################################
 #                           MANIPULATING .ENV FILE
 
 ###
 # Asks user for input
 #
-# @param {string} prompt    - The prompt to display
-# Options:
-#   -e              Allow empty values
-#   -m              Mask the input (e.g. for passwords)
-#   -d {default}    Default value if not specified
-#   -o {options}    Valid options user can provide
-# @return {string} The value entered by the user
+# @param    $1  {string}    The prompt to display
+# @option   -d  {default}   Default value if not specified
+# @option   -e  {flag}      Allow empty values
+# @option   -m  {flag}      Mask the input (e.g. for passwords)
+# @option   -o  {list}      Valid options (comma-separated list)
+# @option   -v  {string}    Regex pattern to validate input against, or name of a validation function, separated by ## from error message
+# @return       {string}    The value entered by the user
 ###
 ask_value() {
     local prompt="$1"
     local default options
     local required=true
     local masked=false
+    local -a validations=()  # Array to store validation patterns and error messages
     local user_input
     OPTIND=2
-    while getopts ":emd:o:" opt; do
+    while getopts ":emd:o:v:" opt; do
         case $opt in
             e) required=false ;;
             m) masked=true ;;
             d) default="$OPTARG" ;;
             o) options="$OPTARG" ;;
+            v) validations+=("$OPTARG") ;;  # Add each validation to the array
             \?) log_warn "Invalid option: -$OPTARG" ;;
             :) log_warn "Option -$OPTARG requires an argument" ;;
         esac
@@ -50,19 +96,67 @@ ask_value() {
     if [ -n "$options" ]; then prompt="$prompt ($options)"; fi
     if [ -n "$display" ]; then prompt="$prompt [$display]"; fi
 
+    local first=true
+
     while true; do
-        echo >&2
-        read "${args[@]}" -p "$prompt: " user_input </dev/tty
-        if [ "$masked" = true ]; then echo >&2; fi
+        log
+        if [ "$UNATTENDED" = true ]; then
+            if [ "$first" != true ]; then
+                log_error "Unattended installation - cannot make blocking prompt to user"
+                exit 1
+            fi
+            log "$prompt"
+            first=false
+        else
+            read "${args[@]}" -p "$prompt: " user_input </dev/tty
+        fi
+        if [ "$masked" = true ]; then log; fi
         user_input=${user_input:-${default}}
-        if [[ -z "$user_input" && "$required" = "true" ]]; then
-            echo -e "\n${Yellow}Empty value is not allowed. Please try again.${COff}\n" >&2
+        if [ -z "$user_input" ]; then
+            if [ "$required" = "false" ]; then
+                break;
+            fi
+            log "\n${Yellow}Empty value is not allowed. Please try again.${COff}\n"
             continue
         fi
         if [ -n "$options" ] && ! echo ",$options," | grep -q ",${user_input},"; then
-            echo -e "\n${Yellow}Value must be one of the options: ${options}\n" >&2
+            log "\n${Yellow}Value must be one of the options: ${options}${COff}\n"
             continue
         fi
+        
+        # Process all validations
+        local validation_failed=false
+        for validation in "${validations[@]}"; do
+            # Split validation pattern and error message by ##
+            local validation_pattern="${validation%%##*}"
+            local validation_error="${validation##*##}"
+            
+            # If no ## separator found, use default error message
+            if [ "$validation_pattern" = "$validation_error" ]; then
+                validation_error="Please enter a valid value."
+            fi
+            
+            # Check if validation_pattern is a function name (no spaces, starts with letter)
+            if [[ "$validation_pattern" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]] && declare -F "$validation_pattern" >/dev/null; then
+                # Call the validation function
+                if ! "$validation_pattern" "$user_input"; then
+                    log "\n${Yellow}${validation_error}${COff}\n"
+                    validation_failed=true
+                    break
+                fi
+            # Otherwise treat as regex pattern
+            elif ! [[ "$user_input" =~ $validation_pattern ]]; then
+                log "\n${Yellow}${validation_error}${COff}\n"
+                validation_failed=true
+                break
+            fi
+        done
+        
+        # If any validation failed, continue the loop to ask again
+        if [ "$validation_failed" = true ]; then
+            continue
+        fi
+        
         break
     done
     echo "$user_input"
@@ -82,6 +176,7 @@ ask_value() {
 #   fi
 ###
 ask_confirmation() {
+    if [ "$FORCE" = true ]; then return 0; fi
     local prompt="Do you want to continue?"
     local default=N
     local options="y/N"
@@ -111,8 +206,8 @@ save_env() {
     local env_variable=$1
     local env_value=$2
     local env_file=${3:-$ENV_FILE}
-    echo -e "Saving ${Purple}$env_variable${COff} in ${Cyan}$env_file${COff}"
-    
+    log "Saving ${Purple}$env_variable${COff} in ${Cyan}$env_file${COff}"
+
     # Check if the variable exists in the file
     if grep -q "^${env_variable}=" "$env_file"; then
         # Update existing variable
@@ -136,6 +231,16 @@ save_env() {
 }
 
 ###
+# Generate a random string with the specified length
+#
+# @param    $1 {string}     Length of the generated secret
+###
+generate_secret() {
+    local secret_length=$1
+    tr -cd '[:alnum:]' </dev/urandom | fold -w "${secret_length}" | head -n 1 | tr -d '\n'
+}
+
+###
 # Generate a random id and save it to the env file
 # @param    $1 {string} Variable name
 # @option   -l {number} Length (in chars) of value [default=20]
@@ -156,39 +261,145 @@ save_env_id() {
     done
     local env_value="${!env_variable}"
     if [ -z "$env_value" ]; then
-        env_value=$(tr -cd '[:alnum:]' </dev/urandom | fold -w "${id_length}" | head -n 1 | tr -d '\n')
+        env_value=$(generate_secret "$id_length")
     fi
     save_env "$env_variable" "$env_value" "$env_file"
 }
 
 ###
+# Add a prompt to the JSON_OUTPUT for the WebUI
+#
+# @param    $1 {string}     Variable name
+# @param    $2 {string}     Text prompt
+# @option   -a {string}     Alternate default if no existing value
+# @option   -e {flag}       Allow empty values
+# @option   -m {flag}       Mask the input (e.g. for passwords)
+# @option   -o {string}     Valid options (comma-separated list)
+# @option   -v {string}     Regex pattern to validate input against, separated by ## from error message
+###
+webui_add_prompt() {
+    local module="$1"
+    local variable="$2"
+    local prompt="$3"
+    shift 3
+    
+    local optional="false"
+    local password="false"
+    local default="${!variable}"
+    local options=""
+    local condition=""
+    local -a validations=()
+    
+    # Parse optional parameters
+    OPTIND=1
+    while getopts ":a:emo:v:c:" opt; do
+        case $opt in
+            e) optional="true" ;;
+            m) password="true" ;;
+            a) if [ -z "$default" ]; then default="$OPTARG"; fi ;;
+            c) condition="$OPTARG" ;;
+            o) options="$OPTARG" ;;
+            v) validations+=("$OPTARG") ;;
+            *) log_error "Unknown option: $opt"; return 1 ;;
+        esac
+    done
+    
+    # Build the regex array if validations exist
+    local regex_json="[]"
+    if [ ${#validations[@]} -gt 0 ]; then
+        regex_json=$(printf '%s\n' "${validations[@]}" | jq -R '
+            if contains("##") then
+                split("##") | {pattern: .[0], message: .[1]}
+            else
+                {pattern: .}
+            end
+        ' | jq -s '.')
+    fi
+    
+    # Build the prompt object
+    local prompt_obj
+    prompt_obj=$(jq -n \
+        --arg module "$module" \
+        --arg var "$variable" \
+        --arg prompt "$prompt" \
+        --arg optional "$optional" \
+        --arg password "$password" \
+        --arg default "$default" \
+        --arg condition "$condition" \
+        --arg options "$options" \
+        --argjson regex "$regex_json" \
+        '{
+            module: $module,
+            variable: $var,
+            prompt: $prompt,
+            optional: ($optional == "true"),
+            password: ($password == "true"),
+        } |
+        if $default != "" then
+            . + {default: $default}
+        else . end |
+        if $condition != "" then
+            . + {condition: $condition}
+        else . end |
+        if $options != "" then
+            . + {options: ($options | split(",") | map(ltrimstr(" ") | rtrimstr(" ")))}
+        else . end |
+        if $regex != [] then
+            . + {regex: $regex}
+        else . end'
+    )
+    
+    # Add the prompt to JSON_OUT
+    JSON_OUTPUT=$(echo "$JSON_OUTPUT" | jq --argjson prompt "$prompt_obj" '
+        if has("config") then
+            if .config | has("prompts") then
+                .config.prompts += [$prompt]
+            else
+                .config.prompts = [$prompt]
+            end
+        else
+            .config = {prompts: [$prompt]}
+        end
+    ')
+}
+
+###
 # Prompt user for a value and save to $ENV_FILE
 #
-# Params:
-#   $1 Variable name
-#   $2 Text prompt
-# Options:
-#   -i Ignore existing value (i.e. do not offer as default)
-#   -e Allow empty values
-#   -m Mask the input (e.g. for passwords)
-#   -o Valid options (comma-separated list)
+# @param    $1 {string}     Variable name
+# @param    $2 {string}     Text prompt
+# @option   -i {flag}       Ignore existing value (i.e. do not offer as default)
+# @option   -a {string}     Use alternative value as default
+# @option   -e {flag}       Allow empty values
+# @option   -m {flag}       Mask the input (e.g. for passwords)
+# @option   -o {string}     Valid options (comma-separated list)
+# @option   -v {string}     Regex pattern to validate input against, or name of a validation function, separated by ## from error message
 ###
 ask_for_env() {
     local env_variable=$1
     local prompt=$2
     local -a input_opts=()
+    local -a webui_opts=()
     local use_default=true
+    local default_value=
     OPTIND=3
-    while getopts ":iemo:" opt; do
+    while getopts ":iemo:v:E:a:" opt; do
         case $opt in
             i) use_default=false ;;
+            a) default_value="$OPTARG" ;;
             e) input_opts+=("-e") ;;
             m) input_opts+=("-m") ;;
             o) input_opts+=("-o" "$OPTARG") ;;
+            v) input_opts+=("-v" "$OPTARG") ;;
+            E) input_opts+=("-E" "$OPTARG") ;;
             \?) log_warn "Invalid option: -$OPTARG" ;;
             :) log_warn "Option -$OPTARG requires an argument" ;;
         esac
     done
+
+    if [[ "$use_default" = "true" ]]; then
+        input_opts+=("-d" "${!env_variable:-${default_value}}")
+    fi
 
     # If an override is specified in command line, that takes priority
     local value_override="${ENV_OVERRIDES["$env_variable"]}"
@@ -201,16 +412,52 @@ ask_for_env() {
         return 0
     fi
 
-    # Choose the right default value to include in the prompt
-    if [[ "$use_default" = "true" ]]; then
-        local env_variable_default="${env_variable}_DEFAULT"
-        input_opts+=("-d" "${!env_variable:-${!env_variable_default}}")
-    fi
-
     # Show the prompt to the use and save the result
     local user_input
-    user_input=$(ask_value "$prompt" "${input_opts[@]}")
+    user_input=$(ask_value "$prompt" "${input_opts[@]}") || exit 1
     save_env "$env_variable" "$user_input"
+}
+
+###
+# Read a file in .env format and place all the keys and values into ENV_OVERRIDES
+#
+# @param    $1 {string}     Name of the file to read
+###
+read_overrides() {
+    local file=$1
+    # Check if file exists and is readable
+    [[ -r "$file" ]] || { log_error "Cannot read file '$file'"; return 1; }
+    
+    local line key value
+    
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        # Skip empty lines and comments
+        [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+        
+        # Check if line contains '='
+        if [[ "$line" != *=* ]]; then
+            continue
+        fi
+        
+        # Extract key (everything before first '=')
+        key="${line%%=*}"
+        
+        # Extract value (everything after first '=')
+        value="${line#*=}"
+        
+        # Trim leading/trailing whitespace from key
+        key="${key#"${key%%[![:space:]]*}"}"
+        key="${key%"${key##*[![:space:]]}"}"
+        
+        # Check if key is valid (non-empty after trimming)
+        if [[ -z "$key" ]]; then
+            continue
+        fi
+        
+        # Store in array (value can contain any character including spaces)
+        ENV_OVERRIDES["$key"]="$value"
+        
+    done < "$file"
 }
 
 ################################################################################
@@ -226,7 +473,7 @@ save_env_secret() {
         log_error "Missing value for '$env_variable' in '$ENV_FILE'"
         exit 1
     fi
-    echo -e "Creating secret file ${Cyan}$secret_filename${COff}"
+    log "Creating secret file ${Cyan}$secret_filename${COff}"
     printf "%s" "${!env_variable}" >"$secret_filename"
 }
 
@@ -237,10 +484,10 @@ create_secret() {
     local secret_filename=$1
     local SECRET_LENGTH=${2:-40}
     if [ -f "$secret_filename" ]; then
-        echo -e "Secret file ${Cyan}$secret_filename${COff} already exists."
+        log "Secret file ${Cyan}$secret_filename${COff} already exists."
     else
         local secret_value
-        secret_value=$(tr -cd '[:alnum:]' </dev/urandom | fold -w "${SECRET_LENGTH}" | head -n 1 | tr -d '\n')
+        secret_value=$(generate_secret "$SECRET_LENGTH")
         write_file "$secret_value" "$secret_filename"
     fi
 }
@@ -255,7 +502,7 @@ create_password_digest_pair() {
     local password_filename="${pair_name}_password"
     local digest_filename="${pair_name}_digest"
     if [ -f "$password_filename" ] && [ -f "$digest_filename" ]; then
-        echo -e "The password and digest files for ${Cyan}$pair_name${COff} already exist."
+        log "The password and digest files for ${Cyan}$pair_name${COff} already exist."
         return 0
     fi
     local output password_value digest_value
@@ -266,9 +513,9 @@ create_password_digest_pair() {
         log_error "Password or digest extraction failed."
         exit 1
     fi
-    echo -e "Creating password file ${Cyan}$password_filename${COff}"
+    log "Creating password file ${Cyan}$password_filename${COff}"
     printf "%s" "$password_value" >"$password_filename"
-    echo -e "Creating digest file ${Cyan}$digest_filename${COff}"
+    log "Creating digest file ${Cyan}$digest_filename${COff}"
     printf "%s" "$digest_value" >"$digest_filename"
 }
 
@@ -281,18 +528,18 @@ create_rsa_keypair() {
     local public_key=$2
     local key_length=${3:-2048}
     if [ -f "$private_key" ]; then
-        echo -e "Private key file ${Cyan}$private_key${COff} already exists."
+        log "Private key file ${Cyan}$private_key${COff} already exists."
     else
-        echo -e "Generating private key ${Cyan}$private_key${COff}."
+        log "Generating private key ${Cyan}$private_key${COff}."
         if ! openssl genrsa -out "$private_key" $key_length; then
             log_error "Failed to generate private key '$private_key'."
             exit 1
         fi
     fi
     if [ -f "$public_key" ]; then
-        echo -e "Public key file ${Cyan}$public_key${COff} already exists."
+        log "Public key file ${Cyan}$public_key${COff} already exists."
     else
-        echo -e "Generating public key ${Cyan}$public_key${COff}."
+        log "Generating public key ${Cyan}$public_key${COff}."
         if ! openssl rsa -in "$private_key" -outform PEM -pubout -out "$public_key"; then
             log_error "Failed to generate public key '$public_key'"
             exit 1
@@ -327,7 +574,7 @@ copy_env_values() {
                     if [[ "$newfile" = true ]] || ! grep -q "^${key}=" "$destination"; then
                         append_file "$line" "$destination" || return 1
                         if [ "$newfile" = false ]; then
-                            echo -e "Added ${Purple}$key${COff} to ${Cyan}$destination${COff}."
+                            log "Added ${Purple}$key${COff} to ${Cyan}$destination${COff}."
                         fi
                     elif [ "$overwrite" = true ]; then
                         value="${line#*=}"
@@ -335,7 +582,7 @@ copy_env_values() {
                             log_error "Failed to update file: '$destination'"
                             return 1
                         }
-                        echo -e "Updated ${Purple}$key${COff} in ${Cyan}$destination${COff}."
+                        log "Updated ${Purple}$key${COff} in ${Cyan}$destination${COff}."
                     fi
                 fi
             fi
@@ -361,7 +608,7 @@ save_deployment_file() {
     readarray -t backup_include < <(env_subst "${BACKUP_FILTER_INCLUDE[@]}")
     readarray -t backup_exclude < <(env_subst "${BACKUP_FILTER_EXCLUDE[@]}")
 
-    echo -e "\nSaving deployment settings to ${Cyan}$deployment_file${COff}" >&2
+    log "\nSaving deployment settings to ${Cyan}$deployment_file${COff}"
     jq -n \
         --arg version "$PROJECT_VERSION" \
         --arg project "$COMPOSE_PROJECT_NAME" \
@@ -389,7 +636,7 @@ save_deployment_file() {
     }
 
     # Copy the ENV file to include in backup/restore
-    echo -e "\nSaving deployment environment to ${Cyan}${PROJECT_PATH%/}/.env${COff}"
+    log "\nSaving deployment environment to ${Cyan}${PROJECT_PATH%/}/.env${COff}"
     cp -f "$ENV_FILE" "${PROJECT_PATH%/}/.env" || {
         log_error "Failed to save file '${PROJECT_PATH%/}/.env'"
         return 1
@@ -404,7 +651,7 @@ load_deployment_file() {
         return 1
     fi
 
-    echo -e "Loading deployment settings from ${Cyan}$deployment_file${COff}" >&2
+    log "Loading deployment settings from ${Cyan}$deployment_file${COff}"
     # shellcheck disable=SC2015
     COMPOSE_PROJECT_NAME=$(jq -r '.project' "$deployment_file") &&
     readarray -t ENABLED_MODULES < <(jq -r '.modules[]' "$deployment_file") &&
@@ -473,16 +720,16 @@ remove_from_array() {
 ###
 # Makes sure a given path exists, if not, it is created with $AS_USER:docker ownership
 #
-# Parameters:
-#   $1 {string} Path to create
-#
-# @return void
+# @param    $1  {string}    Path to create
+# @param    $2  {string}    Identity to set as owner (default: $USER:docker)
 ###
 ensure_path_exists() {
-    if [ ! -d "$1" ]; then
-        sudo mkdir -p "$1" && \
-        sudo chown "$AS_USER:docker" "$1" || {
-            log_error "Failed to create path '$1'"
+    local path=$1
+    local owner=${2:-"$AS_USER:docker"}
+    if [ ! -d "$path" ]; then
+        sudo mkdir -p "$path" && \
+        sudo chown "$owner" "$path" || {
+            log_error "Failed to create path '$path'"
             return 1
         }
     fi
@@ -510,7 +757,7 @@ mask_password() {
 write_file() {
     local content=$1
     local filename=$2
-    echo -e "Creating file ${Cyan}$filename${COff}"
+    log "Creating file ${Cyan}$filename${COff}"
     ensure_path_exists "$(dirname "$filename")" || return 1
     printf "%s" "$content" >"$filename" || {
         log_error "Failed to write to file: '$filename'"
@@ -543,6 +790,7 @@ append_file() {
 # @option   -d  {string}    Destination path under '$APPDATA_LOCATION' where the output is saved (optional)
 # @option   -e  {string}    YQ expression to use for the merge operation (optional)
 # @option   -m  {string}    First module to load configuration for (optional)
+# @option   -f  {string}    Path to additional file to merge (relative to $PROJECT_ROOT) (optional) (can be specified multiple times)
 ###
 merge_yaml_config() {
     local filename="$1"
@@ -551,13 +799,15 @@ merge_yaml_config() {
     # shellcheck disable=SC2016
     local expression='. as $item ireduce({}; . *+ $item)'
     local -a modules=("${ENABLED_MODULES[@]}")
+    local -a extra_files=()
     OPTIND=3
-    while getopts ":d:e:m:" opt; do
+    while getopts ":d:e:m:f:" opt; do
         # shellcheck disable=SC2207
         case $opt in
             d) appdata_path="$OPTARG" ;;
             e) expression="$OPTARG" ;;
             m) modules=("$OPTARG" $(printf '%s\n' "${ENABLED_MODULES[@]}" | grep -v "^${OPTARG}\$")) ;;
+            f) extra_files+=("$OPTARG") ;;
             \?) log_warn "Invalid option: -$OPTARG" ;;
             :) log_warn "Option -$OPTARG requires an argument" ;;
         esac
@@ -568,6 +818,14 @@ merge_yaml_config() {
         if [[ -f "${PROJECT_ROOT%/}/modules/$module/$module_path/$filename" ]]; then
             file_list+=("modules/$module/$module_path/$filename")
         fi
+    done
+
+    for extra_file in "${extra_files[@]}"; do
+        if [ ! -f "${PROJECT_ROOT%/}/${extra_file#/}" ]; then
+            log_error "Additional yaml config file ${extra_file} not found."
+            return 1
+        fi
+        file_list+=("${extra_file#/}")
     done
 
     local configuration
@@ -599,9 +857,9 @@ ensure_packages_installed() {
         # Debian/Ubuntu
         for pkg in $packages; do
             if dpkg -s "$pkg" >/dev/null 2>&1; then
-                echo -e "${Purple}$pkg${COff} is already installed"
+                log "${Purple}$pkg${COff} is already installed"
             else
-                echo -e "Installing ${Purple}$pkg${COff} ..."
+                log "Installing ${Purple}$pkg${COff} ..."
                 if ! sudo apt-get install -y "$pkg"; then
                     log_error "Failed to install package '$pkg'"
                     return 1
@@ -614,9 +872,9 @@ ensure_packages_installed() {
             # Fedora or newer RHEL/CentOS
             for pkg in $packages; do
                 if rpm -q "$pkg" >/dev/null 2>&1; then
-                    echo -e "${Purple}$pkg${COff} is already installed"
+                    log "${Purple}$pkg${COff} is already installed"
                 else
-                    echo -e "Installing ${Purple}$pkg${COff} ..."
+                    log "Installing ${Purple}$pkg${COff} ..."
                     if ! sudo dnf install -y "$pkg"; then
                         log_error "Failed to install package '$pkg'"
                         return 1
@@ -627,9 +885,9 @@ ensure_packages_installed() {
             # Older RHEL/CentOS
             for pkg in $packages; do
                 if rpm -q "$pkg" >/dev/null 2>&1; then
-                    echo -e "${Purple}$pkg${COff} is already installed"
+                    log "${Purple}$pkg${COff} is already installed"
                 else
-                    echo -e "Installing ${Purple}$pkg${COff} ..."
+                    log "Installing ${Purple}$pkg${COff} ..."
                     if ! sudo yum install -y "$pkg"; then
                         log_error "Failed to install package '$pkg'"
                         return 1
@@ -644,9 +902,9 @@ ensure_packages_installed() {
         # Arch Linux
         for pkg in $packages; do
             if pacman -Qq "$pkg" >/dev/null 2>&1; then
-                echo -e "${Purple}$pkg${COff} is already installed"
+                log "${Purple}$pkg${COff} is already installed"
             else
-                echo -e "Installing ${Purple}$pkg${COff} ..."
+                log "Installing ${Purple}$pkg${COff} ..."
                 if ! sudo pacman -S --noconfirm "$pkg"; then
                     log_error "Failed to install package '$pkg'"
                     return 1
@@ -657,9 +915,9 @@ ensure_packages_installed() {
         # OpenSUSE
         for pkg in $packages; do
             if zypper search -i "$pkg" | grep -q "$pkg"; then
-                echo -e "${Purple}$pkg${COff} is already installed"
+                log "${Purple}$pkg${COff} is already installed"
             else
-                echo -e "Installing ${Purple}$pkg${COff} ..."
+                log "Installing ${Purple}$pkg${COff} ..."
                 if ! sudo zypper install -y "$pkg"; then
                     log_error "Failed to install package '$pkg'"
                     return 1
@@ -670,9 +928,9 @@ ensure_packages_installed() {
         # Alpine
         for pkg in $packages; do
             if apk info -e "$pkg" >/dev/null 2>&1; then
-                echo -e "${Purple}$pkg${COff} is already installed"
+                log "${Purple}$pkg${COff} is already installed"
             else
-                echo -e "Installing ${Purple}$pkg${COff} ..."
+                log "Installing ${Purple}$pkg${COff} ..."
                 if ! sudo apk add "$pkg"; then
                     log_error "Failed to install package '$pkg'"
                     return 1
@@ -684,9 +942,9 @@ ensure_packages_installed() {
         for pkg in $packages; do
             # In Gentoo, we need to check differently since package names have categories
             if equery list "*/$pkg" >/dev/null 2>&1; then
-                echo -e "${Purple}$pkg${COff} is already installed"
+                log "${Purple}$pkg${COff} is already installed"
             else
-                echo -e "Installing ${Purple}$pkg${COff} ..."
+                log "Installing ${Purple}$pkg${COff} ..."
                 if ! sudo emerge --ask=n "$pkg"; then
                     log_error "Failed to install package '$pkg'"
                     return 1
@@ -717,11 +975,11 @@ check_python3() {
         _PYTHON_INSTALLED=true
         # shellcheck disable=SC2155
         local version=$(python3 --version 2>&1 | awk '{print $2}')
-        echo -e "Python 3 is installed, version: ${Purple}$version${COff}"
+        log "Python 3 is installed, version: ${Purple}$version${COff}"
         return 0
     else
-        echo -e "\n${Yellow}Python is not installed.${COff}\n"
-        echo "Installing Python..."
+        log "\n${Yellow}Python is not installed.${COff}\n"
+        log "Installing Python..."
         ensure_packages_installed "python3" || return 1
         _PYTHON_INSTALLED=true
     fi
@@ -733,8 +991,8 @@ check_upnpc() {
         _UPNPC_INSTALLED=true
         return 0
     else
-        echo -e "\n${Yellow}upnpc is not installed.${COff}\n"
-        echo "Installing upnpc..."
+        log "\n${Yellow}upnpc is not installed.${COff}\n"
+        log "Installing upnpc..."
         ensure_packages_installed "miniupnpc" || return 1
         _UPNPC_INSTALLED=true
     fi

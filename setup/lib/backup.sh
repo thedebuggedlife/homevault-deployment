@@ -76,6 +76,12 @@ validate_cron_dow() {
     return $?
 }
 
+###
+# Validates that the parameter is a valid cron expression
+# @param    $1  {string}    Cron expression to validate
+# @return       {string}    Validation error if the expression is invalid
+# @status       {number}    0 if valid, 1 if invalid
+###
 validate_cron_regex() {
     local cron_expr="$1"
     
@@ -131,6 +137,12 @@ validate_cron_regex() {
     fi
 }
 
+###
+# Validates that the parameter is a valid retention policy expression
+# @param    $1  {string}    Retention policy expression to validate
+# @return       {string}    Validation error if the expression is invalid
+# @status       {number}    0 if valid, 1 if invalid
+###
 validate_retention_policy() {
     local policy="$1"
     local retention_regex="^([0-9]+[h])?([0-9]+[d])?([0-9]+[w])?([0-9]+[m])?([0-9]+[y])?$"
@@ -227,7 +239,7 @@ restic_load_env() {
         return 1
     fi
 
-    echo -e "Using restic environment: ${Cyan}$RESTIC_ENV${COff}"
+    log "Using restic environment: ${Cyan}$RESTIC_ENV${COff}"
     # shellcheck source=/dev/null
     source "$RESTIC_ENV"
 }
@@ -241,14 +253,14 @@ restic_init_env() {
         log_warn "A previous restic environment exists at '$RESTIC_ENV'"
         ask_confirmation -y -p "Do you want to reuse the existing file? (use CTRL+C to exit)" && {
             if cp "$RESTIC_ENV" "$bak_file"; then
-                echo -e "Previous environment file copied to: ${Cyan}$bak_file${COff}"
+                log "Previous environment file copied to: ${Cyan}$bak_file${COff}"
             else
                 log_error "Failed to make a copy of previous environment file: '$bak_file'"
                 return 1
             fi
         } || {
             if mv "$RESTIC_ENV" "$bak_file"; then
-                echo -e "Previous environment file moved to: ${Cyan}$bak_file${COff}"
+                log "Previous environment file moved to: ${Cyan}$bak_file${COff}"
             else
                 log_error "Failed to make a copy of previous environment file: '$bak_file'"
                 return 1
@@ -258,7 +270,7 @@ restic_init_env() {
 
     if [ ! -f "$RESTIC_ENV" ]; then
         ensure_path_exists "$(dirname "$RESTIC_ENV")" || return 1
-        echo -e "Creating restic environment file: ${Cyan}$RESTIC_ENV${COff}"
+        log "Creating restic environment file: ${Cyan}$RESTIC_ENV${COff}"
         touch "$RESTIC_ENV" && chmod 600 "$RESTIC_ENV" || {
             log_error "Failed to create restic environment file: '$RESTIC_ENV'"
             return 1
@@ -301,17 +313,17 @@ restic_init_repository() {
         if [ -z "$RESTIC_PASSWORD" ]; then
             log_warn "A recovery password was not specified. A new one will be been generated for you."
             save_env_id RESTIC_PASSWORD -l 32 -f "$RESTIC_ENV"
-            echo -e "Recovery password: ${BIPurple}$RESTIC_PASSWORD${COff}"
-            echo -e "Please store this password in a safe place NOW. Press any key to continue..."
+            log "Recovery password: ${BIPurple}$RESTIC_PASSWORD${COff}"
+            log "Please store this password in a safe place NOW. Press any key to continue..."
             read -n 1 -s -r
-            echo
+            log
         fi
 
         if restic snapshots >/dev/null 2>&1; then
-            echo -e "\nExisting repository found at: ${Cyan}${RESTIC_REPOSITORY}${COff}\n"
+            log "\nExisting repository found at: ${Cyan}${RESTIC_REPOSITORY}${COff}\n"
             log_warn "An existing repository was found at this location and will be reused for future snapshots."
         else
-            echo -e "\nInitializing repository: ${Cyan}${RESTIC_REPOSITORY}${COff}\n"
+            log "\nInitializing repository: ${Cyan}${RESTIC_REPOSITORY}${COff}\n"
             restic init -q || {
                 log_error "Failed to initialize backup repository"
                 return 1
@@ -319,7 +331,7 @@ restic_init_repository() {
         fi
 
         local password_file="${SECRETS_PATH%/}/restic_password"
-        echo -e "Saving restic password to ${Cyan}$password_file${COff}"
+        log "Saving restic password to ${Cyan}$password_file${COff}"
         printf "%s" "$RESTIC_PASSWORD" > "$password_file" && 
             chmod 600 "$password_file" || {
                 log_error "Failed to save restic password to '$password_file'"
@@ -346,7 +358,7 @@ restic_run_backup() {
 
         if [ "$BACKUP_KEEP" = true ]; then var_args+=(--tag keep); fi
 
-        echo -e "Creating new snapshot in repository: ${Cyan}${RESTIC_REPOSITORY}${COff}\n"
+        log "Creating new snapshot in repository: ${Cyan}${RESTIC_REPOSITORY}${COff}\n"
         restic -v "$mappings" \
             -m "${PROJECT_PATH%/}/deployment.json" \
             backup \
@@ -358,7 +370,7 @@ restic_run_backup() {
                 log_error "Backup operation failed"
                 return 1
             }
-        echo
+        log
     ); exit_code=$?
 
     rm -rf "$RESTIC_CONFIG" > /dev/null 2>&1
@@ -370,14 +382,14 @@ restic_list_snapshots() {
     (
         restic_load_env || return 1
 
-        echo -e "Listing snapshots in repository: ${Cyan}${RESTIC_REPOSITORY}${COff}\n"
+        log "Listing snapshots in repository: ${Cyan}${RESTIC_REPOSITORY}${COff}\n"
         restic snapshots \
             --tag "$COMPOSE_PROJECT_NAME" || {
                 log_error "Snapshots operation failed"
                 return 1
             }
 
-        echo
+        log
     ) || return 1
 }
 
@@ -386,7 +398,7 @@ restic_browse_snapshot() {
     (
         restic_load_env || return 1
 
-        echo -e "Browsing snapshot ${Purple}$SNAPSHOT_ID${COff} in repository: ${Cyan}${RESTIC_REPOSITORY}${COff}\n"
+        log "Browsing snapshot ${Purple}$SNAPSHOT_ID${COff} in repository: ${Cyan}${RESTIC_REPOSITORY}${COff}\n"
         local recursive=""
         if [ "$SNAPSHOT_BROWSE_RECURSIVE" = true ]; then 
             recursive="--recursive"
@@ -396,7 +408,7 @@ restic_browse_snapshot() {
             return 1
         }
 
-        echo
+        log
     ) || return 1
 }
 
@@ -405,13 +417,13 @@ restic_forget_snapshots() {
     (
         restic_load_env || return 1
 
-        echo -e "Deleting snapshot ${Purple}$SNAPSHOT_ID${COff} from repository: ${Cyan}${RESTIC_REPOSITORY}${COff}\n"
+        log "Deleting snapshot ${Purple}$SNAPSHOT_ID${COff} from repository: ${Cyan}${RESTIC_REPOSITORY}${COff}\n"
         restic forget "$SNAPSHOT_ID" || {
                 log_error "Forget operation failed"
                 return 1
             }
 
-        echo
+        log
     ) || return 1
 }
 
@@ -420,13 +432,13 @@ restic_dump_file() {
     (
         restic_load_env || return 1
 
-        echo -e "Retrieving file ${Purple}$1${COff} from repository: ${Cyan}${RESTIC_REPOSITORY}${COff}\n" >&2
+        log "Retrieving file ${Purple}$1${COff} from repository: ${Cyan}${RESTIC_REPOSITORY}${COff}\n"
         restic dump "$SNAPSHOT_ID" "$RESTIC_DATA_ROOT/${1#/}" || {
             log_error "Forget operation failed"
             return 1
         }
 
-        echo
+        log
     ) || return 1
 }
 
@@ -439,14 +451,14 @@ restic_run_restore() {
 
         mappings=$(IFS=":"; echo "${BACKUP_FILTER_INCLUDE[*]}")
 
-        echo -e "Restoring snapshot ${Purple}$SNAPSHOT_ID${COff} from repository: ${Cyan}${RESTIC_REPOSITORY}${COff}\n"
+        log "Restoring snapshot ${Purple}$SNAPSHOT_ID${COff} from repository: ${Cyan}${RESTIC_REPOSITORY}${COff}\n"
         restic -v "$mappings" \
             restore "$SNAPSHOT_ID" \
             --target / || {
                 log_error "Backup operation failed"
                 return 1
             }
-        echo
+        log
     ) || return 1
 }
 
@@ -464,7 +476,7 @@ BACKUP_SERVICES_STOPPED=false
 
 backup_stop_services() {
     if [[ -n "${BACKUP_SERVICES[*]}" && "$DRY_RUN" != true ]]; then
-        echo -e "Stopping docker services ..."
+        log "Stopping docker services ..."
         # shellcheck disable=SC2048,SC2086
         docker compose -p "$COMPOSE_PROJECT_NAME" stop ${BACKUP_SERVICES[*]} || {
             log_error "Failed to stop docker services in preparation for backup. Some services may need to be restarted manually."
@@ -476,7 +488,7 @@ backup_stop_services() {
 
 backup_start_services() {
     if [[ "$BACKUP_SERVICES_STOPPED" = true && -n "${BACKUP_SERVICES[*]}" && "$DRY_RUN" != true ]]; then
-        echo -e "Starting docker services ..."
+        log "Starting docker services ..."
         # shellcheck disable=SC2048,SC2086
         docker compose -p "$COMPOSE_PROJECT_NAME" start ${BACKUP_SERVICES[*]} || {
             log_warn "Failed to restart docker services after backup. Some services may need to be restarted manually."
@@ -538,8 +550,8 @@ backup_configure_retention() {
 
 restore_check_installed() {
     if [[ "${#INSTALLED_MODULES[@]}" -gt 0 ]]; then
-        log_warn "here are ${#INSTALLED_MODULES[@]} modules already installed."
-        echo "This operation will destroy and recreate Docker resources for these modules."
+        log_warn "There are ${#INSTALLED_MODULES[@]} modules already installed."
+        log "This operation will destroy and recreate Docker resources for these modules."
         ask_confirmation || return 1
     fi
 }
@@ -548,7 +560,7 @@ restore_configure_local() {
     if [ -n "$APPDATA_LOCATION" ]; then
         # Copy the .env file used on last deployment
         local restore_env="${APPDATA_LOCATION%/}/project/${COMPOSE_PROJECT_NAME}/.env"
-        echo -e "Restoring environment from file ${Cyan}$restore_env${COff}"
+        log "Restoring environment from file ${Cyan}$restore_env${COff}"
         if [ ! -f "$restore_env" ]; then
             log_error "Missing file '$restore_env'"
             return 1
@@ -600,15 +612,15 @@ restore_configure_remote() {
 
 restore_snapshot() {
     local deployment_file="$RESTIC_CONFIG/deployment.json"
-    echo -e "Extracting snapshot manifest to ${Cyan}$deployment_file${COff}"
+    log "Extracting snapshot manifest to ${Cyan}$deployment_file${COff}"
     restic_dump_file "/manifest.json" > "$deployment_file" || {
         log_error "Failed to load remote deployment file"
         return 1
     }
 
-    echo "Loading snapshot manifest"
+    log "Loading snapshot manifest"
     load_deployment_file "$deployment_file" || return 1
-    echo
+    log
 
     ensure_path_exists "$APPDATA_LOCATION" || return 1
 
@@ -616,9 +628,9 @@ restore_snapshot() {
     for target_folder in "${BACKUP_FILTER_INCLUDE[@]}"; do
         ensure_path_exists "$target_folder" || return 1
     done
-    echo
+    log
 
-    echo "Running restic restore operation. This operation could take several minutes..."
+    log "Running restic restore operation. This operation could take several minutes..."
     restic_run_restore || return 1
-    echo
+    log
 }

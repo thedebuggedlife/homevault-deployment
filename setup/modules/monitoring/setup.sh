@@ -19,12 +19,20 @@ prometheus_merge_config() {
 ################################################################################
 #                          MONITORING SETUP HOOKS
 
+monitoring_config_webui() {
+    webui_add_prompt monitoring GRAFANA_SUBDOMAIN "Subdomain under {CF_DOMAIN_NAME} to use for Grafana" -v "$RE_VALID_LOCAL_HOSTNAME"
+    webui_add_prompt monitoring LOKI_RETENTION_TIME "Retention time for monitoring logs (empty=infinite)" -e -v "$RE_VALID_DURATION##$MSG_INVALID_DURATION"
+    webui_add_prompt monitoring PROMETHEUS_RETENTION_TIME "Retention time for monitoring metrics (empty=infinite)" -e -v "$RE_VALID_DURATION##$MSG_INVALID_DURATION"
+    webui_add_prompt monitoring PROMETHEUS_RETENTION_SIZE "Maximum size for monitoring time-series database (empty=infinite)" -e -v "$RE_VALID_STORAGE_SIZE##$MSG_INVALID_STORAGE_SIZE"
+    webui_add_prompt monitoring SMARTCTL_INTERVAL "Polling interval to retrieve hard-drive statistics" -v "$RE_VALID_DURATION##$MSG_INVALID_DURATION"
+}
+
 monitoring_config_env() {
-    ask_for_env GRAFANA_SUBDOMAIN "Subdomain under ${CF_DOMAIN_NAME} to use for Grafana"
-    ask_for_env LOKI_RETENTION_TIME "Retention time for monitoring logs (empty=infinite)" -e
-    ask_for_env PROMETHEUS_RETENTION_TIME "Retention time for monitoring metrics (empty=infinite)" -e
-    ask_for_env PROMETHEUS_RETENTION_SIZE "Maximum size for monitoring time-series database (empty=infinite)" -e
-    ask_for_env SMARTCTL_INTERVAL "Polling interval to retrieve hard-drive statistics"
+    ask_for_env GRAFANA_SUBDOMAIN "Subdomain under ${CF_DOMAIN_NAME} to use for Grafana" -v "$RE_VALID_LOCAL_HOSTNAME"
+    ask_for_env LOKI_RETENTION_TIME "Retention time for monitoring logs (empty=infinite)" -e -v "$RE_VALID_DURATION##$MSG_INVALID_DURATION"
+    ask_for_env PROMETHEUS_RETENTION_TIME "Retention time for monitoring metrics (empty=infinite)" -e -v "$RE_VALID_DURATION##$MSG_INVALID_DURATION"
+    ask_for_env PROMETHEUS_RETENTION_SIZE "Maximum size for monitoring time-series database (empty=infinite)" -e -v "$RE_VALID_STORAGE_SIZE##$MSG_INVALID_STORAGE_SIZE"
+    ask_for_env SMARTCTL_INTERVAL "Polling interval to retrieve hard-drive statistics" -v "$RE_VALID_DURATION##$MSG_INVALID_DURATION"
 }
 
 monitoring_config_secrets() {
@@ -49,6 +57,7 @@ monitoring_backup_config() {
     )
 }
 
+CONFIG_WEBUI_HOOKS+=("monitoring_config_webui")
 CONFIG_ENV_HOOKS+=("monitoring_config_env")
 CONFIG_SECRETS_HOOKS+=("monitoring_config_secrets")
 PRE_INSTALL_HOOKS+=("monitoring_pre_install")

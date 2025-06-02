@@ -10,6 +10,8 @@ source "$PROJECT_ROOT/lib/config.sh"
 source "$PROJECT_ROOT/lib/tailscale.sh"
 #shellcheck source=../../lib/cloudflare.sh
 source "$PROJECT_ROOT/lib/cloudflare.sh"
+#shellcheck source=../../lib/webui.sh
+source "$PROJECT_ROOT/lib/webui.sh"
 
 _PAM_USER_CONFIG="lldap/bootstrap/user-configs/pam.json"
 _ADMIN_USER_CONFIG="lldap/bootstrap/user-configs/admin.json"
@@ -22,7 +24,11 @@ _SSSD_CONFIG_PATH="/etc/sssd/sssd.conf"
 # @return: {void}
 ###
 configure_traefik() {
-    merge_yaml_config "dynamic.yml" traefik
+    local -a extra_opts=()
+    if [ "$WEBUI_INSTALLED" = true ]; then
+        extra_opts+=("-f" "modules/base/traefik/dynamic.webui.yml")
+    fi
+    merge_yaml_config "dynamic.yml" traefik "${extra_opts[@]}"
 }
 
 ###
@@ -73,21 +79,21 @@ lldap_bootstrap() {
         exit 1
     }
 
-    echo -e "Starting LLDAP service...\n"
+    log "Starting LLDAP service...\n"
     sg docker -c "docker compose $COMPOSE_OPTIONS up $COMPOSE_UP_OPTIONS lldap" || {
         log_error "Failed to start LLDAP service for bootstrapping"
         exit 1
     }
 
     # Run LLDAP's built-in bootstrap script to create/update users and groups
-    echo -e "Configuring LLDAP with built-in users and groups...\n"
+    log "Configuring LLDAP with built-in users and groups...\n"
     sg docker -c "docker exec \
         -e LLDAP_ADMIN_PASSWORD_FILE=/run/secrets/ldap_admin_password \
         -e USER_CONFIGS_DIR=/data/bootstrap/user-configs \
         -e GROUP_CONFIGS_DIR=/data/bootstrap/group-configs \
         -e USER_SCHEMAS_DIR=/data/bootstrap/user-schemas \
         -e GROUP_SCHEMAS_DIR=/data/bootstrap/group-schemas \
-        -it lldap /data/bootstrap/bootstrap.sh" >/dev/null || \
+        lldap /data/bootstrap/bootstrap.sh" >/dev/null || \
     {
         log_error "Failed to bootstrap LLDAP users and groups"
         exit 1
@@ -105,14 +111,12 @@ pam_write_sssd_config() {
         local user_input
         if ! sudo grep -Fq "$CF_DOMAIN_NAME" "$_SSSD_CONFIG_PATH"; then
             log_warn "SSSD configuration file exists but does not seem to be configured for '$CF_DOMAIN_NAME'"
-            if [ "$UNATTENDED" = true ]; then return 1; fi
-            read -p "Do you want to override the existing configuration? [y/N] " user_input </dev/tty
-            user_input=${user_input:-N}
-            if [[ ! "$user_input" =~ ^[Yy]$ ]]; then
+
+            if ! ask_confirmation -p "Do you want to override the existing configuration?"; then
                 abort_install
             fi
         else
-            echo -e "Configuration for ${Purple}$CF_DOMAIN_NAME${COff} already present in ${Cyan}$_SSSD_CONFIG_PATH${COff}"
+            log "Configuration for ${Purple}$CF_DOMAIN_NAME${COff} already present in ${Cyan}$_SSSD_CONFIG_PATH${COff}"
             if [ "$USE_DEFAULTS" = true ]; then return 0; fi
             read -p "Do you want to override the existing configuration? [y/N] " user_input </dev/tty
             user_input=${user_input:-N}
@@ -122,7 +126,7 @@ pam_write_sssd_config() {
         fi
     fi
 
-    echo -e "Generating configuration file ${Cyan}$_SSSD_CONFIG_PATH${COff}"
+    log "Generating configuration file ${Cyan}$_SSSD_CONFIG_PATH${COff}"
 
     cat "$PROJECT_ROOT/modules/base/sssd.conf" \
         | sed "s/\${CF_DOMAIN_NAME}/$CF_DOMAIN_NAME/g" \
@@ -235,11 +239,11 @@ pam_generate_ssl_cert() {
 
     ensure_path_exists "${APPDATA_LOCATION%/}/lldap" || return 1
     if [[ -f "${APPDATA_LOCATION%/}/lldap/key.pem" && -f "${APPDATA_LOCATION%/}/lldap/cert.pem" ]]; then
-        echo "SSL certificates for LLDAP already exist"
+        log "SSL certificates for LLDAP already exist"
         return 0
     fi
 
-    echo "Generating SSL certificates for LLDAP"
+    log "Generating SSL certificates for LLDAP"
     openssl req \
         -x509 \
         -nodes \
@@ -259,7 +263,7 @@ pam_generate_ssl_cert() {
 
 lldap_add_to_hosts_file() {
     if ! grep -Fq "${CF_DOMAIN_NAME}" /etc/hosts; then
-        echo -e "Adding redirection for ${Purple}lldap.${CF_DOMAIN_NAME}${COff} to ${Cyan}/etc/hosts${COff}"
+        log "Adding redirection for ${Purple}lldap.${CF_DOMAIN_NAME}${COff} to ${Cyan}/etc/hosts${COff}"
         local temp_file
         temp_file=$(mktemp)
         echo "127.0.0.1 lldap.${CF_DOMAIN_NAME}" | cat - /etc/hosts > "$temp_file"
@@ -299,9 +303,9 @@ pam_pre_install() {
 
 pam_post_install() {
     sudo pam-auth-update --enable mkhomedir
-    echo "Clearing SSSD cache"
+    log "Clearing SSSD cache"
     sudo sss_cache -E
-    echo -e "Restarting service ${Cyan}sssd${COff}"
+    log "Restarting service ${Cyan}sssd${COff}"
     sudo systemctl restart sssd
 }
 
@@ -326,10 +330,28 @@ configure_backup() {
 ################################################################################
 #                             BASE SETUP HOOKS
 
+base_config_webui() {
+    webui_add_prompt base APPDATA_LOCATION "Application Data folder" -v "$RE_VALID_PATH"
+    webui_add_prompt base TZ "Server Timezone" -v "is_valid_timezone##Please enter a valid timezone. See: https://timeapi.io/documentation/iana-timezones"
+    webui_add_prompt base TAILSCALE_API_KEY "Tailscale API Key"
+    webui_add_prompt base CF_DNS_API_TOKEN "Cloudflare API Token"
+    webui_add_prompt base CF_DOMAIN_NAME "Domain Name (e.g. example.com)" -v "$RE_MAIN_DOMAIN"
+    webui_add_prompt base CF_TUNNEL_NAME "Cloudflare Tunnel Name" -v "$RE_VALID_TUNNEL_NAME"
+    webui_add_prompt base USE_SMTP2GO "Do you want to configure SMTP2GO for outgoing email?" -o "true,false"
+    webui_add_prompt base SMTP_SENDER "SMTP Email From (username only)" -v "$RE_VALID_EMAIL_NAME"
+    webui_add_prompt base SMTP_USERNAME "SMTP Server Username" -c "USE_SMTP2GO==false"
+    webui_add_prompt base SMTP_PASSWORD "SMTP Server Password" -c "USE_SMTP2GO==false"
+    webui_add_prompt base SMTP_SERVER "SMTP Server Address" -v "$RE_VALID_HOSTNAME" -c "USE_SMTP2GO==false"
+    webui_add_prompt base SMTP_PORT "SMTP Server Port" -v "$RE_VALID_PORT_NUMBER" -c "USE_SMTP2GO==false"
+    webui_add_prompt base SMTP_SECURE "SMTP Security Protocol (optional)" -e -o "tls,ssl" -c "USE_SMTP2GO==false"
+    webui_add_prompt base SMTP2GO_API_KEY "SMTP2GO API Key" -c "USE_SMTP2GO==true"
+    webui_add_prompt base AUTHELIA_THEME "Authelia admin website theme" -o "dark,light"
+}
+
 base_config_env() {
     # Global Settings
-    ask_for_env APPDATA_LOCATION "Application Data folder"
-    ask_for_env TZ "Server Timezone"
+    ask_for_env APPDATA_LOCATION "Application Data folder" -v "$RE_VALID_PATH"
+    ask_for_env TZ "Server Timezone" -v "is_valid_timezone##Please enter a valid timezone. See: https://timeapi.io/documentation/iana-timezones"
     save_env HOSTNAME "${HOSTNAME}"
     save_env INSTALLER_UID "$(id -u "$USER")"
     save_env DOCKER_GID "$(getent group docker | cut -d: -f3)"
@@ -339,40 +361,36 @@ base_config_env() {
 
     # Cloudflare Settings
     ask_for_env CF_DNS_API_TOKEN "Cloudflare API Token"
-    ask_for_env CF_DOMAIN_NAME "Domain Name (e.g. example.com)"
+    ask_for_env CF_DOMAIN_NAME "Domain Name (e.g. example.com)" -v "$RE_MAIN_DOMAIN"
     save_env CF_DOMAIN_CN "\"$(echo "$CF_DOMAIN_NAME" | sed 's/^/dc=/' | sed 's/\./,dc=/g')\""
-    ask_for_env CF_TUNNEL_NAME "Cloudflare Tunnel Name"
+    ask_for_env CF_TUNNEL_NAME "Cloudflare Tunnel Name" -v "$RE_VALID_TUNNEL_NAME"
 
     # SMTP Server Settings
     if [ -z "$USE_SMTP2GO" ]; then
-        echo
+        log
         if ask_confirmation -p "Do you want to configure SMTP2GO for outgoing email?" -y; then
             save_env USE_SMTP2GO true
         else
             save_env USE_SMTP2GO false
         fi
     fi
-    ask_for_env SMTP2GO_API_KEY "SMTP2GO API Key"
-    ask_for_env SMTP_SENDER "SMTP Email From (username only)"
+    ask_for_env SMTP_SENDER "SMTP Email From (username only)" -v "$RE_VALID_EMAIL_NAME"
     if [ "$USE_SMTP2GO" != "true" ]; then
-        ask_for_env SMTP_USERNAME "SMTP Server Username"
+        ask_for_env SMTP_USERNAME "SMTP Server Username" -v "$RE_VALID_EMAIL_NAME"
         ask_for_env SMTP_PASSWORD "SMTP Server Password"
-        ask_for_env SMTP_SERVER "SMTP Server Address"
-        ask_for_env SMTP_PORT "SMTP Server Port"
-        ask_for_env SMTP_SECURE "SMTP Security Protocol (optional) ('tls' or 'ssl')" -e
+        ask_for_env SMTP_SERVER "SMTP Server Address" -v "$RE_VALID_HOSTNAME"
+        ask_for_env SMTP_PORT "SMTP Server Port" -v "$RE_VALID_PORT_NUMBER"
+        ask_for_env SMTP_SECURE "SMTP Security Protocol (optional)" -e -o "tls,ssl"
     else
-        if [ -z "$SMTP_USERNAME" ]; then
-            save_env SMTP_USERNAME "selfhost@${CF_DOMAIN_NAME}"
-        fi
-        ask_for_env SMTP_USERNAME "SMTP Server Username"
+        ask_for_env SMTP2GO_API_KEY "SMTP2GO API Key"
+        ask_for_env SMTP_USERNAME "SMTP Server Username" -a "homevault@${CF_DOMAIN_NAME}"
     fi
 
     # Authelia Settings
-    ask_for_env AUTHELIA_THEME "Authelia admin website theme (dark | light)"
+    ask_for_env AUTHELIA_THEME "Authelia admin website theme" -o "dark,light"
 }
 
 base_config_secrets() {
-    save_env_id OIDC_GRAFANA_CLIENT_ID
     save_env_secret "${SECRETS_PATH}cloudflare_dns_api_token" CF_DNS_API_TOKEN
     save_env_secret "${SECRETS_PATH}smtp_password" SMTP_PASSWORD
     create_secret "${SECRETS_PATH}ldap_admin_password"
@@ -416,6 +434,11 @@ base_pre_install() {
 base_post_install() {
     log_header "Post-install steps for LLDAP"
     pam_post_install || return 1
+
+    if [ "$WEBUI_INSTALLED" = true ]; then
+        log_header "Post-install steps for WebUI"
+        webui_configure_dns || return 1
+    fi
 }
 
 base_backup_config() {
@@ -432,6 +455,7 @@ base_backup_config() {
     )
 }
 
+CONFIG_WEBUI_HOOKS+=("base_config_webui")
 CONFIG_ENV_HOOKS+=("base_config_env")
 CONFIG_SECRETS_HOOKS+=("base_config_secrets")
 COMPOSE_EXTRA_HOOKS+=("base_compose_extra")

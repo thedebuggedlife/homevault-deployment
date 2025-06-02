@@ -1,0 +1,13 @@
+http:
+  routers:
+    webui:
+      rule: Host(`${WEBUI_SUBDOMAIN}.${CF_DOMAIN_NAME}`)
+      entrypoints:
+        - tailnet
+      service: webui
+
+  services:
+    webui:
+      loadBalancer:
+        servers:
+          - url: "http://host.docker.internal:3000"

@@ -45,13 +45,14 @@ cockpit_network_workaround() {
     local con_name="cockpit-fake"
     local if_name="cockpit-fake0"
     if nmcli connection show | grep -q "$con_name" || ip link show "$if_name" &>/dev/null; then
-        echo -e "Connection ${Purple}$con_name${COff} or interface ${Purple}$if_name${COff} already exists."
+        log "Connection ${Purple}$con_name${COff} or interface ${Purple}$if_name${COff} already exists."
     else
         sudo nmcli con add type dummy con-name "$con_name" ifname "$if_name" ip4 1.2.3.4/24 gw4 1.2.3.1 || {
             log_error "Failed to create interface '$if_name'"
             return 1
         }
-        echo -e "Interface ${Purple}$if_name${COff} created."
+        log "Interface ${Purple}$if_name${COff} created."
+        # shellcheck disable=SC2034
         REQUIRES_RESTART=true
     fi
 }
@@ -66,14 +67,14 @@ cockpit_detect_distribution() {
         log_warn "Cannot detect Linux distribution. /etc/os-release not found."
     fi
 
-    echo -e "Detected: ${Purple}$DISTRO $VERSION${COff}"
+    log "Detected: ${Purple}$DISTRO $VERSION${COff}"
 }
 
 cockpit_install_navigator() {
     case "$DISTRO" in
         rhel)
             if yum list installed cockpit-navigator > /dev/null 2>&1; then
-                echo -e "Package ${Purple}cockpit-navigator${COff} is already installed."
+                log "Package ${Purple}cockpit-navigator${COff} is already installed."
                 return 0
             fi
             if [[ "$VERSION" == 7* ]]; then
@@ -89,7 +90,7 @@ cockpit_install_navigator() {
             ;;
         ubuntu|debian)
             if dpkg -s cockpit-navigator > /dev/null 2>&1; then
-                echo -e "Package ${Purple}cockpit-navigator${COff} is already installed."
+                log "Package ${Purple}cockpit-navigator${COff} is already installed."
                 return 0
             fi
             wget -qO - https://repo.45drives.com/key/gpg.asc | sudo gpg --dearmor -o /usr/share/keyrings/45drives-archive-keyring.gpg
@@ -99,20 +100,20 @@ cockpit_install_navigator() {
             sudo systemctl restart cockpit
             ;;
         *)
-            echo -e "Package ${Purple}cockpit-navigator${COff} is not supported for ${Cyan}$DISTRO${COff}."
+            log "Package ${Purple}cockpit-navigator${COff} is not supported for ${Cyan}$DISTRO${COff}."
             ;;
     esac
 }
 
 cockpit_install_service() {
     if systemctl is-active --quiet cockpit.socket; then
-        echo "Cockpit is already installed."
+        log "Cockpit is already installed."
         return 0
     fi
 
     case "$DISTRO" in
         fedora)
-            echo "Installing Cockpit on Fedora..."
+            log "Installing Cockpit on Fedora..."
             sudo dnf install -y cockpit
             sudo systemctl enable --now cockpit.socket
             # Open firewall if firewalld is running
@@ -124,7 +125,7 @@ cockpit_install_service() {
             
         rhel)
             # RHEL 8 or later
-            echo "Installing Cockpit on RHEL..."
+            log "Installing Cockpit on RHEL..."
             if [[ "$VERSION" == 7* ]]; then
                 sudo subscription-manager repos --enable rhel-7-server-extras-rpms
             fi
@@ -139,7 +140,7 @@ cockpit_install_service() {
 
         centos)
             # CentOS
-            echo "Installing Cockpit on CentOS..."
+            log "Installing Cockpit on CentOS..."
             sudo yum install -y cockpit
             sudo systemctl enable --now cockpit.socket
             # Open firewall if firewalld is running
@@ -150,13 +151,13 @@ cockpit_install_service() {
             ;;
             
         ubuntu)
-            echo "Installing Cockpit on Ubuntu..."
+            log "Installing Cockpit on Ubuntu..."
             . /etc/os-release
             sudo apt install -y -t ${VERSION_CODENAME}-backports cockpit
             ;;
 
         debian)
-            echo "Installing Cockpit on Debian..."
+            log "Installing Cockpit on Debian..."
             . /etc/os-release
             echo "deb http://deb.debian.org/debian ${VERSION_CODENAME}-backports main" | sudo tee /etc/apt/sources.list.d/backports.list > /dev/null
             sudo apt update
@@ -164,13 +165,13 @@ cockpit_install_service() {
             ;;
             
         arch)
-            echo "Installing Cockpit on Arch Linux..."
+            log "Installing Cockpit on Arch Linux..."
             sudo pacman -Sy --noconfirm cockpit
             sudo systemctl enable --now cockpit.socket
             ;;
             
         suse|opensuse|opensuse-leap|opensuse-tumbleweed)
-            echo "Installing Cockpit on openSUSE..."
+            log "Installing Cockpit on openSUSE..."
             sudo zypper install -y cockpit
             sudo systemctl enable --now cockpit.socket
             # Open firewall if firewalld is running
@@ -181,8 +182,8 @@ cockpit_install_service() {
             ;;
             
         flatcar)
-            echo "Flatcar Container Linux has Cockpit pre-installed."
-            echo "Make sure the Cockpit socket is enabled:"
+            log "Flatcar Container Linux has Cockpit pre-installed."
+            log "Make sure the Cockpit socket is enabled:"
             systemctl enable --now cockpit.socket
             # Open firewall if firewalld is running
             if systemctl is-active --quiet firewalld; then
@@ -199,7 +200,7 @@ cockpit_install_service() {
     
     # Check if installation was successful
     if systemctl is-active --quiet cockpit.socket; then
-        echo "Cockpit has been successfully installed and enabled."
+        log "Cockpit has been successfully installed and enabled."
     else
         log_warn "Cockpit installation completed, but the service is not running."
     fi
@@ -208,7 +209,7 @@ cockpit_install_service() {
 cockpit_configure_system() {
     local cockpit_socket_file="/etc/systemd/system/cockpit.socket.d/listen.conf"
     if [ ! -f "$cockpit_socket_file" ]; then
-        echo -e "Creating file ${Cyan}$cockpit_socket_file${COff}..."
+        log "Creating file ${Cyan}$cockpit_socket_file${COff}..."
         sudo mkdir -p "$(dirname ${cockpit_socket_file})"
         sudo cp "$COCKPIT_SETUP_DIR/listen.conf" "$cockpit_socket_file"
         sudo systemctl daemon-reload
@@ -216,12 +217,12 @@ cockpit_configure_system() {
     fi
     local cockpit_conf_file="/etc/cockpit/cockpit.conf"
     if [ ! -f "$cockpit_conf_file" ]; then
-        echo -e "Creating file ${Cyan}$cockpit_conf_file${COff}..."
+        log "Creating file ${Cyan}$cockpit_conf_file${COff}..."
         sudo mkdir -p "$(dirname ${cockpit_conf_file})"
         sudo cp "$COCKPIT_SETUP_DIR/cockpit.conf" "$cockpit_conf_file"
     fi
     local origins="http://$COCKPIT_SUBDOMAIN.$CF_DOMAIN_NAME ws://$COCKPIT_SUBDOMAIN.$CF_DOMAIN_NAME https://$COCKPIT_SUBDOMAIN.$CF_DOMAIN_NAME wss://$COCKPIT_SUBDOMAIN.$CF_DOMAIN_NAME"
-    echo -e "Updating ${Purple}Origins${COff} value in ${Cyan}$cockpit_conf_file${COff}..."
+    log "Updating ${Purple}Origins${COff} value in ${Cyan}$cockpit_conf_file${COff}..."
     sudo sed -i -E "s|^Origins=.*|Origins=${origins}|" "$cockpit_conf_file" || {
         log_error "Failed to update 'Origins' in '$cockpit_conf_file'"
         exit 1
@@ -241,8 +242,12 @@ cockpit_configure_dns() {
 ################################################################################
 #                          COCKPIT SETUP HOOKS
 
+cockpit_config_webui() {
+    webui_add_prompt cockpit COCKPIT_SUBDOMAIN "Subdomain under {CF_DOMAIN_NAME} to use for Cockpit" -v "$RE_VALID_LOCAL_HOSTNAME"
+}
+
 cockpit_config_env() {
-    ask_for_env COCKPIT_SUBDOMAIN "Subdomain under ${CF_DOMAIN_NAME} to use for Cockpit"
+    ask_for_env COCKPIT_SUBDOMAIN "Subdomain under ${CF_DOMAIN_NAME} to use for Cockpit" -v "$RE_VALID_LOCAL_HOSTNAME"
 }
 
 cockpit_pre_install() {
@@ -256,6 +261,7 @@ cockpit_pre_install() {
     cockpit_configure_dns || return 1
 }
 
+CONFIG_WEBUI_HOOKS+=("cockpit_config_webui")
 CONFIG_ENV_HOOKS+=("cockpit_config_env")
 # CONFIG_SECRETS_HOOKS+=("")
 PRE_INSTALL_HOOKS+=("cockpit_pre_install")

@@ -63,7 +63,7 @@ portainer_admin_check() {
         echo "false"
     elif [[ "$status_code" = "303" && "$allow_restart" = true ]]; then
         # Administrator initialization window has closed, try restarting Portainer
-        echo "Portainer AdminInitTimeout expired. Attempting to restart container..." >&2
+        log "Portainer AdminInitTimeout expired. Attempting to restart container..."
         sg docker -c "docker restart portainer"
         sleep 5
         portainer_admin_check false
@@ -169,7 +169,7 @@ portainer_configure_admin_account() {
     local has_admin
     if ! has_admin=$(portainer_admin_check); then return 1; fi
     if [ "$has_admin" = true ]; then
-        echo "The administrator account has been onboarded previously."
+        log "The administrator account has been onboarded previously."
         return 0
     fi
     local portainer_password
@@ -177,17 +177,17 @@ portainer_configure_admin_account() {
         log_error "Could not read admin password from '${SECRETS_PATH}portainer_admin_password'"
         return 1
     fi
-    echo "Onboarding Portainer administrator account..."
+    log "Onboarding Portainer administrator account..."
     portainer_admin_init "$ADMIN_USERNAME" "$portainer_password" || return 1
-    echo -e "Administrator account ${Purple}$ADMIN_USERNAME${COff} has been onboarded to Immich"
+    log "Administrator account ${Purple}$ADMIN_USERNAME${COff} has been onboarded to Portainer"
 }
 
 portainer_configure_api_key() {
     if [ -n "$PORTAINER_API_KEY" ]; then
-        echo "Portainer API Key is already configured."
+        log "Portainer API Key is already configured."
         return 0
     fi
-    echo "Logging in administrator account..."
+    log "Logging in administrator account..."
     local portainer_password
     if ! portainer_password=$(<"${SECRETS_PATH}portainer_admin_password"); then
         log_error "Could not read admin password from '${SECRETS_PATH}portainer_admin_password'"
@@ -197,19 +197,19 @@ portainer_configure_api_key() {
         log_error "Failed to sign user '$ADMIN_USERNAME' to Immich."
         return 1
     fi
-    echo "Getting user id..."
+    log "Getting user id..."
     local user_id
     if ! user_id=$(portainer_get_current_user_id); then return 1; fi
-    echo "Creating new API Key..."
+    log "Creating new API Key..."
     local api_key
     if ! api_key=$(portainer_create_api_key "Selfhost" "$user_id" "$portainer_password"); then return 1; fi
-    echo "Logging out administrator account..."
+    log "Logging out administrator account..."
     portainer_logout
     save_env PORTAINER_API_KEY "$api_key"
 }
 
 portainer_configure_oauth() {
-    echo "Getting current server configuration..."
+    log "Getting current server configuration..."
 
     local settings
     if ! settings=$(portainer_get_settings); then return 1; fi
@@ -243,7 +243,7 @@ portainer_configure_oauth() {
         return 1
     fi
 
-    echo "Saving updated server configuration..."
+    log "Saving updated server configuration..."
 
     portainer_set_settings "$settings" || return 1
 }
@@ -251,8 +251,12 @@ portainer_configure_oauth() {
 ################################################################################
 #                          PORTAINER SETUP HOOKS
 
+portainer_config_webui() {
+    webui_add_prompt portainer PORTAINER_SUBDOMAIN "Subdomain under {CF_DOMAIN_NAME} to use for Portainer" -v "$RE_VALID_LOCAL_HOSTNAME"
+}
+
 portainer_config_env() {
-    ask_for_env PORTAINER_SUBDOMAIN "Subdomain under ${CF_DOMAIN_NAME} to use for Portainer"
+    ask_for_env PORTAINER_SUBDOMAIN "Subdomain under ${CF_DOMAIN_NAME} to use for Portainer" -v "$RE_VALID_LOCAL_HOSTNAME"
 }
 
 portainer_config_secrets() {
@@ -275,6 +279,7 @@ portainer_backup_config() {
     )
 }
 
+CONFIG_WEBUI_HOOKS+=("portainer_config_webui")
 CONFIG_ENV_HOOKS+=("portainer_config_env")
 CONFIG_SECRETS_HOOKS+=("portainer_config_secrets")
 # PRE_INSTALL_HOOKS+=("")

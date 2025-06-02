@@ -32,7 +32,7 @@ smtp2go_rest_call() {
 # Returns:  The domain object
 smtp2go_add_domain() {
     local domain_name=$1
-    echo -e "Attempting to create domain ${UPurple}$domain_name${COff} via SMTP2GO API..." >&2
+    log "Attempting to create domain ${UPurple}$domain_name${COff} via SMTP2GO API..."
     local response domain_obj
     if ! response=$(smtp2go_rest_call POST domain/add "{\"auto_verify\": false, \"domain\": \"$domain_name\"}"); then
         return 1
@@ -42,7 +42,7 @@ smtp2go_add_domain() {
         log_error "Could not extract domain from response: $response"
         return 1
     fi
-    echo "$domain_obj"
+    log "$domain_obj"
 }
 
 # Checks if validation of a domain has succeeded
@@ -53,7 +53,7 @@ smtp2go_validate_domain() {
     local wait_sec=${2:-15}
     local response
     for _ in $(seq 1 "$wait_sec"); do
-        echo -n "Waiting for 5s for DNS records to propagate..."
+        log -n "Waiting for 5s for DNS records to propagate..."
         sleep 5
         if ! response=$(smtp2go_rest_call POST domain/verify "{\"domain\":\"$domain_name\"}"); then
             exit 1
@@ -64,10 +64,10 @@ smtp2go_validate_domain() {
         return_path=$(echo "$domain" | jq -r '.domain.rpath_verified')
         # link=$(echo "$domain" | jq -r '.trackers[0].cname_verified')
         if [ "$dkim" = "true" ] && [ "$return_path" = "true" ]; then
-            echo -e "\nDomain ${UPurple}$domain_name${COff} is fully verified"
+            log "\nDomain ${UPurple}$domain_name${COff} is fully verified"
             return 0
         fi
-        echo " domain has not been validated yet."
+        log " domain has not been validated yet."
     done
     log_error "Failed to verify $domain_name: $response"
     exit 1
@@ -79,13 +79,13 @@ smtp2go_validate_domain() {
 smtp2go_add_user() {
     local username=$1
     local password json_payload user response
-    password=$(tr -cd '[:alnum:]' </dev/urandom | fold -w 20 | head -n 1 | tr -d '\n')
+    password=$(generate_secret 20)
     json_payload=$(jq -n \
         --arg username "$username" \
         --arg password "$password" \
         --arg description "Email sender for self-hosted applications" \
         '{username: $username, email_password: $password, description: $description}')
-    echo -e "Creating user ${Purple}$username${COff} in SMTP2GO account" >&2
+    log "Creating user ${Purple}$username${COff} in SMTP2GO account"
     if ! response=$(smtp2go_rest_call POST users/smtp/add "$json_payload"); then
         return 1
     fi
@@ -142,7 +142,7 @@ configure_smtp_domain_records() {
 ###
 configure_smtp_domain() {
     if [ "$SMTP2GO_DOMAIN_VALIDATED" = "true" ]; then
-        echo "Domain has been previously verified."
+        log "Domain has been previously verified."
         if [ "$USE_DEFAULTS" = "true" ]; then return 0; fi
         local user_input=N
         if [ "$UNATTENDED" != "true" ]; then
@@ -169,9 +169,9 @@ configure_smtp_domain() {
     return_path=$(echo "$domain" | jq -r '.domain.rpath_verified')
     # link=$(echo "$domain" | jq -r '.trackers[0].cname_verified')
     if [ "$dkim" = "true" ] && [ "$return_path" = "true" ]; then
-        echo -e "Domain ${UPurple}$CF_DOMAIN_NAME${COff} is fully verified"
+        log "Domain ${UPurple}$CF_DOMAIN_NAME${COff} is fully verified"
     else
-        echo -e "Domain ${UPurple}$CF_DOMAIN_NAME${COff} is not fully verified"
+        log "Domain ${UPurple}$CF_DOMAIN_NAME${COff} is not fully verified"
         configure_smtp_domain_records "$domain"
         if [ $? -ne 0 ]; then
             return 1
@@ -191,7 +191,7 @@ configure_smtp_domain() {
 ###
 configure_smtp_user() {
     if [ -n "$SMTP_PASSWORD" ]; then
-        echo "SMTP2GO user appears to already be configured."
+        log "SMTP2GO user appears to already be configured."
         if [ "$USE_DEFAULTS" = "true" ]; then return 0; fi
         local user_input=N
         if [ "$UNATTENDED" != "true" ]; then
@@ -211,7 +211,7 @@ configure_smtp_user() {
     fi
     user=$(echo "$response" | jq -r --arg username "$username" '.data.results[] | select(.username == $username)')
     if [ -z "$user" ]; then
-        echo -e "User ${Purple}$username${COff} does not exist in SMTP2GO account. Creating user..."
+        log "User ${Purple}$username${COff} does not exist in SMTP2GO account. Creating user..."
         if ! user=$(smtp2go_add_user "$username"); then
             exit 1
         fi

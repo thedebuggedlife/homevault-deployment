@@ -1,0 +1,42 @@
+{
+  "name": "homevault-webui-backend",
+  "version": "1.0.0",
+  "description": "HomeVault Web UI Backend",
+  "main": "dist/app.js",
+  "scripts": {
+    "start": "node -r dotenv/config dist/app.js",
+    "dev": "ts-node-dev --respawn --transpile-only -r dotenv/config src/app.ts",
+    "build": "tsc && tsc-alias && cp askpass.sh package.json package-lock.json dist/ && mkdir -p ../dist/backend && cp -r dist/* ../dist/backend/",
+    "dist": "npm run build && cd ../dist/backend/ && npm install --omit=dev",
+    "clean": "rimraf dist ../dist/backend"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "child_process": "^1.0.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.1",
+    "express": "^4.18.2",
+    "express-validator": "^7.0.1",
+    "jsonwebtoken": "^9.0.2",
+    "lodash": "^4.17.21",
+    "nanoevents": "^9.1.0",
+    "socket.io": "^4.7.4",
+    "systeminformation": "^5.27.0",
+    "tmp-promise": "^3.0.3",
+    "tree-kill": "^1.2.2",
+    "uuid": "^11.1.0",
+    "winston": "^3.11.0"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/cors": "^2.8.18",
+    "@types/express": "^4.17.22",
+    "@types/jsonwebtoken": "^9.0.9",
+    "@types/lodash": "^4.17.17",
+    "@types/node": "^22.15.24",
+    "rimraf": "^5.0.5",
+    "ts-node-dev": "^2.0.0",
+    "tsc-alias": "^1.8.16",
+    "typescript": "^5.3.3"
+  }
+}
