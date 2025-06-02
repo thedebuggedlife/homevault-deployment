@@ -35,6 +35,7 @@ declare -g JSON_OUTPUT={}
 
 # WebUI configuration
 declare -g WEBUI_ACTION=
+declare -g WEBUI_SKIP_DEPLOY=false
 
 # Defaults to false, if set to true, docker and restic operations will be passed the --dry-run parameter
 # Can be set with the --dry-run command line option
@@ -735,7 +736,7 @@ webui_action_install() {
     webui_download || return 1
     webui_install_services || return 1
     local is_public=false
-    if compose_service_exists traefik; then
+    if [ "$WEBUI_SKIP_DEPLOY" != true ] && compose_service_exists traefik; then
         DEPLOY_SERVICES=traefik
         NO_DOWNLOAD=true
         OVERRIDE_COMPOSE=false
