@@ -24,7 +24,8 @@ import {
 } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
 import backend from "@/backend";
-import { BackupStatus } from "@/types/backup";
+import { BackupStatus } from "@backend/types/backup";
+import { formatBytes } from "@/utils/units";
 
 function formatRelativeTime(dateString: string): string {
     const date = new Date(dateString);
@@ -53,7 +54,7 @@ function formatCronExpression(cron: string): string {
 
 const BackupDashboard: React.FC = () => {
     const navigate = useNavigate();
-    const [status, setStatus] = useState<BackupStatus | null>(null);
+    const [status, setStatus] = useState<BackupStatus>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
 
@@ -226,7 +227,7 @@ const BackupDashboard: React.FC = () => {
                                 <Card variant="outlined">
                                     <CardContent>
                                         <Typography variant="h4" color="primary" align="center">
-                                            {status.totalSize || "0 GB"}
+                                            {formatBytes(status.totalSize)}
                                         </Typography>
                                         <Typography variant="body2" color="text.secondary" align="center">
                                             Total Size
@@ -296,7 +297,6 @@ const BackupDashboard: React.FC = () => {
                                 </Alert>
                                 <Button 
                                     variant="contained"
-                                    startIcon={<ScheduleIcon />}
                                     onClick={() => navigate("/backup/scheduling")}
                                 >
                                     Configure Schedule

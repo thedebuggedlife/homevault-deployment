@@ -38,6 +38,7 @@ print_usage() {
         log "\nUsage: $0 [global options] backup <action> [backup options]"
         log "\nBackup actions:\n"
         log "  init                         Initialize the backup configuration. Must be run once before creating a snapshot."
+        log "  info                         Show configuration and statistics about the repository."
         log "  run                          Create a new recovery snapshot."
         log "  schedule                     Configure (or disable) the schedule for background backup operations."
         log "\nBackup 'init' options:\n"
@@ -209,7 +210,7 @@ parse_deploy_option() {
 #                              BACKUP OPTIONS
 
 is_valid_backup_action() {
-    local -a valid_actions=("init" "run" "schedule")
+    local -a valid_actions=("init" "run" "schedule" "info")
     array_contains "$1" "${valid_actions[@]}" || return 1
 }
 

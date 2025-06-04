@@ -16,7 +16,7 @@ import {
     BackupSchedule,
     BackupConfig,
     BackupInitRequest,
-} from "@/types/backup";
+} from "@backend/types/backup";
 import axios, { AxiosRequestConfig } from "axios";
 import { createNanoEvents, EmitterMixin } from "nanoevents";
 import { io, Socket } from "socket.io-client";
@@ -143,22 +143,8 @@ class BackendServer implements EmitterMixin<BackendServerEvents> {
         return response.data;
     }
     async getBackupStatus(): Promise<BackupStatus> {
-        // TODO: Replace with actual API call
-        // const response = await this.client.get<BackupStatus>("/api/backup/status");
-        // return response.data;
-        
-        // Mock data for development
-        return {
-            initialized: true,
-            repositoryType: "s3",
-            repositoryLocation: "s3:s3.amazonaws.com/my-backup-bucket",
-            snapshotCount: 15,
-            lastBackupTime: new Date(Date.now() - 86400000).toISOString(), // 1 day ago
-            totalSize: "2.5 GB",
-            schedulingEnabled: true,
-            scheduleExpression: "0 2 * * *",
-            retentionPolicy: "7d4w12m",
-        };
+        const response = await this.client.get<BackupStatus>("/api/backup/status");
+        return response.data;
     }
     async getBackupConfig(): Promise<BackupConfig> {
         // TODO: Replace with actual API call

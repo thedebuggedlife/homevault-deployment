@@ -662,6 +662,12 @@ backup_action_schedule() {
     fi
 }
 
+backup_action_info() {
+    restic_print_env || return 1
+    restic_show_stats || return 1
+    backup_schedule_info || return 1
+}
+
 run_backup() {
     configure_docker
     find_installed_modules

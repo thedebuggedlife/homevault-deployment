@@ -842,6 +842,27 @@ merge_yaml_config() {
     }
 }
 
+json_snake_to_camel() {
+    local input=$1
+    local jq_recursive_snake_to_camel='
+def snake_to_camel:
+  split("_") 
+  | .[0] + (.[1:] | map((.[0:1] | ascii_upcase) + .[1:]) | join(""));
+
+def transform_keys:
+  if type == "object" then
+    with_entries(.key |= snake_to_camel | .value |= transform_keys)
+  elif type == "array" then
+    map(transform_keys)
+  else
+    .
+  end;
+
+transform_keys
+'
+    echo "$input" | jq -c "$jq_recursive_snake_to_camel"
+}
+
 ###
 # Checks if the specified packages are installed, if not it proceeds to install them
 #

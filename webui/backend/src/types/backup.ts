@@ -1,10 +1,13 @@
+export type RepositoryType = 'local' | 's3' | 'b2' | 'rest' | 'sftp' | 'azure' | 'gs' | 'unknown';
+  
 export interface BackupStatus {
     initialized: boolean;
-    repositoryType?: string;
+    repositoryType?: RepositoryType;
     repositoryLocation?: string;
     snapshotCount?: number;
     lastBackupTime?: string;
-    totalSize?: string;
+    totalSize?: number;
+    totalUncompressedSize?: number;
     schedulingEnabled?: boolean;
     scheduleExpression?: string;
     retentionPolicy?: string;
@@ -48,8 +51,6 @@ export interface BackupStatus {
         passwordSet?: boolean;
     };
   }
-  
-  export type RepositoryType = 'local' | 's3' | 'b2' | 'rest' | 'sftp' | 'azure' | 'gs';
   
   export interface RepositoryConfig {
     type: RepositoryType;

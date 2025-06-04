@@ -210,6 +210,9 @@ restic() {
     if [ -d "$RESTIC_REPOSITORY" ]; then
         cmd+=" -v '$RESTIC_REPOSITORY:/repo' "
     fi
+    if [ -d "${APPDATA_LOCATION%/}/backup/cache" ]; then
+        cmd+=" -v ${APPDATA_LOCATION%/}/backup/cache:/cache -e RESTIC_CACHE_DIR=/cache "
+    fi
     # The restic container
     cmd+="ghcr.io/restic/restic:$RESTIC_VERSION "
     # Pass the rest of the parameters to restic
@@ -242,6 +245,58 @@ restic_load_env() {
     log "Using restic environment: ${Cyan}$RESTIC_ENV${COff}"
     # shellcheck source=/dev/null
     source "$RESTIC_ENV"
+}
+
+restic_print_env() {
+    local env_file="${RESTIC_ENV:-${APPDATA_LOCATION%/}/backup/restic.env}"
+    local private_keys=("RESTIC_PASSWORD" "AWS_SECRET_ACCESS_KEY")
+
+    if [ ! -f "$env_file" ]; then
+        log_error "Restic configuration file is missing: '$env_file'"
+        return 1
+    fi
+
+    log_header "Repository Configuration"
+
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        # Skip empty lines and comments
+        if [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]]; then
+            continue
+        fi
+        
+        # Check if line matches KEY=VALUE pattern
+        if [[ "$line" =~ ^[[:space:]]*([^=]+)=(.*)$ ]]; then
+            local key="${BASH_REMATCH[1]}"
+            local value="${BASH_REMATCH[2]}"
+            
+            # Remove leading/trailing whitespace from key
+            key=$(echo "$key" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+            
+            # Check if key is in private_keys array
+            local is_private=false
+            for private_key in "${private_keys[@]}"; do
+                if [[ "$key" == "$private_key" ]]; then
+                    is_private=true
+                    break
+                fi
+            done
+            
+            # Prepare values for display and JSON
+            local display_value="$value"
+            
+            if [[ "$is_private" == true ]]; then
+                display_value="*******"
+            fi
+            
+            # Print to console
+            log "${key}=${display_value}"
+            
+            # Add to JSON_OUTPUT using jq
+            JSON_OUTPUT=$(echo "$JSON_OUTPUT" | jq --arg k "$key" --arg v "$value" '.backup.env[$k] = $v')
+        fi
+    done < "$env_file"
+
+    log
 }
 
 restic_init_env() {
@@ -375,6 +430,25 @@ restic_run_backup() {
 
     rm -rf "$RESTIC_CONFIG" > /dev/null 2>&1
     return $exit_code
+}
+
+restic_show_stats() {
+    local -a opts=()
+    if [ "$JSON_OUT" = true ]; then opts+=("--json"); fi
+
+    local output
+    output=$(
+        restic_load_env || return 1
+        restic stats --mode raw-data "${opts[@]}"
+    ) || return 1
+
+    if [ "$JSON_OUT" = true ]; then
+        output=$(json_snake_to_camel "$output")
+        JSON_OUTPUT=$(echo "$JSON_OUTPUT" | jq --argjson stats "$output" '.backup.stats = $stats')
+    else
+        log_header "Repository Statistics"
+        log "$output"
+    fi
 }
 
 restic_list_snapshots() {
@@ -542,6 +616,24 @@ backup_configure_retention() {
     else
         save_env BACKUP_ENABLE_FORGET true
         save_env BACKUP_RETENTION_POLICY "$BACKUP_RETENTION_POLICY_CHANGE"
+    fi
+}
+
+backup_schedule_info() {
+    log_header "Scheduled Backup Configuration"
+    log "Background backups:    $([ "$BACKUP_ENABLED" == true ] && echo "enabled" || echo "disabled")"
+    log "Backup schedule:       ${BACKUP_SCHEDULE:-"(Not set)"}"
+    log "Retention policy:      ${BACKUP_RETENTION_POLICY:-"(Not set)"}"
+
+    if [ "$JSON_OUT" = true ]; then
+        JSON_OUTPUT=$(echo "$JSON_OUTPUT" | jq -c \
+            --argjson enabled "$([ "$BACKUP_ENABLED" == true ] && echo "true" || echo "false")" \
+            --arg cron "$BACKUP_SCHEDULE" \
+            --arg retention "$BACKUP_RETENTION_POLICY" '
+            .backup.schedule.enabled=$enabled |
+            .backup.schedule.cron=$cron |
+            .backup.schedule.retention=$retention
+        ')
     fi
 }
 
