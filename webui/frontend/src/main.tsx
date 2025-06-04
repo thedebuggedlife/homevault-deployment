@@ -7,6 +7,10 @@ import Dashboard from "./pages/Dashboard";
 import Login from "./pages/Login";
 import Modules from "./pages/Modules";
 import Deployment from "./pages/Deployment";
+import BackupDashboard from "./pages/backup/Dashboard";
+import BackupRepository from "./pages/backup/Repository";
+import BackupSnapshots from "./pages/backup/Snapshots";
+import BackupScheduling from "./pages/backup/Scheduling";
 
 const router = createBrowserRouter([
     {
@@ -42,6 +46,39 @@ const router = createBrowserRouter([
                             hideNavigation: true,
                             fullPage: true,
                         },
+                    },
+                    {
+                        path: "backup",
+                        children: [
+                            {
+                                index: true,
+                                Component: BackupDashboard,
+                                handle: {
+                                    title: "Backup Overview",
+                                },
+                            },
+                            {
+                                path: "repository",
+                                Component: BackupRepository,
+                                handle: {
+                                    title: "Repository Configuration",
+                                },
+                            },
+                            {
+                                path: "snapshots",
+                                Component: BackupSnapshots,
+                                handle: {
+                                    title: "Snapshots",
+                                },
+                            },
+                            {
+                                path: "scheduling",
+                                Component: BackupScheduling,
+                                handle: {
+                                    title: "Backup Scheduling",
+                                },
+                            },
+                        ],
                     }
                 ],
             },

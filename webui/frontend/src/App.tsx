@@ -1,7 +1,11 @@
 import * as React from 'react';
 import { 
+  Bookmark as BookmarkIcon,
   Dashboard as DashboardIcon,
   Extension as ExtensionIcon,
+  Backup as BackupIcon,
+  Schedule as ScheduleIcon,
+  PhotoLibrary as PhotoLibraryIcon,
 } from '@mui/icons-material';
 import { AppProvider } from '@toolpad/core/AppProvider';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
@@ -24,6 +28,33 @@ const NAVIGATION: Navigation = [
     title: 'Modules',
     segment: 'modules',
     icon: <ExtensionIcon />,
+  },
+  {
+    title: 'Backup',
+    segment: 'backup',
+    icon: <BackupIcon />,
+    children: [
+      {
+        title: 'Overview',
+        segment: '',
+        icon: <DashboardIcon />,
+      },
+      {
+        title: 'Repository',
+        segment: 'repository',
+        icon: <BookmarkIcon />,
+      },
+      {
+        title: 'Snapshots',
+        segment: 'snapshots',
+        icon: <PhotoLibraryIcon />,
+      },
+      {
+        title: 'Scheduling',
+        segment: 'scheduling',
+        icon: <ScheduleIcon />,
+      },
+    ],
   },
 ];
 

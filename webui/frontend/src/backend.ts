@@ -10,6 +10,13 @@ import {
     LoginResponse,
     SystemStatusResponse,
 } from "@backend/types";
+import {
+    BackupStatus,
+    BackupSnapshot,
+    BackupSchedule,
+    BackupConfig,
+    BackupInitRequest,
+} from "@/types/backup";
 import axios, { AxiosRequestConfig } from "axios";
 import { createNanoEvents, EmitterMixin } from "nanoevents";
 import { io, Socket } from "socket.io-client";
@@ -134,6 +141,105 @@ class BackendServer implements EmitterMixin<BackendServerEvents> {
     async getDeploymentConfig(request: DeploymentRequest): Promise<DeploymentConfig> {
         const response = await this.client.post<DeploymentConfig>("/api/deployment/config", request);
         return response.data;
+    }
+    async getBackupStatus(): Promise<BackupStatus> {
+        // TODO: Replace with actual API call
+        // const response = await this.client.get<BackupStatus>("/api/backup/status");
+        // return response.data;
+        
+        // Mock data for development
+        return {
+            initialized: true,
+            repositoryType: "s3",
+            repositoryLocation: "s3:s3.amazonaws.com/my-backup-bucket",
+            snapshotCount: 15,
+            lastBackupTime: new Date(Date.now() - 86400000).toISOString(), // 1 day ago
+            totalSize: "2.5 GB",
+            schedulingEnabled: true,
+            scheduleExpression: "0 2 * * *",
+            retentionPolicy: "7d4w12m",
+        };
+    }
+    async getBackupConfig(): Promise<BackupConfig> {
+        // TODO: Replace with actual API call
+        // const response = await this.client.get<BackupConfig>("/api/backup/config");
+        // return response.data;
+        
+        // Mock data for development
+        return {
+            repository: "s3:s3.amazonaws.com/my-backup-bucket",
+            passwordSet: true,
+            s3: {
+                endpoint: "s3.amazonaws.com",
+                bucket: "my-backup-bucket",
+                path: "/",
+                accessKeySet: true,
+                secretKeySet: true,
+            }
+        };
+    }
+    async initBackupRepository(request: BackupInitRequest): Promise<void> {
+        // TODO: Replace with actual API call
+        // await this.client.post("/api/backup/init", request);
+        
+        console.log("Mock: Initializing backup repository", request);
+        return Promise.resolve();
+    }
+    async getBackupSnapshots(): Promise<BackupSnapshot[]> {
+        // TODO: Replace with actual API call
+        // const response = await this.client.get<BackupSnapshot[]>("/api/backup/snapshots");
+        // return response.data;
+        
+        // Mock data for development
+        const mockSnapshots: BackupSnapshot[] = [];
+        for (let i = 0; i < 15; i++) {
+            const daysAgo = i * 1;
+            const time = new Date(Date.now() - (daysAgo * 86400000));
+            mockSnapshots.push({
+                id: `snapshot-${i}`,
+                shortId: `snap${i}`,
+                time: time.toISOString(),
+                hostname: "homevault",
+                tags: ["homevault", "auto"],
+                paths: ["/data"],
+                size: `${(Math.random() * 500 + 100).toFixed(1)} MB`,
+            });
+        }
+        return mockSnapshots;
+    }
+    async deleteBackupSnapshot(id: string): Promise<void> {
+        // TODO: Replace with actual API call
+        // await this.client.delete(`/api/backup/snapshots/${id}`);
+        
+        console.log("Mock: Deleting snapshot", id);
+        return Promise.resolve();
+    }
+    async getBackupSchedule(): Promise<BackupSchedule> {
+        // TODO: Replace with actual API call
+        // const response = await this.client.get<BackupSchedule>("/api/backup/schedule");
+        // return response.data;
+        
+        // Mock data for development
+        return {
+            enabled: true,
+            cronExpression: "0 2 * * *",
+            retentionPolicy: "7d4w12m",
+        };
+    }
+    async updateBackupSchedule(schedule: BackupSchedule): Promise<void> {
+        // TODO: Replace with actual API call
+        // await this.client.post("/api/backup/schedule", schedule);
+        
+        console.log("Mock: Updating backup schedule", schedule);
+        return Promise.resolve();
+    }
+    async startBackup(): Promise<DeploymentOperation> {
+        // TODO: Replace with actual implementation
+        // This will need to connect to a backup-specific WebSocket endpoint
+        
+        console.log("Mock: Starting backup");
+        // For now, throw an error to indicate this is not implemented
+        throw new Error("Backup operation not yet implemented");
     }
     async startDeployment(request: DeploymentRequest): Promise<DeploymentOperation> {
         const socket = await this.connectDeployment();
