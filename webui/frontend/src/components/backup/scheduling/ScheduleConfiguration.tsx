@@ -1,4 +1,4 @@
-import { BackupSchedule } from "@/types/backup";
+import { BackupSchedule } from "@backend/types/backup";
 import { Alert, Card, CardContent, FormHelperText, Grid, TextField, Typography } from "@mui/material";
 import { useEffect, useState } from "react";
 import cronParser from "cron-parser";
@@ -16,7 +16,7 @@ export default function ScheduleConfiguration({ schedule, onChange, onValidation
 
     const handleChange = (value: string) => {
         onChange(value);
-    }
+    };
 
     useEffect(() => {
         try {
@@ -24,13 +24,12 @@ export default function ScheduleConfiguration({ schedule, onChange, onValidation
             setError(null);
             onValidation(true);
             setMeaning(cronstrue.toString(schedule.cronExpression));
-        }
-        catch (error) {
+        } catch (error) {
             setError(error.message ?? "Invalid cron expression");
             onValidation(false);
             setMeaning("");
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [schedule.cronExpression]);
 
     return (

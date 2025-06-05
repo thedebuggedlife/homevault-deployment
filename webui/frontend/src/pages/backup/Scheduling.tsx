@@ -12,16 +12,12 @@ import {
     Card,
     CardContent,
 } from "@mui/material";
-import {
-    Schedule as ScheduleIcon,
-    Save as SaveIcon,
-    Undo as UndoIcon,
-} from "@mui/icons-material";
+import { Schedule as ScheduleIcon, Save as SaveIcon, Undo as UndoIcon } from "@mui/icons-material";
 import backend from "@/backend";
-import { BackupSchedule } from "@/types/backup";
-import ScheduleConfiguration from "@/components/backup/ScheduleConfiguration";
+import { BackupSchedule } from "@backend/types/backup";
+import ScheduleConfiguration from "@/components/backup/scheduling/ScheduleConfiguration";
 import _ from "lodash";
-import RetentionPolicy from "@/components/backup/RetentionPolicy";
+import RetentionPolicy from "@/components/backup/scheduling/RetentionPolicy";
 
 const BackupScheduling: React.FC = () => {
     const [schedule, setSchedule] = useState<BackupSchedule>({
@@ -87,32 +83,32 @@ const BackupScheduling: React.FC = () => {
     };
 
     const handleScheduleChange = (cronExpression: string) => {
-        setSchedule(prev => ({
+        setSchedule((prev) => ({
             ...prev,
             cronExpression,
         }));
-    }
+    };
 
     const handleScheduleValidation = (cronExpression: boolean) => {
-        setValidation(prev => ({
+        setValidation((prev) => ({
             ...prev,
             cronExpression,
         }));
-    }
+    };
 
     const handleRetentionChange = (retentionPolicy: string) => {
-        setSchedule(prev => ({
+        setSchedule((prev) => ({
             ...prev,
             retentionPolicy,
         }));
-    }
+    };
 
     const handleRetentionValidation = (retentionPolicy: boolean) => {
-        setValidation(prev => ({
+        setValidation((prev) => ({
             ...prev,
             retentionPolicy,
         }));
-    }
+    };
 
     const handleEnabledChange = (enabled: boolean) => {
         setSchedule((prev) => ({
@@ -143,18 +139,11 @@ const BackupScheduling: React.FC = () => {
                 <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
                     <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                         <ScheduleIcon color="primary" />
-                        <Typography variant="h5">
-                            Backup Scheduling
-                        </Typography>
+                        <Typography variant="h5">Backup Scheduling</Typography>
                     </Box>
                     <Box sx={{ display: "flex", gap: 1 }}>
                         {hasChanges && (
-                            <Button
-                                variant="outlined"
-                                startIcon={<UndoIcon />}
-                                onClick={handleReset}
-                                disabled={saving}
-                            >
+                            <Button variant="outlined" startIcon={<UndoIcon />} onClick={handleReset} disabled={saving}>
                                 Reset
                             </Button>
                         )}
@@ -182,9 +171,7 @@ const BackupScheduling: React.FC = () => {
                             }
                             label={
                                 <Box>
-                                    <Typography variant="body1">
-                                        Enable Automatic Backups
-                                    </Typography>
+                                    <Typography variant="body1">Enable Automatic Backups</Typography>
                                     <Typography variant="body2" color="text.secondary">
                                         When enabled, backups will run automatically according to the schedule
                                     </Typography>
@@ -195,10 +182,18 @@ const BackupScheduling: React.FC = () => {
                 </Card>
 
                 {/* Schedule Configuration */}
-                <ScheduleConfiguration schedule={schedule} onChange={handleScheduleChange} onValidation={handleScheduleValidation} />
+                <ScheduleConfiguration
+                    schedule={schedule}
+                    onChange={handleScheduleChange}
+                    onValidation={handleScheduleValidation}
+                />
 
                 {/* Retention Policy */}
-                <RetentionPolicy schedule={schedule} onChange={handleRetentionChange} onValidation={handleRetentionValidation} />
+                <RetentionPolicy
+                    schedule={schedule}
+                    onChange={handleRetentionChange}
+                    onValidation={handleRetentionValidation}
+                />
             </Paper>
         </Container>
     );
