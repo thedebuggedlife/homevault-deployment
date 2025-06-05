@@ -39,17 +39,6 @@ export interface BackupStatus {
         accessKeySet?: boolean;
         secretKeySet?: boolean;
     };
-    b2?: {
-        bucket?: string;
-        path?: string;
-        accountIdSet?: boolean;
-        accountKeySet?: boolean;
-    };
-    rest?: {
-        url?: string;
-        usernameSet?: boolean;
-        passwordSet?: boolean;
-    };
   }
   
   export interface RepositoryConfig {

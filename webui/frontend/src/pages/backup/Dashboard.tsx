@@ -1,34 +1,16 @@
-import React, { useEffect, useState } from "react";
-import { Container, Grid, Paper, Typography, Box, CircularProgress, Alert, Button } from "@mui/material";
-import { Error as ErrorIcon, Storage as StorageIcon, PlayArrow as PlayArrowIcon } from "@mui/icons-material";
+import React, { useContext } from "react";
+import { Container, Grid, Paper, Typography, Box, CircularProgress, Alert, Button, IconButton } from "@mui/material";
+import { Cached as CachedIcon, Error as ErrorIcon, Storage as StorageIcon, PlayArrow as PlayArrowIcon } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
 import backend from "@/backend";
-import { BackupStatus } from "@backend/types/backup";
 import StatusOverview from "@/components/backup/dashboard/StatusOverview";
 import BackupStatistics from "@/components/backup/dashboard/BackupStatistics";
 import ScheduleStatus from "@/components/backup/dashboard/ScheduleStatus";
+import { BackupContext } from "@/contexts/BackupContext";
 
 const BackupDashboard: React.FC = () => {
+    const { status, loading, error, reload } = useContext(BackupContext);
     const navigate = useNavigate();
-    const [status, setStatus] = useState<BackupStatus>(null);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState("");
-
-    useEffect(() => {
-        fetchBackupStatus();
-    }, []);
-
-    const fetchBackupStatus = async () => {
-        try {
-            const response = await backend.getBackupStatus();
-            setStatus(response);
-            setError("");
-        } catch (err) {
-            setError("Failed to load backup status");
-        } finally {
-            setLoading(false);
-        }
-    };
 
     const handleRunBackup = async () => {
         try {
@@ -53,6 +35,9 @@ const BackupDashboard: React.FC = () => {
         return (
             <Alert severity="error" sx={{ mt: 2 }}>
                 {error}
+                <Button onClick={reload} sx={{ ml: 2 }}>
+                    Retry
+                </Button>
             </Alert>
         );
     }
@@ -95,6 +80,12 @@ const BackupDashboard: React.FC = () => {
                         >
                             Run Backup Now
                         </Button>
+                        <IconButton
+                            onClick={reload}
+                            color="primary"
+                        >
+                            <CachedIcon />
+                        </IconButton>
                     </Box>
                 </Grid>
 
