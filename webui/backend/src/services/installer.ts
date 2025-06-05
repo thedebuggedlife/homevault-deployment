@@ -7,12 +7,17 @@ import { ServiceError } from "@/errors";
 import { v4 as uuid } from "uuid";
 import { file } from "tmp-promise";
 import * as fs from "fs/promises";
-import { BackupStatus, RepositoryType } from "@/types/backup";
+import { BackupSnapshot, BackupStatus, RepositoryType } from "@/types/backup";
 import _ from "lodash";
 
 export const INSTALLER_PATH = process.env.INSTALLER_PATH ?? "~/homevault/workspace";
 
 interface SnapshotOutput {
+    id: string;
+    shortId: string;
+    hostname: string;
+    username: string;
+    paths: string[];
     time: string;
     tags: string[],
     summary: {
@@ -207,9 +212,31 @@ class InstallerService {
         return instance;
     }
 
+    async listSnapshots(snapshotId?: string): Promise<BackupSnapshot[]> {
+        try {
+            const args = ["snapshots", "list"]
+            if (snapshotId) {
+                args.push(snapshotId);
+            }
+            const result = await this.executeCommand(args);
+            return result?.backup?.snapshots?.map(snapshot => ({
+                id: snapshot.id,
+                shortId: snapshot.shortId,
+                time: snapshot.time,
+                hostname: snapshot.hostname,
+                tags: snapshot.tags,
+                totalSize: snapshot.summary.totalBytesProcessed,
+            })) ?? [];
+        }
+        catch (error) {
+            this.logger.warn("Failed to enumerate snapshots");
+            return [];
+        }
+    }
+
     async getBackupStatus(): Promise<BackupStatus> {
         try {
-            const { backup } = (await this.executeCommand(["backup info"])) || {};
+            const { backup } = (await this.executeCommand(["backup", "info"])) || {};
             if (!backup) {
                 this.logger.warn("Empty restic object returned - assuming system is uninitialized");
                 return { initialized: false };

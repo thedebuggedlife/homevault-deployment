@@ -1,6 +1,7 @@
 import { Paper, Typography, Box, Chip, Divider } from "@mui/material";
 import { Backup as BackupIcon, CheckCircle as CheckCircleIcon } from "@mui/icons-material";
 import { BackupStatus } from "@backend/types/backup";
+import humanizeDuration from "humanize-duration";
 
 interface BackupStatusOverviewProps {
     status: BackupStatus;
@@ -10,17 +11,7 @@ function formatRelativeTime(dateString: string): string {
     const date = new Date(dateString);
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-
-    if (diffHours < 1) {
-        const diffMinutes = Math.floor(diffMs / (1000 * 60));
-        return `${diffMinutes} minutes ago`;
-    } else if (diffHours < 24) {
-        return `${diffHours} hours ago`;
-    } else {
-        const diffDays = Math.floor(diffHours / 24);
-        return `${diffDays} days ago`;
-    }
+    return humanizeDuration(diffMs, { largest: 2, round: true });
 }
 
 export default function StatusOverview({ status }: BackupStatusOverviewProps) {
@@ -72,7 +63,7 @@ export default function StatusOverview({ status }: BackupStatusOverviewProps) {
                         Last Backup
                     </Typography>
                     <Typography variant="body1">
-                        {status.lastBackupTime ? formatRelativeTime(status.lastBackupTime) : "Never"}
+                        {status.lastBackupTime ? formatRelativeTime(status.lastBackupTime) + " ago" : "Never"}
                     </Typography>
                 </Box>
             </Box>

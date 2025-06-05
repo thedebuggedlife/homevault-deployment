@@ -27,7 +27,8 @@ import {
     Refresh as RefreshIcon,
 } from "@mui/icons-material";
 import backend from "@/backend";
-import { BackupSnapshot } from "@/types/backup";
+import { BackupSnapshot } from "@backend/types/backup";
+import { formatBytes } from "@/utils/units";
 
 const BackupSnapshots: React.FC = () => {
     const [snapshots, setSnapshots] = useState<BackupSnapshot[]>([]);
@@ -162,7 +163,7 @@ const BackupSnapshots: React.FC = () => {
                                                 ))}
                                             </Box>
                                         </TableCell>
-                                        <TableCell>{snapshot.size}</TableCell>
+                                        <TableCell>{formatBytes(snapshot.totalSize)}</TableCell>
                                         <TableCell align="right">
                                             <IconButton
                                                 color="error"

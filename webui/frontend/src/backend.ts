@@ -187,8 +187,7 @@ class BackendServer implements EmitterMixin<BackendServerEvents> {
                 time: time.toISOString(),
                 hostname: "homevault",
                 tags: ["homevault", "auto"],
-                paths: ["/data"],
-                size: `${(Math.random() * 500 + 100).toFixed(1)} MB`,
+                totalSize: (Math.random() * 500000000 + 100),
             });
         }
         return mockSnapshots;

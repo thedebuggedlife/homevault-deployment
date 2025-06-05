@@ -11,6 +11,7 @@ export function useBackupStatus() {
 
     const loadConfig = useCallback(async () => {
         setLoading(true);
+        setError(null);
         try {
             setStatus(await backend.getBackupStatus());
         } catch (error) {

@@ -452,19 +452,33 @@ restic_show_stats() {
 }
 
 restic_list_snapshots() {
+    local output
     # Using a subshell to isolate code with access to restic ENV values
-    (
+    output=$(
         restic_load_env || return 1
 
+        local -a opts=()
+        local output
+
+        if [ -n "$SNAPSHOT_ID" ]; then opts+=("$SNAPSHOT_ID"); fi
+        if [ "$JSON_OUT" = true ]; then opts+=("--json"); fi
+
         log "Listing snapshots in repository: ${Cyan}${RESTIC_REPOSITORY}${COff}\n"
-        restic snapshots \
+        restic snapshots "${opts[@]}" \
             --tag "$COMPOSE_PROJECT_NAME" || {
                 log_error "Snapshots operation failed"
                 return 1
             }
-
-        log
     ) || return 1
+
+    if [ "$JSON_OUT" = true ]; then
+        output=$(json_snake_to_camel "$output")
+        JSON_OUTPUT=$(echo "$JSON_OUTPUT" | jq -c --argjson snapshots "$output" '.backup.snapshots = $snapshots')
+    else
+        log "$output"
+        log
+    fi
+
 }
 
 restic_browse_snapshot() {

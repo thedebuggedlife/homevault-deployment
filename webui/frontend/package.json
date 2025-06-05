@@ -22,6 +22,7 @@
     "axios": "^1.6.7",
     "cron-parser": "^5.2.0",
     "cronstrue": "^2.61.0",
+    "humanize-duration": "^3.32.2",
     "lodash": "^4.17.21",
     "nanoevents": "^9.1.0",
     "react": "^18.2.0",
@@ -31,6 +32,7 @@
     "socket.io-client": "^4.7.4"
   },
   "devDependencies": {
+    "@types/humanize-duration": "^3.27.4",
     "@types/react": "^18.2.43",
     "@types/react-dom": "^18.2.17",
     "@typescript-eslint/eslint-plugin": "^6.14.0",

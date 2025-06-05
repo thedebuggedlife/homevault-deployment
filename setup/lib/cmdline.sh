@@ -73,7 +73,8 @@ print_usage() {
     elif [ "$SELECTED_ACTION" = "snapshots" ]; then
         log "\nUsage: $0 [global options] snapshots <action> [snapshot options]"
         log "\Snapshot actions:\n"
-        log "  list                         Show a list of snapshots that have been taken."
+        log "  list [snapshot_id]           Show a list of snapshots that have been taken."
+        log "                               You can specify single snapshot ID to filter output (optional)."
         log "  browse <snapshot_id> [dir]   Show the contents of a snapshot. Optionally, only files under [dir]."
         log "  forget <snapshot_id>         Configure (or disable) the schedule for background backup operations."
         log "\nSnapshot 'browse' options:\n"
@@ -356,6 +357,15 @@ parse_snapshots_option() {
             SNAPSHOT_ACTION="$action"
             ## Check for required options
             case "$action" in
+                list)
+                    if [[ -n "$2" && "$2" != -* ]]; then
+                        SNAPSHOT_ID="$2"
+                        return 2
+                    else
+                        SNAPSHOT_ID=
+                        return 1
+                    fi
+                    ;;
                 browse)
                     if [[ -n "$2" && "$2" != -* ]]; then
                         SNAPSHOT_ID="$2"
