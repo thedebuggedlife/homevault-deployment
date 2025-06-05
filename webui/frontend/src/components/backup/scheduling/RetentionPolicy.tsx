@@ -1,74 +1,33 @@
 import { BackupSchedule } from "@backend/types/backup";
 import { Card, CardContent, Typography, TextField, FormHelperText, Box } from "@mui/material";
 import { useEffect, useState } from "react";
+import { validateRetentionPolicy, formatRetentionPolicy } from "@/utils/retentionPolicy";
 
 interface RetentionPolicyProps {
-    schedule: BackupSchedule;
-    onChange: (retentionPolicy: string) => void;
+    schedule: BackupSchedule,
+    onChange: (retentionPolicy: string) => void,
     onValidation: (isValid: boolean) => void;
 }
 
-export default function RetentionPolicy({ schedule, onChange, onValidation }: RetentionPolicyProps) {
-    const [error, setError] = useState<string>(null);
-
-    const validateRetentionPolicy = (policy: string): string | undefined => {
-        if (!policy.trim()) {
-            return "Retention policy is required";
-        }
-
-        if (policy.toLowerCase() === "all") {
-            return undefined; // "all" is valid
-        }
-
-        // Check format: should match pattern like 7d, 4w, 12m, 5y
-        const pattern = /^(\d+[hdwmy])+$/i;
-        if (!pattern.test(policy)) {
-            return "Invalid format. Use combinations of #h, #d, #w, #m, #y (e.g., 7d4w12m) or 'all'";
-        }
-
-        return undefined;
-    };
-
-    const formatRetentionPreview = (policy: string): string => {
-        // Parse the retention policy
-        const parts = policy.match(/(\d+[hdwmy])/g);
-        if (!parts) return "Keep all snapshots";
-
-        const descriptions: string[] = [];
-        parts.forEach((part) => {
-            const num = parseInt(part);
-            const unit = part[part.length - 1];
-            switch (unit) {
-                case "h":
-                    descriptions.push(`${num} hourly`);
-                    break;
-                case "d":
-                    descriptions.push(`${num} daily`);
-                    break;
-                case "w":
-                    descriptions.push(`${num} weekly`);
-                    break;
-                case "m":
-                    descriptions.push(`${num} monthly`);
-                    break;
-                case "y":
-                    descriptions.push(`${num} yearly`);
-                    break;
-            }
-        });
-
-        return `Keep ${descriptions.join(", ")} snapshots`;
-    };
+export default function RetentionPolicy({schedule, onChange, onValidation}: RetentionPolicyProps) {
+    const [error, setError] = useState<string | null>(null);
+    const [preview, setPreview] = useState<string>("");
 
     const handleChange = (value: string) => {
         onChange(value);
-    };
+    }
 
     useEffect(() => {
-        const error = validateRetentionPolicy(schedule.retentionPolicy);
-        setError(error);
-        onValidation(!error);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        const validationError = validateRetentionPolicy(schedule.retentionPolicy);
+        setError(validationError ?? null);
+        onValidation(!validationError);
+        
+        if (!validationError) {
+            setPreview(formatRetentionPolicy(schedule.retentionPolicy));
+        } else {
+            setPreview("");
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [schedule.retentionPolicy]);
 
     return (
@@ -77,7 +36,7 @@ export default function RetentionPolicy({ schedule, onChange, onValidation }: Re
                 <Typography variant="h6" gutterBottom>
                     Retention Policy
                 </Typography>
-
+                
                 <TextField
                     label="Retention Policy"
                     value={schedule.retentionPolicy}
@@ -85,29 +44,43 @@ export default function RetentionPolicy({ schedule, onChange, onValidation }: Re
                     fullWidth
                     disabled={!schedule.enabled}
                     error={!!error}
-                    helperText={error || formatRetentionPreview(schedule.retentionPolicy)}
+                    helperText={error || preview}
                 />
                 {!error && (
                     <FormHelperText>
-                        Format: [#h][#d][#w][#m][#y] where h=hourly, d=daily, w=weekly, m=monthly, y=yearly. Example:
-                        "7d4w12m" keeps 7 daily, 4 weekly, and 12 monthly snapshots. Use "all" to keep all snapshots.
+                        Format: [#h][#H][#d][#D][#w][#W][#m][#M][#y][#Y] where:
+                        <br />
+                        • Lowercase (h,d,w,m,y) = keep only the most recent snapshot for that period
+                        <br />
+                        • Uppercase (H,D,W,M,Y) = keep all snapshots for that period
+                        <br />
+                        • Use "all" to keep all snapshots indefinitely
                     </FormHelperText>
                 )}
 
-                <Box sx={{ mt: 2 }}>
-                    <Typography variant="body2" color="text.secondary">
+                <Box sx={{ mt: 3 }}>
+                    <Typography variant="body2" color="text.secondary" gutterBottom>
                         <strong>Common policies:</strong>
                     </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                        • "7d4w12m" - Good for most use cases
-                        <br />
-                        • "30d" - Keep daily snapshots for a month
-                        <br />
-                        • "7d4w12m5y" - Long-term retention with yearly snapshots
-                        <br />• "all" - Never delete any snapshots
+                    <Typography variant="body2" color="text.secondary" component="div">
+                        • <strong>7D4W12M10Y</strong> - Default policy, good for most use cases<br />
+                        <span style={{ marginLeft: '1.5em', fontSize: '0.875em' }}>
+                            (Keep all daily snapshots for 7 days, all weekly for 4 weeks, all monthly for 12 months, all yearly for 10 years)
+                        </span><br />
+                        
+                        • <strong>24H7D</strong> - Keep all hourly snapshots for the past day and all daily snapshots for the past week<br />
+                        
+                        • <strong>7d</strong> - Keep only the most recent daily snapshot for the last 7 days<br />
+                        
+                        • <strong>7d4w12m</strong> - Keep the most recent daily, weekly, and monthly snapshots<br />
+                        <span style={{ marginLeft: '1.5em', fontSize: '0.875em' }}>
+                            (Most recent daily for 7 days, most recent weekly for 4 weeks, most recent monthly for 12 months)
+                        </span><br />
+                        
+                        • <strong>all</strong> - Never delete any snapshots
                     </Typography>
                 </Box>
             </CardContent>
         </Card>
-    );
+    )
 }
