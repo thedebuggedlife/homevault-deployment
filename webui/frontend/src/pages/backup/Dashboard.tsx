@@ -106,9 +106,7 @@ const BackupDashboard: React.FC = () => {
                 {/* Scheduling Status */}
                 <Grid size={{ xs: 12 }}>
                     <ScheduleStatus
-                        schedulingEnabled={status.schedulingEnabled || false}
-                        scheduleExpression={status.scheduleExpression}
-                        retentionPolicy={status.retentionPolicy}
+                        schedule={status.schedule}
                         onConfigureSchedule={() => navigate("/backup/scheduling")}
                     />
                 </Grid>

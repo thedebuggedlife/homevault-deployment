@@ -30,5 +30,5 @@ export function useBackupStatus() {
         }
     }, [loadConfig, session]);
 
-    return { status, loading, error, reload: loadConfig };
+    return { status, setStatus, loading, error, reload: loadConfig };
 }

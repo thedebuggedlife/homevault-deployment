@@ -3,30 +3,31 @@ import { Paper, Typography, Box, Button, Chip, Alert } from "@mui/material";
 import { Schedule as ScheduleIcon } from "@mui/icons-material";
 import cronParser from "cron-parser";
 import cronstrue from "cronstrue";
+import { BackupSchedule } from "@backend/types/backup";
 
 interface BackupScheduleStatusProps {
-    schedulingEnabled: boolean;
-    scheduleExpression?: string;
-    retentionPolicy?: string;
+    schedule?: BackupSchedule,
     onConfigureSchedule: () => void;
 }
 
 export default function ScheduleStatus({
-    schedulingEnabled,
-    scheduleExpression,
-    retentionPolicy,
+    schedule,
     onConfigureSchedule,
 }: BackupScheduleStatusProps) {
     const [meaning, setMeaning] = useState<string>();
 
     useEffect(() => {
+        if (!schedule?.enabled) {
+            setMeaning("");
+            return;
+        }
         try {
-            cronParser.parse(scheduleExpression);
-            setMeaning(cronstrue.toString(scheduleExpression));
+            cronParser.parse(schedule.cronExpression);
+            setMeaning(cronstrue.toString(schedule.cronExpression));
         } catch (error) {
             setMeaning("");
         }
-    }, [scheduleExpression]);
+    }, [schedule]);
     return (
         <Paper sx={{ p: 3 }}>
             <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
@@ -34,17 +35,17 @@ export default function ScheduleStatus({
                 <Typography variant="h6">Backup Schedule</Typography>
             </Box>
 
-            {schedulingEnabled ? (
+            {schedule?.enabled ? (
                 <Box>
                     <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
                         <Chip label="Enabled" color="success" size="small" />
                         <Typography variant="body1">{meaning}</Typography>
                     </Box>
 
-                    {retentionPolicy && (
+                    {schedule.retentionPolicy && (
                         <Box>
                             <Typography variant="body2" color="text.secondary">
-                                Retention Policy: <strong>{retentionPolicy}</strong>
+                                Retention Policy: <strong>{schedule.retentionPolicy}</strong>
                             </Typography>
                         </Box>
                     )}

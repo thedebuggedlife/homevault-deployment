@@ -239,10 +239,12 @@ class InstallerService {
                 snapshotCount: backup.stats.snapshotsCount,
                 totalSize: backup.stats.totalSize,
                 totalUncompressedSize: backup.stats.totalUncompressedSize,
-                schedulingEnabled: backup.schedule?.enabled ?? false,
-                scheduleExpression: backup.schedule?.cron,
-                retentionPolicy: backup.schedule?.retention,
                 lastBackupTime: backup.stats.lastSnapshotTime,
+                schedule: {
+                    enabled: backup.schedule?.enabled ?? false,
+                    cronExpression: backup.schedule?.cron,
+                    retentionPolicy: backup.schedule?.retention,
+                },
             }
         } catch (error) {
             this.logger.warn("Could not get backup information - assuming system is uninitialized");

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useContext, useEffect, useState } from "react";
 import {
     Container,
     Paper,
@@ -11,15 +11,23 @@ import {
     FormControlLabel,
     Card,
     CardContent,
+    IconButton,
 } from "@mui/material";
-import { Schedule as ScheduleIcon, Save as SaveIcon, Undo as UndoIcon } from "@mui/icons-material";
+import {
+    Cached as CachedIcon,
+    Schedule as ScheduleIcon,
+    Save as SaveIcon,
+    Undo as UndoIcon,
+} from "@mui/icons-material";
 import backend from "@/backend";
 import { BackupSchedule } from "@backend/types/backup";
 import ScheduleConfiguration from "@/components/backup/scheduling/ScheduleConfiguration";
 import _ from "lodash";
 import RetentionPolicy from "@/components/backup/scheduling/RetentionPolicy";
+import { BackupContext } from "@/contexts/BackupContext";
 
 const BackupScheduling: React.FC = () => {
+    const { status, loading, error, setStatus, reload } = useContext(BackupContext);
     const [schedule, setSchedule] = useState<BackupSchedule>({
         enabled: false,
         cronExpression: "0 2 * * *",
@@ -30,9 +38,8 @@ const BackupScheduling: React.FC = () => {
         cronExpression: "0 2 * * *",
         retentionPolicy: "7d4w12m",
     });
-    const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    const [error, setError] = useState("");
+    const [saveError, setSaveError] = useState<string>();
     const [validation, setValidation] = useState({
         cronExpression: false,
         retentionPolicy: false,
@@ -42,43 +49,34 @@ const BackupScheduling: React.FC = () => {
     const hasChanges = JSON.stringify(schedule) !== JSON.stringify(originalSchedule);
     const hasErrors = !_.every(_.values(validation));
 
-    console.log("Current", schedule);
-    console.log("Original", originalSchedule);
-    console.log("Has errors", hasErrors);
-
     useEffect(() => {
-        fetchSchedule();
-    }, []);
+        setSaveError(null);
+        setSchedule(status?.schedule);
+        setOriginalSchedule(status?.schedule);
+    }, [status?.schedule]);
 
-    const fetchSchedule = async () => {
+    const handleSave = useCallback(async () => {
         try {
-            const response = await backend.getBackupSchedule();
-            setSchedule(response);
-            setOriginalSchedule(response); // Save the original state
-            setError("");
-        } catch (err) {
-            setError("Failed to load schedule configuration");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleSave = async () => {
-        try {
+            setSaveError(null);
             setSaving(true);
             await backend.updateBackupSchedule(schedule);
-            setOriginalSchedule(schedule); // Update the original state after successful save
-            alert("Schedule updated successfully!");
-        } catch (err) {
-            console.error("Failed to save schedule:", err);
-            alert("Failed to save schedule configuration");
+            setOriginalSchedule(schedule);
+            setStatus({ ...status, schedule });
+        } catch (error) {
+            console.error("Failed to save schedule:", error);
+            let message = "Failed to save schedule configuration";
+            if (error.message) {
+                message += " " + error.message;
+            }
+            setSaveError(message);
         } finally {
             setSaving(false);
         }
-    };
+    }, [schedule, setStatus, status]);
 
     const handleReset = () => {
         // Reset to original values
+        setSaveError(null);
         setSchedule(originalSchedule);
     };
 
@@ -129,12 +127,20 @@ const BackupScheduling: React.FC = () => {
         return (
             <Alert severity="error" sx={{ mt: 2 }}>
                 {error}
+                <Button onClick={reload} sx={{ ml: 2 }}>
+                    Retry
+                </Button>
             </Alert>
         );
     }
 
     return (
         <Container maxWidth="md">
+            {saveError && (
+                <Alert severity="error" sx={{ mb: 3 }}>
+                    {saveError}
+                </Alert>
+            )}
             <Paper sx={{ p: 3 }}>
                 <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
                     <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
@@ -142,6 +148,11 @@ const BackupScheduling: React.FC = () => {
                         <Typography variant="h5">Backup Scheduling</Typography>
                     </Box>
                     <Box sx={{ display: "flex", gap: 1 }}>
+                        {!hasChanges && (
+                            <IconButton onClick={reload} color="primary">
+                                <CachedIcon />
+                            </IconButton>
+                        )}
                         {hasChanges && (
                             <Button variant="outlined" startIcon={<UndoIcon />} onClick={handleReset} disabled={saving}>
                                 Reset
@@ -164,7 +175,7 @@ const BackupScheduling: React.FC = () => {
                         <FormControlLabel
                             control={
                                 <Switch
-                                    checked={schedule.enabled}
+                                    checked={schedule?.enabled}
                                     onChange={(e) => handleEnabledChange(e.target.checked)}
                                     color="primary"
                                 />

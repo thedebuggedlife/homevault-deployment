@@ -8,9 +8,7 @@ export interface BackupStatus {
     lastBackupTime?: string;
     totalSize?: number;
     totalUncompressedSize?: number;
-    schedulingEnabled?: boolean;
-    scheduleExpression?: string;
-    retentionPolicy?: string;
+    schedule?: BackupSchedule;
   }
   
   export interface BackupSnapshot {
@@ -25,8 +23,8 @@ export interface BackupStatus {
   
   export interface BackupSchedule {
     enabled: boolean;
-    cronExpression: string;
-    retentionPolicy: string;
+    cronExpression?: string;
+    retentionPolicy?: string;
   }
   
   export interface BackupConfig {
