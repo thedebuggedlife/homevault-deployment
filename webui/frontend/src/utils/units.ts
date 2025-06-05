@@ -7,3 +7,8 @@ export function formatBytes(bytes: number, decimals = 1) {
 
     return parseFloat((bytes / Math.pow(k, i)).toFixed(decimals)) + " " + sizes[i];
 }
+
+export function formatDate(dateString: string) {
+    const date = new Date(dateString);
+    return date.toLocaleString();
+}

@@ -172,25 +172,8 @@ class BackendServer implements EmitterMixin<BackendServerEvents> {
         return Promise.resolve();
     }
     async getBackupSnapshots(): Promise<BackupSnapshot[]> {
-        // TODO: Replace with actual API call
-        // const response = await this.client.get<BackupSnapshot[]>("/api/backup/snapshots");
-        // return response.data;
-        
-        // Mock data for development
-        const mockSnapshots: BackupSnapshot[] = [];
-        for (let i = 0; i < 15; i++) {
-            const daysAgo = i * 1;
-            const time = new Date(Date.now() - (daysAgo * 86400000));
-            mockSnapshots.push({
-                id: `snapshot-${i}`,
-                shortId: `snap${i}`,
-                time: time.toISOString(),
-                hostname: "homevault",
-                tags: ["homevault", "auto"],
-                totalSize: (Math.random() * 500000000 + 100),
-            });
-        }
-        return mockSnapshots;
+        const response = await this.client.get<BackupSnapshot[]>("/api/backup/snapshots");
+        return response.data;
     }
     async deleteBackupSnapshot(id: string): Promise<void> {
         // TODO: Replace with actual API call

@@ -13,8 +13,6 @@ import {
     TableContainer,
     TableHead,
     TableRow,
-    IconButton,
-    Chip,
     Dialog,
     DialogTitle,
     DialogContent,
@@ -22,13 +20,12 @@ import {
     DialogActions,
 } from "@mui/material";
 import {
-    Delete as DeleteIcon,
     PhotoLibrary as PhotoLibraryIcon,
     Refresh as RefreshIcon,
 } from "@mui/icons-material";
 import backend from "@/backend";
 import { BackupSnapshot } from "@backend/types/backup";
-import { formatBytes } from "@/utils/units";
+import SnapshotRow from "@/components/backup/snapshots/SnapshotRow";
 
 const BackupSnapshots: React.FC = () => {
     const [snapshots, setSnapshots] = useState<BackupSnapshot[]>([]);
@@ -83,11 +80,6 @@ const BackupSnapshots: React.FC = () => {
         setSelectedSnapshot(null);
     };
 
-    const formatDate = (dateString: string): string => {
-        const date = new Date(dateString);
-        return date.toLocaleString();
-    };
-
     if (loading && snapshots.length === 0) {
         return (
             <Box display="flex" justifyContent="center" alignItems="center" minHeight="60vh">
@@ -100,6 +92,9 @@ const BackupSnapshots: React.FC = () => {
         return (
             <Alert severity="error" sx={{ mt: 2 }}>
                 {error}
+                <Button onClick={fetchSnapshots} sx={{ ml: 2 }}>
+                    Retry
+                </Button>
             </Alert>
         );
     }
@@ -143,37 +138,7 @@ const BackupSnapshots: React.FC = () => {
                             </TableHead>
                             <TableBody>
                                 {snapshots.map((snapshot) => (
-                                    <TableRow key={snapshot.id}>
-                                        <TableCell>
-                                            <Typography variant="body2" sx={{ fontFamily: "monospace" }}>
-                                                {snapshot.shortId || snapshot.id}
-                                            </Typography>
-                                        </TableCell>
-                                        <TableCell>{formatDate(snapshot.time)}</TableCell>
-                                        <TableCell>{snapshot.hostname}</TableCell>
-                                        <TableCell>
-                                            <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap" }}>
-                                                {snapshot.tags.map((tag) => (
-                                                    <Chip
-                                                        key={tag}
-                                                        label={tag}
-                                                        size="small"
-                                                        variant="outlined"
-                                                    />
-                                                ))}
-                                            </Box>
-                                        </TableCell>
-                                        <TableCell>{formatBytes(snapshot.totalSize)}</TableCell>
-                                        <TableCell align="right">
-                                            <IconButton
-                                                color="error"
-                                                onClick={() => handleDeleteClick(snapshot)}
-                                                size="small"
-                                            >
-                                                <DeleteIcon />
-                                            </IconButton>
-                                        </TableCell>
-                                    </TableRow>
+                                    <SnapshotRow snapshot={snapshot} onDelete={() => handleDeleteClick(snapshot)} />
                                 ))}
                             </TableBody>
                         </Table>

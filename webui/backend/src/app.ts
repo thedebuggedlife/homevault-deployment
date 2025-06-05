@@ -16,6 +16,7 @@ import { logger } from "@/logger";
 import { getActivity, postActivitySudo } from "./api/activity";
 import { deploymentSocket } from "./socket/deployment";
 import getBackupStatus from "./api/backup/getBackupStatus";
+import getSnapshots from "./api/backup/getSnapshots";
 
 const app = express();
 const server = http.createServer(app);
@@ -33,6 +34,7 @@ app.use(express.json());
 
 app.get("/api/activity", authenticateToken, getActivity);
 app.post("/api/activity/sudo", postActivitySudo);
+app.get("/api/backup/snapshots", authenticateToken, getSnapshots);
 app.get("/api/backup/status", authenticateToken, getBackupStatus);
 app.post("/api/deployment/config", authenticateToken, getDeploymentConfig);
 app.post("/api/login", [body("username").notEmpty(), body("password").notEmpty(), handleValidationErrors], login);
