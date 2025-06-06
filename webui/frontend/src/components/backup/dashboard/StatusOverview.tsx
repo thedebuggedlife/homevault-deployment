@@ -42,7 +42,7 @@ export default function StatusOverview({ status }: BackupStatusOverviewProps) {
                         Repository Type
                     </Typography>
                     <Chip
-                        label={status.repositoryType?.toUpperCase() || "Unknown"}
+                        label={status.repository?.repositoryType ?? "unknown"}
                         color="primary"
                         size="small"
                         sx={{ mt: 0.5 }}
@@ -54,7 +54,7 @@ export default function StatusOverview({ status }: BackupStatusOverviewProps) {
                         Repository Location
                     </Typography>
                     <Typography variant="body1" sx={{ fontFamily: "monospace", fontSize: "0.875rem" }}>
-                        {status.repositoryLocation}
+                        {status.repository?.location}
                     </Typography>
                 </Box>
 

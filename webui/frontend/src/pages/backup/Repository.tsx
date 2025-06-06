@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useContext, useState } from "react";
 import {
     Container,
     Paper,
@@ -10,7 +10,6 @@ import {
     Card,
     CardContent,
     TextField,
-    Grid,
     Divider,
 } from "@mui/material";
 import {
@@ -18,35 +17,14 @@ import {
     Edit as EditIcon,
     Add as AddIcon,
 } from "@mui/icons-material";
-import backend from "@/backend";
-import { BackupConfig, BackupStatus } from "@/types/backup";
+import { BackupContext } from "@/contexts/BackupContext";
+import S3Repository from "@/components/backup/repository/S3Repository";
+import B2Repository from "@/components/backup/repository/B2Repository";
+import RESTRepository from "@/components/backup/repository/RESTRepository";
 
 const BackupRepository: React.FC = () => {
-    const [status, setStatus] = useState<BackupStatus | null>(null);
-    const [config, setConfig] = useState<BackupConfig | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState("");
+    const { status, loading, error, reload } = useContext(BackupContext);
     const [editMode, setEditMode] = useState(false);
-
-    useEffect(() => {
-        fetchData();
-    }, []);
-
-    const fetchData = async () => {
-        try {
-            const [statusRes, configRes] = await Promise.all([
-                backend.getBackupStatus(),
-                backend.getBackupConfig(),
-            ]);
-            setStatus(statusRes);
-            setConfig(configRes);
-            setError("");
-        } catch (err) {
-            setError("Failed to load repository configuration");
-        } finally {
-            setLoading(false);
-        }
-    };
 
     const handleInitialize = () => {
         // TODO: Open repository wizard
@@ -71,6 +49,9 @@ const BackupRepository: React.FC = () => {
         return (
             <Alert severity="error" sx={{ mt: 2 }}>
                 {error}
+                <Button onClick={reload} sx={{ ml: 2 }}>
+                    Retry
+                </Button>
             </Alert>
         );
     }
@@ -100,144 +81,18 @@ const BackupRepository: React.FC = () => {
     }
 
     const renderRepositoryDetails = () => {
-        if (!config) return null;
-
-        switch (status?.repositoryType) {
+        switch (status?.repository?.repositoryType) {
             case "s3":
-                return (
-                    <>
-                        <Grid container spacing={2}>
-                            <Grid size={6}>
-                                <TextField
-                                    label="Endpoint"
-                                    value={config.s3?.endpoint || ""}
-                                    fullWidth
-                                    disabled
-                                    variant="outlined"
-                                />
-                            </Grid>
-                            <Grid size={6}>
-                                <TextField
-                                    label="Bucket"
-                                    value={config.s3?.bucket || ""}
-                                    fullWidth
-                                    disabled
-                                    variant="outlined"
-                                />
-                            </Grid>
-                            <Grid size={12}>
-                                <TextField
-                                    label="Path"
-                                    value={config.s3?.path || "/"}
-                                    fullWidth
-                                    disabled
-                                    variant="outlined"
-                                />
-                            </Grid>
-                            <Grid size={6}>
-                                <TextField
-                                    label="Access Key"
-                                    value={config.s3?.accessKeySet ? "••••••••" : "Not Set"}
-                                    fullWidth
-                                    disabled
-                                    variant="outlined"
-                                />
-                            </Grid>
-                            <Grid size={6}>
-                                <TextField
-                                    label="Secret Key"
-                                    value={config.s3?.secretKeySet ? "••••••••" : "Not Set"}
-                                    fullWidth
-                                    disabled
-                                    variant="outlined"
-                                />
-                            </Grid>
-                        </Grid>
-                    </>
-                );
+                return <S3Repository repository={status.repository} />
             case "b2":
-                return (
-                    <>
-                        <Grid container spacing={2}>
-                            <Grid size={6}>
-                                <TextField
-                                    label="Bucket"
-                                    value={config.b2?.bucket || ""}
-                                    fullWidth
-                                    disabled
-                                    variant="outlined"
-                                />
-                            </Grid>
-                            <Grid size={6}>
-                                <TextField
-                                    label="Path"
-                                    value={config.b2?.path || "/"}
-                                    fullWidth
-                                    disabled
-                                    variant="outlined"
-                                />
-                            </Grid>
-                            <Grid size={6}>
-                                <TextField
-                                    label="Account ID"
-                                    value={config.b2?.accountIdSet ? "••••••••" : "Not Set"}
-                                    fullWidth
-                                    disabled
-                                    variant="outlined"
-                                />
-                            </Grid>
-                            <Grid size={6}>
-                                <TextField
-                                    label="Account Key"
-                                    value={config.b2?.accountKeySet ? "••••••••" : "Not Set"}
-                                    fullWidth
-                                    disabled
-                                    variant="outlined"
-                                />
-                            </Grid>
-                        </Grid>
-                    </>
-                );
+                return <B2Repository repository={status.repository} />
             case "rest":
-                return (
-                    <>
-                        <Grid container spacing={2}>
-                            <Grid size={12}>
-                                <TextField
-                                    label="REST Server URL"
-                                    value={config.rest?.url || ""}
-                                    fullWidth
-                                    disabled
-                                    variant="outlined"
-                                />
-                            </Grid>
-                            <Grid size={6}>
-                                <TextField
-                                    label="Username"
-                                    value={config.rest?.usernameSet ? "••••••••" : "Not Set"}
-                                    fullWidth
-                                    disabled
-                                    variant="outlined"
-                                />
-                            </Grid>
-                            <Grid size={6}>
-                                <TextField
-                                    label="Password"
-                                    value={config.rest?.passwordSet ? "••••••••" : "Not Set"}
-                                    fullWidth
-                                    disabled
-                                    variant="outlined"
-                                />
-                            </Grid>
-                        </Grid>
-                    </>
-                );
-            case "local":
+                return <RESTRepository repository={status.repository} />
             default:
                 return (
                     <TextField
                         label="Repository Path"
-                        value={config.repository || ""}
+                        value={status?.repository?.location ?? ""}
                         fullWidth
                         disabled
                         variant="outlined"
@@ -266,7 +121,7 @@ const BackupRepository: React.FC = () => {
                 <Card variant="outlined">
                     <CardContent>
                         <Typography variant="h6" gutterBottom>
-                            Repository Type: {status?.repositoryType?.toUpperCase()}
+                            Repository Type: {status?.repository?.repositoryType}
                         </Typography>
                         
                         <Divider sx={{ my: 2 }} />
@@ -276,7 +131,7 @@ const BackupRepository: React.FC = () => {
                                 Repository Location
                             </Typography>
                             <Typography variant="body1" sx={{ fontFamily: "monospace" }}>
-                                {config?.repository}
+                                {status?.repository?.location}
                             </Typography>
                         </Box>
 
@@ -291,7 +146,7 @@ const BackupRepository: React.FC = () => {
                                 Repository Password
                             </Typography>
                             <TextField
-                                value={config?.passwordSet ? "••••••••••••" : "Not Set"}
+                                value={status?.repository?.passwordSet ? "••••••••••••" : "Not Set"}
                                 fullWidth
                                 disabled
                                 variant="outlined"

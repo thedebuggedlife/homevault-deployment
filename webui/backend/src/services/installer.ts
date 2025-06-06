@@ -9,6 +9,7 @@ import { file } from "tmp-promise";
 import * as fs from "fs/promises";
 import { BackupSnapshot, BackupStatus, RepositoryType } from "@/types/backup";
 import _ from "lodash";
+import { parseRepositoryEnvironment } from "@/types/restic";
 
 export const INSTALLER_PATH = process.env.INSTALLER_PATH ?? "~/homevault/workspace";
 
@@ -245,24 +246,10 @@ class InstallerService {
             if (_.isEmpty(repositoryLocation)) {
                 return { initialized: false };
             }
-            let repositoryType: RepositoryType = "unknown";
-            if (repositoryLocation.startsWith("/")) {
-                repositoryType = "local";
-            } else if (repositoryLocation.startsWith("s3:")) {
-                repositoryType = "s3";
-            } else if (repositoryLocation.startsWith("azure:")) {
-                repositoryType = "azure";
-            } else if (repositoryLocation.startsWith("gs:")) {
-                repositoryType = "gs";
-            } else if (repositoryLocation.startsWith("sftp:")) {
-                repositoryType = "sftp";
-            } else if (repositoryLocation.startsWith("rest:")) {
-                repositoryType = "rest";
-            }
+            const repository = parseRepositoryEnvironment(backup.env);
             return {
                 initialized: true,
-                repositoryType,
-                repositoryLocation,
+                repository,
                 snapshotCount: backup.stats.snapshotsCount,
                 totalSize: backup.stats.totalSize,
                 totalUncompressedSize: backup.stats.totalUncompressedSize,
@@ -272,6 +259,7 @@ class InstallerService {
                     cronExpression: backup.schedule?.cron,
                     retentionPolicy: backup.schedule?.retention,
                 },
+                environment: backup.env,
             }
         } catch (error) {
             this.logger.warn("Could not get backup information - assuming system is uninitialized");

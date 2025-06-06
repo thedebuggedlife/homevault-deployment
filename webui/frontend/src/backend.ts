@@ -10,13 +10,7 @@ import {
     LoginResponse,
     SystemStatusResponse,
 } from "@backend/types";
-import {
-    BackupStatus,
-    BackupSnapshot,
-    BackupSchedule,
-    BackupConfig,
-    BackupInitRequest,
-} from "@backend/types/backup";
+import { BackupStatus, BackupSnapshot, BackupSchedule, BackupInitRequest } from "@backend/types/backup";
 import axios, { AxiosRequestConfig } from "axios";
 import { createNanoEvents, EmitterMixin } from "nanoevents";
 import { io, Socket } from "socket.io-client";
@@ -35,7 +29,10 @@ export class DeploymentOperation implements EmitterMixin<DeploymentOperationEven
     private readonly emitter = createNanoEvents<DeploymentOperationEvents>();
     private completed = false;
 
-    constructor(private socket: DeploymentSocket, public id?: string) {
+    constructor(
+        private socket: DeploymentSocket,
+        public id?: string
+    ) {
         socket.on("disconnect", () => {
             if (!this.completed) {
                 this.completed = true;
@@ -43,7 +40,7 @@ export class DeploymentOperation implements EmitterMixin<DeploymentOperationEven
             }
             this.close();
         });
-        socket.on("started", id => this.id = id);
+        socket.on("started", (id) => (this.id = id));
         socket.on("completed", () => {
             this.completed = true;
             this.emitter.emit("completed");
@@ -101,8 +98,8 @@ class BackendServer implements EmitterMixin<BackendServerEvents> {
     });
     private readonly emitter = createNanoEvents<BackendServerEvents>();
     on<E extends keyof BackendServerEvents>(event: E, callback: BackendServerEvents[E]) {
-        return this.emitter.on(event, callback)
-      }
+        return this.emitter.on(event, callback);
+    }
     async login(username: string, password: string): Promise<LoginResponse> {
         const response = await this.client.post<LoginResponse>("/api/login", {
             username,
@@ -146,28 +143,10 @@ class BackendServer implements EmitterMixin<BackendServerEvents> {
         const response = await this.client.get<BackupStatus>("/api/backup/status");
         return response.data;
     }
-    async getBackupConfig(): Promise<BackupConfig> {
-        // TODO: Replace with actual API call
-        // const response = await this.client.get<BackupConfig>("/api/backup/config");
-        // return response.data;
-        
-        // Mock data for development
-        return {
-            repository: "s3:s3.amazonaws.com/my-backup-bucket",
-            passwordSet: true,
-            s3: {
-                endpoint: "s3.amazonaws.com",
-                bucket: "my-backup-bucket",
-                path: "/",
-                accessKeySet: true,
-                secretKeySet: true,
-            }
-        };
-    }
     async initBackupRepository(request: BackupInitRequest): Promise<void> {
         // TODO: Replace with actual API call
         // await this.client.post("/api/backup/init", request);
-        
+
         console.log("Mock: Initializing backup repository", request);
         return Promise.resolve();
     }
@@ -178,7 +157,7 @@ class BackendServer implements EmitterMixin<BackendServerEvents> {
     async deleteBackupSnapshot(id: string): Promise<void> {
         // TODO: Replace with actual API call
         // await this.client.delete(`/api/backup/snapshots/${id}`);
-        
+
         console.log("Mock: Deleting snapshot", id);
         return Promise.resolve();
     }
@@ -186,7 +165,7 @@ class BackendServer implements EmitterMixin<BackendServerEvents> {
         // TODO: Replace with actual API call
         // const response = await this.client.get<BackupSchedule>("/api/backup/schedule");
         // return response.data;
-        
+
         // Mock data for development
         return {
             enabled: true,
@@ -197,14 +176,14 @@ class BackendServer implements EmitterMixin<BackendServerEvents> {
     async updateBackupSchedule(schedule: BackupSchedule): Promise<void> {
         // TODO: Replace with actual API call
         // await this.client.post("/api/backup/schedule", schedule);
-        
+
         console.log("Mock: Updating backup schedule", schedule);
         return Promise.resolve();
     }
     async startBackup(): Promise<DeploymentOperation> {
         // TODO: Replace with actual implementation
         // This will need to connect to a backup-specific WebSocket endpoint
-        
+
         console.log("Mock: Starting backup");
         // For now, throw an error to indicate this is not implemented
         throw new Error("Backup operation not yet implemented");

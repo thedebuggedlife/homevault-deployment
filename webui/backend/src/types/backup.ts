@@ -1,14 +1,16 @@
+import { ResticRepository } from "./restic";
+
 export type RepositoryType = "local" | "s3" | "b2" | "rest" | "sftp" | "azure" | "gs" | "unknown";
 
 export interface BackupStatus {
     initialized: boolean;
-    repositoryType?: RepositoryType;
-    repositoryLocation?: string;
+    repository?: ResticRepository;
     snapshotCount?: number;
     lastBackupTime?: string;
     totalSize?: number;
     totalUncompressedSize?: number;
     schedule?: BackupSchedule;
+    environment?: Record<string, string>;
 }
 
 export interface BackupSnapshot {
@@ -24,23 +26,6 @@ export interface BackupSchedule {
     enabled: boolean;
     cronExpression?: string;
     retentionPolicy?: string;
-}
-
-export interface BackupConfig {
-    repository?: string;
-    passwordSet?: boolean;
-    s3?: {
-        endpoint?: string;
-        bucket?: string;
-        path?: string;
-        accessKeySet?: boolean;
-        secretKeySet?: boolean;
-    };
-}
-
-export interface RepositoryConfig {
-    type: RepositoryType;
-    config: Record<string, string>;
 }
 
 export interface BackupInitRequest {
