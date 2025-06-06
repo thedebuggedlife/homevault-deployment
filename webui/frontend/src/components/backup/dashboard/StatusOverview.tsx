@@ -41,12 +41,21 @@ export default function StatusOverview({ status }: BackupStatusOverviewProps) {
                     <Typography variant="body2" color="text.secondary">
                         Repository Type
                     </Typography>
-                    <Chip
-                        label={status.repository?.repositoryType ?? "unknown"}
-                        color="primary"
-                        size="small"
-                        sx={{ mt: 0.5 }}
-                    />
+                    <Box sx={{ display: 'flex', gap: 0.5, mt: 0.5 }}>
+                        <Chip
+                            label={status.repository?.repositoryType ?? "unknown"}
+                            color="primary"
+                            size="small"
+                        />
+                        {status.repository?.repositoryType === "s3" && 
+                         status.repository.details.subType === "aws" && (
+                            <Chip
+                                label="aws"
+                                color="secondary"
+                                size="small"
+                            />
+                        )}
+                    </Box>
                 </Box>
 
                 <Box>
