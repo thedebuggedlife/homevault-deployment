@@ -7,7 +7,7 @@ import { ServiceError } from "@/errors";
 import { v4 as uuid } from "uuid";
 import { file } from "tmp-promise";
 import * as fs from "fs/promises";
-import { BackupSnapshot, BackupStatus, RepositoryType } from "@/types/backup";
+import { BackupSnapshot, BackupStatus } from "@/types/backup";
 import _ from "lodash";
 import { generateRepositoryEnvironment, parseRepositoryEnvironment, ResticRepository } from "@/types/restic";
 

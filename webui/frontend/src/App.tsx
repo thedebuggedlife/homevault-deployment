@@ -9,7 +9,7 @@ import {
 } from "@mui/icons-material";
 import { AppProvider } from "@toolpad/core/AppProvider";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
-import type { Authentication, Navigation, Router } from "@toolpad/core";
+import { DialogsProvider, type Authentication, type Navigation, type Router } from "@toolpad/core";
 import SessionContext, { type Session, onAuthStateChanged, restoreSession, signOut } from "./contexts/SessionContext";
 import { DeploymentProvider } from "./contexts/DeploymentProvider";
 import { User } from "./types";
@@ -110,19 +110,21 @@ export default function App() {
 
     return (
         <SessionContext.Provider value={sessionContextValue}>
-            <DeploymentProvider>
-                <BackupProvider>
-                    <AppProvider
-                        authentication={AUTHENTICATION}
-                        navigation={NAVIGATION}
-                        branding={BRANDING}
-                        session={session}
-                        router={router}
-                    >
-                        <Outlet />
-                    </AppProvider>
-                </BackupProvider>
-            </DeploymentProvider>
+            <DialogsProvider>
+                <DeploymentProvider>
+                    <BackupProvider>
+                        <AppProvider
+                            authentication={AUTHENTICATION}
+                            navigation={NAVIGATION}
+                            branding={BRANDING}
+                            session={session}
+                            router={router}
+                        >
+                            <Outlet />
+                        </AppProvider>
+                    </BackupProvider>
+                </DeploymentProvider>
+            </DialogsProvider>
         </SessionContext.Provider>
     );
 }

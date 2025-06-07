@@ -1,7 +1,5 @@
 import { ResticRepository } from "./restic";
 
-export type RepositoryType = "local" | "s3" | "b2" | "rest" | "sftp" | "azure" | "gs" | "unknown";
-
 export interface BackupStatus {
     initialized: boolean;
     repository?: ResticRepository;

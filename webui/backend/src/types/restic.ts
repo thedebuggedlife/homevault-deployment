@@ -1,3 +1,5 @@
+export type RepositoryType = "local" | "s3" | "b2" | "rest" | "sftp" | "azure" | "gs" | "unknown";
+
 export interface S3CredentialDetails {
     accessKeyId?: string;
     secretAccessKey?: string;

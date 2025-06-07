@@ -257,8 +257,8 @@ restic_print_env() {
     local private_keys=("RESTIC_PASSWORD" "AWS_SECRET_ACCESS_KEY")
 
     if [ ! -f "$env_file" ]; then
-        log_error "Restic configuration file is missing: '$env_file'"
-        return 1
+        log_warn "The repository for backups has not been initialized"
+        return 0
     fi
 
     log_header "Repository Configuration"

@@ -14,7 +14,7 @@ import {
 } from "@mui/material";
 import {
     Cached as CachedIcon,
-    Storage as StorageIcon,
+    Backup as BackupIcon,
     Edit as EditIcon,
     Star as StarIcon,
     Add as AddIcon,
@@ -34,6 +34,8 @@ import { RepositoryCredentials, ResticRepository } from "@backend/types/restic";
 import SecretField from "@/components/SecretField";
 import _ from "lodash";
 import { useDialogs } from "@toolpad/core";
+import RepositoryTypeDialog from "@/components/backup/repository/RepositoryTypeDialog";
+import { createEmptyRepository } from "@/utils/restic";
 
 const BackupRepository: React.FC = () => {
     const dialogs = useDialogs();
@@ -55,11 +57,6 @@ const BackupRepository: React.FC = () => {
 
     const hasChanges = !_.isEqual(repository, originalRepository);
 
-    const handleInitialize = () => {
-        // TODO: Open repository wizard
-        alert("Repository wizard not yet implemented");
-    };
-
     const handleEdit = () => {
         setEditMode(true);
         setSaveError(undefined);
@@ -67,8 +64,11 @@ const BackupRepository: React.FC = () => {
     };
 
     const handleNew = async () => {
-        // TODO: Use the dialogs hook to show a prompt with a drop-down to select repository type
-        // and create a new empty ResticRepository for user to fill in
+        const repositoryType = await dialogs.open(RepositoryTypeDialog, null);
+        if (repositoryType && repositoryType !== "unknown") {
+            setRepository(createEmptyRepository(repositoryType));
+            handleEdit();
+        }
     }
 
     const handleCancel = () => {
@@ -260,11 +260,11 @@ const BackupRepository: React.FC = () => {
         );
     }
 
-    if (!status?.initialized) {
+    if (!status?.initialized && !editMode) {
         return (
             <Container maxWidth="md">
                 <Paper sx={{ p: 4, textAlign: "center" }}>
-                    <StorageIcon color="primary" sx={{ fontSize: 64, mb: 2 }} />
+                    <BackupIcon color="primary" sx={{ fontSize: 64, mb: 2 }} />
                     <Typography variant="h5" gutterBottom>
                         Configure Backup Repository
                     </Typography>
@@ -274,7 +274,7 @@ const BackupRepository: React.FC = () => {
                     <Button
                         variant="contained"
                         startIcon={<AddIcon />}
-                        onClick={handleInitialize}
+                        onClick={handleNew}
                         size="large"
                     >
                         Initialize Repository
@@ -356,11 +356,26 @@ const BackupRepository: React.FC = () => {
 
                     <Divider sx={{ my: 2 }} />
 
+                    { status?.initialized && editMode && (
+                        <Alert severity="info" sx={{ m: 2, mb: 3 }}>
+                            <Typography variant="body2">
+                                <strong>Note:</strong> Changing repository configuration may affect access to existing snapshots.
+                            </Typography>
+                        </Alert>
+                    )}
+
                     {renderRepositoryDetails()}
 
                     <Divider sx={{ my: 2 }} />
 
                     <Box>
+                        { editMode && (
+                            <Alert severity="warning" sx={{ m: 2, mb: 3 }}>
+                                <Typography variant="body2">
+                                    Keep your password in a safe location. If you lose it, your backup data will become <strong>permanently and irreversibly inaccessible</strong>.
+                                </Typography>
+                            </Alert>
+                        )}
                         <Typography variant="body2" color="text.secondary" gutterBottom>
                             Repository Password
                         </Typography>
@@ -369,7 +384,6 @@ const BackupRepository: React.FC = () => {
                             fullWidth
                             disabled={!editMode}
                             variant="outlined"
-                            size="small"
                             isSet={repository?.passwordSet} 
                             onChange={handlePasswordChange} 
                             validate={allTouched}
@@ -377,12 +391,6 @@ const BackupRepository: React.FC = () => {
                     </Box>
                 </CardContent>
             </Card>
-
-            <Alert severity="info" sx={{ mt: 3 }}>
-                <Typography variant="body2">
-                    <strong>Note:</strong> Changing repository configuration may affect access to existing snapshots.
-                </Typography>
-            </Alert>
         </>
     );
 };
