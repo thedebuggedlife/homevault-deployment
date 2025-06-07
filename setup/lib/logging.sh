@@ -139,11 +139,18 @@ log_header() {
 
 log_warn() {
     log -n "\n🟡 ${BIYellow}WARN:${IYellow} $1${COff}\n\n"
-
+    if [ "$JSON_OUT" = true ]; then
+        JSON_OUTPUT=$(echo "$JSON_OUTPUT" | jq --arg message "$1" '.warnings //= [] | .warnings += [$message]')
+    fi
 }
 
 log_error() {
-    log -n "\n🔴 ${BIRed}ERROR:${IRed} $1${COff}\n\n$(stack_trace)\n\n"
+    local stack
+    stack=$(stack_trace)
+    log -n "\n🔴 ${BIRed}ERROR:${IRed} $1${COff}\n\n$stack\n\n"
+    if [ "$JSON_OUT" = true ]; then
+        JSON_OUTPUT=$(echo "$JSON_OUTPUT" | jq --arg message "$1" stack "$stack" '.errors //= [] | .errors += [{message: $message, stack: $stack}]')
+    fi
 }
 
 log_invalid() {

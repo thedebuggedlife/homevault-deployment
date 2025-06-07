@@ -46,7 +46,6 @@ export interface RepositoryCredentials {
 }
 
 export interface S3Details {
-    subType: "aws" | "other";
     endpoint?: string;
     bucket: string;
     path: string;
@@ -137,10 +136,10 @@ export interface ResticLocalRepository {
     credentials?: RepositoryCredentials & { details: LocalCredentialDetails };
 }
 
-export class MissingCredentialsError extends Error {
+export class MissingConfigurationError extends Error {
     constructor(public missingFields: string[]) {
-        super(`Missing required credentials: ${missingFields.join(", ")}`);
-        this.name = "MissingCredentialsError";
+        super(`Missing required configuration: ${missingFields.join(", ")}`);
+        this.name = "MissingConfigurationError";
     }
 }
 
@@ -226,7 +225,6 @@ function parseS3Repository(repository: string, env: Record<string, string>): Res
     let endpoint: string | undefined;
     let bucket: string;
     let path: string = "/";
-    let subType: "aws" | "other" = "other";
     let region: string | undefined;
 
     // Check if it's a URL format (with or without scheme)
@@ -256,8 +254,6 @@ function parseS3Repository(repository: string, env: Record<string, string>): Res
 
         // Check if it's AWS S3
         if (endpoint && endpoint.includes("amazonaws.com")) {
-            subType = "aws";
-
             // Try to extract region from endpoint
             // Patterns: s3.{region}.amazonaws.com or s3-{region}.amazonaws.com
             const regionMatch = endpoint.match(/s3[.-]([a-z0-9-]+)\.amazonaws\.com/);
@@ -280,7 +276,6 @@ function parseS3Repository(repository: string, env: Record<string, string>): Res
 
         // For legacy format, assume AWS if AWS credentials are present
         if (env.AWS_ACCESS_KEY_ID || env.AWS_SECRET_ACCESS_KEY) {
-            subType = "aws";
             region = env.AWS_DEFAULT_REGION;
         }
     }
@@ -294,7 +289,6 @@ function parseS3Repository(repository: string, env: Record<string, string>): Res
     }
 
     const details: S3Details = {
-        subType,
         endpoint,
         bucket,
         path,
@@ -541,7 +535,7 @@ function parseRESTRepository(repository: string, env: Record<string, string>): R
  * @param repository Parsed repository with optional credentials
  * @param existingEnv Existing environment variables to use for missing credentials
  * @returns New environment variables map
- * @throws MissingCredentialsError if required credentials are not available
+ * @throws MissingConfigurationError if required credentials are not available
  */
 export function generateRepositoryEnvironment(
     repository: ResticRepository,
@@ -592,7 +586,7 @@ export function generateRepositoryEnvironment(
     }
 
     if (missingFields.length > 0) {
-        throw new MissingCredentialsError(missingFields);
+        throw new MissingConfigurationError(missingFields);
     }
 
     return env;
@@ -653,8 +647,6 @@ function generateS3Environment(
         env.AWS_ACCESS_KEY_ID = creds.accessKeyId;
     } else if (existingEnv.AWS_ACCESS_KEY_ID) {
         env.AWS_ACCESS_KEY_ID = existingEnv.AWS_ACCESS_KEY_ID;
-    } else if (repository.details.subType === "aws") {
-        missingFields.push("AWS_ACCESS_KEY_ID");
     }
 
     // AWS_SECRET_ACCESS_KEY
@@ -662,8 +654,6 @@ function generateS3Environment(
         env.AWS_SECRET_ACCESS_KEY = creds.secretAccessKey;
     } else if (existingEnv.AWS_SECRET_ACCESS_KEY) {
         env.AWS_SECRET_ACCESS_KEY = existingEnv.AWS_SECRET_ACCESS_KEY;
-    } else if (repository.details.subType === "aws") {
-        missingFields.push("AWS_SECRET_ACCESS_KEY");
     }
 
     // AWS_DEFAULT_REGION (optional but recommended for AWS)

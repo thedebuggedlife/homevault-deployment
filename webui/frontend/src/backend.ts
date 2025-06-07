@@ -144,8 +144,7 @@ class BackendServer implements EmitterMixin<BackendServerEvents> {
         return response.data;
     }
     async initBackupRepository(request: BackupInitRequest): Promise<void> {
-        // TODO: Replace with actual API call
-        // await this.client.post("/api/backup/init", request);
+        await this.client.post("/api/backup/init", request);
 
         console.log("Mock: Initializing backup repository", request);
         return Promise.resolve();
@@ -160,18 +159,6 @@ class BackendServer implements EmitterMixin<BackendServerEvents> {
 
         console.log("Mock: Deleting snapshot", id);
         return Promise.resolve();
-    }
-    async getBackupSchedule(): Promise<BackupSchedule> {
-        // TODO: Replace with actual API call
-        // const response = await this.client.get<BackupSchedule>("/api/backup/schedule");
-        // return response.data;
-
-        // Mock data for development
-        return {
-            enabled: true,
-            cronExpression: "0 2 * * *",
-            retentionPolicy: "7d4w12m",
-        };
     }
     async updateBackupSchedule(schedule: BackupSchedule): Promise<void> {
         // TODO: Replace with actual API call

@@ -22,6 +22,8 @@ declare -A RESTIC_OVERRIDES
 BACKUP_ACTION=
 # Set with hv backup run --keep
 BACKUP_KEEP=false
+# Set with hv backup info --env-only
+BACKUP_ENV_ONLY=false
 
 # Indicates whether background backups are set to run automatically
 BACKUP_ENABLED=
@@ -172,16 +174,19 @@ validate_retention_policy() {
 #
 # @option   -v  {list}      Colon-separated list of directories to map
 # @option   -m  {manifest}  Manifest JSON file (for backup operations only)
+# @option   -e  {path}      File with environment variables to use for restic. Defaults to: $RESTIC_ENV.
 # @param    $@              Any additional parameters are passed down to restic
 # @return   {string}        Any output from restic
 ###
 restic() {
     local data_paths manifest_file exit_code
+    local env_file="$RESTIC_ENV"
     OPTIND=1
-    while getopts ":v:m:" opt; do
+    while getopts ":v:m:e:" opt; do
         case $opt in
             v) data_paths="$OPTARG" ;;
             m) manifest_file="$OPTARG" ;;
+            e) env_file="$OPTARG" ;;
             \?) log_warn "Invalid option: -$OPTARG" ;;
             :) log_warn "Option -$OPTARG requires an argument" ;;
         esac
@@ -201,8 +206,8 @@ restic() {
     if [ -n "$manifest_file" ]; then
         cmd+=" -v '$manifest_file':$RESTIC_DATA_ROOT/manifest.json"
     fi
-    if [ -n "$RESTIC_ENV" ]; then
-        cmd+=" --env-file '$RESTIC_ENV' "
+    if [ -n "$env_file" ]; then
+        cmd+=" --env-file '$env_file' "
     fi
     if [ -d "$RESTIC_CONFIG" ]; then
         cmd+=" -v '$RESTIC_CONFIG:/config' "
@@ -299,58 +304,77 @@ restic_print_env() {
     log
 }
 
+###
+# Generates an .env file for use with restic
+#
+# @param    $1  {path}  Path to the .env file to create
+###
 restic_init_env() {
+    local temp_env=$1
+
+    ## TODO: Support assisted initialization of restic for different repository types
+
+    if [ -n "$RESTIC_INIT_ENV" ]; then
+        copy_env_values "$RESTIC_INIT_ENV" "$temp_env" -o || return 1
+    fi
+
+    local key
+    for key in "${!RESTIC_OVERRIDES[@]}"; do
+        save_env "$key" "${RESTIC_OVERRIDES[$key]}" "$temp_env"
+    done
+
+    source "$temp_env"
+}
+
+###
+# Copies a temporary restic .env file to the path where it'll be used for backup/snapshot operations
+#
+# @param    $1  {path}      Path to the temporary .env file
+###
+restic_copy_env() {
+    local temp_env=$1
+
+    if [ ! -f "$temp_env" ]; then
+        log_error "File '$temp_env' does not exist"
+        return 1
+    fi
+
     RESTIC_ENV="${RESTIC_ENV:-${APPDATA_LOCATION%/}/backup/restic.env}"
 
     if [ -f "$RESTIC_ENV" ]; then
         local bak_file
         bak_file="$RESTIC_ENV.$(date +%s).bak"
         log_warn "A previous restic environment exists at '$RESTIC_ENV'"
-        ask_confirmation -y -p "Do you want to reuse the existing file? (use CTRL+C to exit)" && {
-            if cp "$RESTIC_ENV" "$bak_file"; then
-                log "Previous environment file copied to: ${Cyan}$bak_file${COff}"
-            else
-                log_error "Failed to make a copy of previous environment file: '$bak_file'"
-                return 1
-            fi
-        } || {
-            if mv "$RESTIC_ENV" "$bak_file"; then
-                log "Previous environment file moved to: ${Cyan}$bak_file${COff}"
-            else
-                log_error "Failed to make a copy of previous environment file: '$bak_file'"
-                return 1
-            fi
-        }
-    fi
-
-    if [ ! -f "$RESTIC_ENV" ]; then
-        ensure_path_exists "$(dirname "$RESTIC_ENV")" || return 1
-        log "Creating restic environment file: ${Cyan}$RESTIC_ENV${COff}"
-        touch "$RESTIC_ENV" && chmod 600 "$RESTIC_ENV" || {
-            log_error "Failed to create restic environment file: '$RESTIC_ENV'"
+        if mv "$RESTIC_ENV" "$bak_file"; then
+            log "Previous environment file moved to: ${Cyan}$bak_file${COff}"
+        else
+            log_error "Failed to make a copy of previous environment file: '$bak_file'"
             return 1
-        }
+        fi
     fi
 
-    ## TODO: Support assisted initialization of restic for different repository types
+    log "Creating restic environment file: ${Cyan}$RESTIC_ENV${COff}"
 
-    if [ -n "$RESTIC_INIT_ENV" ]; then
-        copy_env_values "$RESTIC_INIT_ENV" "$RESTIC_ENV" -o || return 1
-    fi
-
-    local key
-    for key in "${!RESTIC_OVERRIDES[@]}"; do
-        save_env "$key" "${RESTIC_OVERRIDES[$key]}" "$RESTIC_ENV"
-    done
+    ensure_path_exists "$(dirname "$RESTIC_ENV")" || return 1
+    cp -f "$temp_env" "$RESTIC_ENV" && chmod 600 "$RESTIC_ENV" || {
+        log_error "Failed to create restic environment file: '$RESTIC_ENV'"
+        return 1
+    }
 }
 
 restic_init_repository() {
+    log_header "Initializing restic repository"
+
+    local temp_env
+    temp_env=$(mktemp)
+
+    local return_code=0
     # Using a subshell to isolate code with access to restic ENV values
     (
-        restic_load_env || return 1
+        restic_init_env "$temp_env" || return 1
 
         if [ -z "$RESTIC_HOST" ]; then
-            save_env RESTIC_HOST "$HOSTNAME" "$RESTIC_ENV"
+            save_env RESTIC_HOST "$HOSTNAME" "$temp_env"
         fi
 
         if [ -z "$RESTIC_REPOSITORY" ]; then
@@ -361,29 +385,31 @@ restic_init_repository() {
             local full_path
             full_path="$(readlink -f "$RESTIC_REPOSITORY")"
             if [ "$full_path" != "$RESTIC_REPOSITORY" ]; then
-                save_env RESTIC_REPOSITORY "" "$RESTIC_ENV"
+                save_env RESTIC_REPOSITORY "" "$temp_env"
             fi
         fi
 
         if [ -z "$RESTIC_PASSWORD" ]; then
             log_warn "A recovery password was not specified. A new one will be been generated for you."
-            save_env_id RESTIC_PASSWORD -l 32 -f "$RESTIC_ENV"
+            save_env_id RESTIC_PASSWORD -l 32 -f "$temp_env"
             log "Recovery password: ${BIPurple}$RESTIC_PASSWORD${COff}"
             log "Please store this password in a safe place NOW. Press any key to continue..."
             read -n 1 -s -r
             log
         fi
 
-        if restic snapshots >/dev/null 2>&1; then
+        if restic -e "$temp_env" stats >/dev/null 2>&1; then
             log "\nExisting repository found at: ${Cyan}${RESTIC_REPOSITORY}${COff}\n"
             log_warn "An existing repository was found at this location and will be reused for future snapshots."
         else
             log "\nInitializing repository: ${Cyan}${RESTIC_REPOSITORY}${COff}\n"
-            restic init -q || {
+            restic -e "$temp_env" init -q || {
                 log_error "Failed to initialize backup repository"
                 return 1
             }
         fi
+
+        restic_copy_env "$temp_env"
 
         local password_file="${SECRETS_PATH%/}/restic_password"
         log "Saving restic password to ${Cyan}$password_file${COff}"
@@ -392,7 +418,10 @@ restic_init_repository() {
                 log_error "Failed to save restic password to '$password_file'"
                 return 1
             }
-    ) || return 1
+    ) || return_code=1
+
+    rm "$temp_env"
+    return $return_code
 }
 
 restic_run_backup() {

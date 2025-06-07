@@ -6,9 +6,9 @@ interface BackupContextType {
     status?: BackupStatus;
     setStatus: (status: BackupStatus) => void;
     error?: string;
-    reload: () => void;
+    reload: () => Promise<void>;
 }
 
-export const BackupContext = createContext<BackupContextType>({ loading: false, reload: () => {}, setStatus: () => {} });
+export const BackupContext = createContext<BackupContextType>({ loading: false, reload: async () => {}, setStatus: () => {} });
 
 

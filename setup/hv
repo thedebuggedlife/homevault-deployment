@@ -612,9 +612,7 @@ run_deploy() {
 }
 
 backup_action_init() {
-    log_header "Initializing backup repository"
     backup_check_requisites || exit 1
-    restic_init_env || exit 1
     load_deployment_file || exit 1
     restic_init_repository || exit 1
 }
@@ -664,8 +662,10 @@ backup_action_schedule() {
 
 backup_action_info() {
     restic_print_env || return 1
-    restic_show_stats || return 1
-    backup_schedule_info || return 1
+    if [ "$BACKUP_ENV_ONLY" != true ]; then
+        restic_show_stats || return 1
+        backup_schedule_info || return 1
+    fi
 }
 
 run_backup() {

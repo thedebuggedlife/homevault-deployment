@@ -1,4 +1,4 @@
-import React, { useContext, useState } from "react";
+import React, { useContext, useState, useCallback, useEffect } from "react";
 import {
     Container,
     Paper,
@@ -9,22 +9,51 @@ import {
     Button,
     Card,
     CardContent,
-    TextField,
     Divider,
+    IconButton,
 } from "@mui/material";
 import {
+    Cached as CachedIcon,
     Storage as StorageIcon,
     Edit as EditIcon,
+    Star as StarIcon,
     Add as AddIcon,
+    Save as SaveIcon,
+    Undo as UndoIcon,
 } from "@mui/icons-material";
 import { BackupContext } from "@/contexts/BackupContext";
 import S3Repository from "@/components/backup/repository/S3Repository";
 import B2Repository from "@/components/backup/repository/B2Repository";
 import RESTRepository from "@/components/backup/repository/RESTRepository";
+import GoogleCloudRepository from "@/components/backup/repository/GoogleCloudRepository";
+import AzureRepository from "@/components/backup/repository/AzureRepository";
+import LocalRepository from "@/components/backup/repository/LocalRepository";
+import SFTPRepository from "@/components/backup/repository/SFTPRepository";
+import backend from "@/backend";
+import { RepositoryCredentials, ResticRepository } from "@backend/types/restic";
+import SecretField from "@/components/SecretField";
+import _ from "lodash";
+import { useDialogs } from "@toolpad/core";
 
 const BackupRepository: React.FC = () => {
+    const dialogs = useDialogs();
     const { status, loading, error, reload } = useContext(BackupContext);
     const [editMode, setEditMode] = useState(false);
+    const [repository, setRepository] = useState<ResticRepository | null>(null);
+    const [originalRepository, setOriginalRepository] = useState<ResticRepository | null>(null);
+    const [saving, setSaving] = useState(false);
+    const [saveError, setSaveError] = useState<string>();
+    const [allTouched, setAllTouched] = useState(false);
+    const [detailsValid, setDetailsValid] = useState(false);
+
+    useEffect(() => {
+        if (status?.repository) {
+            setRepository(_.cloneDeep(status.repository)); // Deep clone
+            setOriginalRepository(_.cloneDeep(status.repository));
+        }
+    }, [status?.repository]);
+
+    const hasChanges = !_.isEqual(repository, originalRepository);
 
     const handleInitialize = () => {
         // TODO: Open repository wizard
@@ -33,11 +62,186 @@ const BackupRepository: React.FC = () => {
 
     const handleEdit = () => {
         setEditMode(true);
-        // TODO: Implement edit mode
-        alert("Edit functionality not yet implemented");
+        setSaveError(undefined);
+        setAllTouched(false);
     };
 
-    if (loading) {
+    const handleNew = async () => {
+        // TODO: Use the dialogs hook to show a prompt with a drop-down to select repository type
+        // and create a new empty ResticRepository for user to fill in
+    }
+
+    const handleCancel = () => {
+        setEditMode(false);
+        setRepository(_.cloneDeep(originalRepository)); // Reset to original
+        setSaveError(undefined);
+        setAllTouched(false);
+    };
+
+    const handleSave = useCallback(async () => {
+        if (!repository) return;
+        
+        if (!detailsValid) {
+            setAllTouched(true);
+            return;
+        }
+        
+        try {
+            setSaveError(undefined);
+            setSaving(true);
+            await backend.initBackupRepository({ repository });
+            await reload();
+            setOriginalRepository(_.cloneDeep(repository));
+            setEditMode(false);
+            setAllTouched(false);
+        } catch (error) {
+            console.error("Failed to save repository:", error);
+            let message = "Failed to save repository configuration";
+            if (error.message) {
+                message += ": " + error.message;
+            }
+            setSaveError(message);
+        } finally {
+            setSaving(false);
+        }
+    }, [repository, detailsValid, reload]);
+
+    const handleDetailsChange = useCallback((details: ResticRepository["details"]) => {
+        if (!repository) return;
+        
+        const newRepository = _.cloneDeep(repository);
+        newRepository.details = details;
+        newRepository.location = generateRepositoryLocation(newRepository);
+        setRepository(newRepository);
+    }, [repository]);
+
+    const handleCredentialsChange = useCallback((details: RepositoryCredentials["details"]) => {
+        if (!repository) return;
+        
+        const newRepository = _.cloneDeep(repository);
+        newRepository.credentials = { ...newRepository.credentials, details };
+        setRepository(newRepository);
+    }, [repository]);
+
+    const handlePasswordChange = useCallback((resticPassword: string) => {
+        const newRepository = _.cloneDeep(repository);
+        newRepository.credentials = { ...newRepository.credentials, resticPassword };
+        setRepository(newRepository);
+    }, [repository])
+
+    const handleValidation = useCallback((isValid: boolean) => {
+        setDetailsValid(isValid);
+    }, []);
+
+    const generateRepositoryLocation = (repo: ResticRepository): string => {
+        switch (repo.repositoryType) {
+            case "s3":
+                return `s3:${repo.details.endpoint || ''}/${repo.details.bucket}${repo.details.path}`;
+            case "b2":
+                return `b2:${repo.details.bucket}${repo.details.path}`;
+            case "rest":
+                return `rest:${repo.details.url}`;
+            case "azure":
+                return `azure:${repo.details.containerName}:${repo.details.path}`;
+            case "gs":
+                return `gs:${repo.details.bucket}${repo.details.path}`;
+            case "sftp":
+                return `sftp:${repo.details.username ? repo.details.username + '@' : ''}${repo.details.host}:${repo.details.port || 22}${repo.details.path}`;
+            case "local":
+                return repo.details.path;
+        }
+    };
+
+    const renderRepositoryDetails = () => {
+        if (!repository) return null;
+
+        switch (repository.repositoryType) {
+            case "s3":
+                return (
+                    <S3Repository
+                        details={repository.details}
+                        credentials={repository.credentials?.details}
+                        editMode={editMode}
+                        allTouched={allTouched}
+                        onDetailsChange={handleDetailsChange}
+                        onCredentialsChange={handleCredentialsChange}
+                        onValidation={handleValidation}
+                    />
+                );
+            case "b2":
+                return (
+                    <B2Repository
+                        details={repository.details}
+                        credentials={repository.credentials?.details}
+                        editMode={editMode}
+                        allTouched={allTouched}
+                        onDetailsChange={handleDetailsChange}
+                        onCredentialsChange={handleCredentialsChange}
+                        onValidation={handleValidation}
+                    />
+                );
+            case "rest":
+                return (
+                    <RESTRepository
+                        details={repository.details}
+                        credentials={repository.credentials?.details}
+                        editMode={editMode}
+                        allTouched={allTouched}
+                        onDetailsChange={handleDetailsChange}
+                        onCredentialsChange={handleCredentialsChange}
+                        onValidation={handleValidation}
+                    />
+                );
+            case "gs":
+                return (
+                    <GoogleCloudRepository
+                        details={repository.details}
+                        credentials={repository.credentials?.details}
+                        editMode={editMode}
+                        allTouched={allTouched}
+                        onDetailsChange={handleDetailsChange}
+                        onCredentialsChange={handleCredentialsChange}
+                        onValidation={handleValidation}
+                    />
+                );
+            case "azure":
+                return (
+                    <AzureRepository
+                        details={repository.details}
+                        credentials={repository.credentials?.details}
+                        editMode={editMode}
+                        allTouched={allTouched}
+                        onDetailsChange={handleDetailsChange}
+                        onCredentialsChange={handleCredentialsChange}
+                        onValidation={handleValidation}
+                    />
+                );
+            case "sftp":
+                return (
+                    <SFTPRepository
+                        details={repository.details}
+                        credentials={repository.credentials?.details}
+                        editMode={editMode}
+                        allTouched={allTouched}
+                        onDetailsChange={handleDetailsChange}
+                        onCredentialsChange={handleCredentialsChange}
+                        onValidation={handleValidation}
+                    />
+                );
+            case "local":
+                return (
+                    <LocalRepository
+                        details={repository.details}
+                        editMode={editMode}
+                        allTouched={allTouched}
+                        onDetailsChange={handleDetailsChange}
+                        onValidation={handleValidation}
+                    />
+                );
+        }
+    };
+
+    if (loading && !saving) {
         return (
             <Box display="flex" justifyContent="center" alignItems="center" minHeight="60vh">
                 <CircularProgress />
@@ -80,90 +284,106 @@ const BackupRepository: React.FC = () => {
         );
     }
 
-    const renderRepositoryDetails = () => {
-        switch (status?.repository?.repositoryType) {
-            case "s3":
-                return <S3Repository repository={status.repository} />
-            case "b2":
-                return <B2Repository repository={status.repository} />
-            case "rest":
-                return <RESTRepository repository={status.repository} />
-            default:
-                return (
-                    <TextField
-                        label="Repository Path"
-                        value={status?.repository?.location ?? ""}
-                        fullWidth
-                        disabled
-                        variant="outlined"
-                    />
-                );
-        }
-    };
-
     return (
-        <Container maxWidth="md">
-            <Paper sx={{ p: 3 }}>
-                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
-                    <Typography variant="h5">
-                        Repository Configuration
-                    </Typography>
+        <>
+            {saveError && (
+                <Alert severity="error" sx={{ mb: 3 }}>
+                    {saveError}
+                </Alert>
+            )}
+            <Box sx={{ display: "flex", justifyContent: "end", gap: 1, mb: 3 }}>
+                {!editMode && (
+                    <IconButton onClick={reload} color="primary">
+                        <CachedIcon />
+                    </IconButton>
+                )}
+                {editMode && !saving && (
                     <Button
                         variant="outlined"
-                        startIcon={<EditIcon />}
-                        onClick={handleEdit}
-                        disabled={editMode}
+                        startIcon={<UndoIcon />}
+                        onClick={handleCancel}
                     >
-                        Edit Configuration
+                        Cancel
                     </Button>
-                </Box>
+                )}
+                {editMode ? (
+                    <Button
+                        variant="contained"
+                        startIcon={<SaveIcon />}
+                        onClick={handleSave}
+                        loading={saving}
+                        loadingPosition="start"
+                        disabled={!hasChanges}
+                    >
+                        Save
+                    </Button>
+                ) : (
+                    <>
+                        <Button
+                            variant="outlined"
+                            startIcon={<EditIcon />}
+                            onClick={handleEdit}
+                        >
+                            Edit Config
+                        </Button>
+                        <Button
+                            variant="outlined"
+                            startIcon={<StarIcon />}
+                            onClick={handleNew}
+                        >
+                            Create New
+                        </Button>
+                    </>
+                )}
+            </Box>
 
-                <Card variant="outlined">
-                    <CardContent>
-                        <Typography variant="h6" gutterBottom>
-                            Repository Type: {status?.repository?.repositoryType}
-                        </Typography>
-                        
-                        <Divider sx={{ my: 2 }} />
-                        
-                        <Box sx={{ mb: 3 }}>
-                            <Typography variant="body2" color="text.secondary" gutterBottom>
-                                Repository Location
-                            </Typography>
-                            <Typography variant="body1" sx={{ fontFamily: "monospace" }}>
-                                {status?.repository?.location}
-                            </Typography>
-                        </Box>
-
-                        <Divider sx={{ my: 2 }} />
-
-                        {renderRepositoryDetails()}
-
-                        <Divider sx={{ my: 2 }} />
-
-                        <Box>
-                            <Typography variant="body2" color="text.secondary" gutterBottom>
-                                Repository Password
-                            </Typography>
-                            <TextField
-                                value={status?.repository?.passwordSet ? "••••••••••••" : "Not Set"}
-                                fullWidth
-                                disabled
-                                variant="outlined"
-                                size="small"
-                            />
-                        </Box>
-                    </CardContent>
-                </Card>
-
-                <Alert severity="info" sx={{ mt: 3 }}>
-                    <Typography variant="body2">
-                        <strong>Note:</strong> Changing repository configuration requires re-initialization. 
-                        This will create a new repository and existing snapshots will not be accessible.
+            <Card variant="outlined">
+                <CardContent>
+                    <Typography variant="h6" gutterBottom>
+                        Repository Type: {repository?.repositoryType || status?.repository?.repositoryType}
                     </Typography>
-                </Alert>
-            </Paper>
-        </Container>
+                    
+                    <Divider sx={{ my: 2 }} />
+                    
+                    <Box sx={{ mb: 3 }}>
+                        <Typography variant="body2" color="text.secondary" gutterBottom>
+                            Repository Location
+                        </Typography>
+                        <Typography variant="body1" sx={{ fontFamily: "monospace" }}>
+                            {repository?.location || status?.repository?.location}
+                        </Typography>
+                    </Box>
+
+                    <Divider sx={{ my: 2 }} />
+
+                    {renderRepositoryDetails()}
+
+                    <Divider sx={{ my: 2 }} />
+
+                    <Box>
+                        <Typography variant="body2" color="text.secondary" gutterBottom>
+                            Repository Password
+                        </Typography>
+                        <SecretField
+                            value={repository?.credentials?.resticPassword ?? ""}
+                            fullWidth
+                            disabled={!editMode}
+                            variant="outlined"
+                            size="small"
+                            isSet={repository?.passwordSet} 
+                            onChange={handlePasswordChange} 
+                            validate={allTouched}
+                        />
+                    </Box>
+                </CardContent>
+            </Card>
+
+            <Alert severity="info" sx={{ mt: 3 }}>
+                <Typography variant="body2">
+                    <strong>Note:</strong> Changing repository configuration may affect access to existing snapshots.
+                </Typography>
+            </Alert>
+        </>
     );
 };
 

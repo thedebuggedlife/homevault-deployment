@@ -9,6 +9,7 @@ export interface SnapshotRowProps {
 }
 
 export default function SnapshotRow({ snapshot, onDelete }: SnapshotRowProps) {
+    console.log(snapshot.id);
     return (
         <TableRow key={snapshot.id}>
             <TableCell>

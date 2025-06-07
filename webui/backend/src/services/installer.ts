@@ -9,7 +9,7 @@ import { file } from "tmp-promise";
 import * as fs from "fs/promises";
 import { BackupSnapshot, BackupStatus, RepositoryType } from "@/types/backup";
 import _ from "lodash";
-import { parseRepositoryEnvironment } from "@/types/restic";
+import { generateRepositoryEnvironment, parseRepositoryEnvironment, ResticRepository } from "@/types/restic";
 
 export const INSTALLER_PATH = process.env.INSTALLER_PATH ?? "~/homevault/workspace";
 
@@ -65,7 +65,12 @@ interface InstallerOutput {
     };
     config?: DeploymentConfig;
     backup?: BackupOutput;
-    logs: string[];
+    logs?: string[];
+    warnings?: string[];
+    errors?: {
+        message: string;
+        stack: string;
+    }[];
 }
 
 interface CommandOptions {
@@ -237,9 +242,9 @@ class InstallerService {
 
     async getBackupStatus(): Promise<BackupStatus> {
         try {
-            const { backup } = (await this.executeCommand(["backup", "info"])) || {};
+            const { backup } = (await this.executeCommand(["backup", "info"])) ?? {};
             if (!backup) {
-                this.logger.warn("Empty restic object returned - assuming system is uninitialized");
+                this.logger.warn("Empty backup object returned - assuming system is uninitialized");
                 return { initialized: false };
             }
             const repositoryLocation = backup.env["RESTIC_REPOSITORY"];
@@ -267,10 +272,21 @@ class InstallerService {
         }
     }
 
+    async initRepository(repository: ResticRepository): Promise<void> {
+        const { backup } = (await this.executeCommand(["backup", "info", "--env-only"])) ?? {};
+        const newEnv = generateRepositoryEnvironment(repository, backup?.env);
+        const { path: envPath, cleanup } = await this.generateConfFile(newEnv);
+        try {
+            await this.executeCommand(["backup", "init", "--restic-env", envPath]);
+        } catch {
+            throw new ServiceError("Failed to initialize restic repository.");
+        } finally {
+            cleanup();
+        }
+    }
+
     private async generateConfFile(config: Record<string, string>): Promise<ConfigFile> {
         const { path, cleanup } = await file();
-
-        this.logger.info("Created temporary file: " + path);
         const content = Object.entries(config)
             .map(([key, value]) => `${key}=${value}`)
             .join("\n");

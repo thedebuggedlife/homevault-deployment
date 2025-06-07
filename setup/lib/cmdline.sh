@@ -41,6 +41,8 @@ print_usage() {
         log "  info                         Show configuration and statistics about the repository."
         log "  run                          Create a new recovery snapshot."
         log "  schedule                     Configure (or disable) the schedule for background backup operations."
+        log "\nBackup 'info' options:\n"
+        log "  --env-only                   Only show restic configuration."
         log "\nBackup 'init' options:\n"
         log "  --restic-env <env_file>      Use the specified file to initialize restic environment variables."
         log "  --restic-var <var>=<value>   Specify a restic variable value. Can be specified multiple times."
@@ -226,7 +228,15 @@ parse_backup_init_option() {
             return 2
             ;;
     esac
-    return 1
+}
+
+parse_backup_info_option() {
+    case "$(echo "$1" | tr '[:upper:]' '[:lower:]')" in
+        --env-only)
+            BACKUP_ENV_ONLY=true
+            return 1
+            ;;
+    esac
 }
 
 parse_backup_run_option() {

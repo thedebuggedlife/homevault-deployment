@@ -1,4 +1,5 @@
 import { DockerContainer } from "./docker";
+import { ResticRepository } from "./restic";
 
 export interface User {
     username: string;

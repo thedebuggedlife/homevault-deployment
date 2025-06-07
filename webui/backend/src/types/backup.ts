@@ -29,9 +29,7 @@ export interface BackupSchedule {
 }
 
 export interface BackupInitRequest {
-    repositoryType: RepositoryType;
-    config: Record<string, string>;
-    password: string;
+    repository: ResticRepository;
 }
 
 export interface BackupRunRequest {

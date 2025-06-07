@@ -17,6 +17,7 @@ import { getActivity, postActivitySudo } from "./api/activity";
 import { deploymentSocket } from "./socket/deployment";
 import getBackupStatus from "./api/backup/getBackupStatus";
 import getSnapshots from "./api/backup/getSnapshots";
+import initRepository from "./api/backup/initRepository";
 
 const app = express();
 const server = http.createServer(app);
@@ -34,6 +35,7 @@ app.use(express.json());
 
 app.get("/api/activity", authenticateToken, getActivity);
 app.post("/api/activity/sudo", postActivitySudo);
+app.post("/api/backup/init", authenticateToken, initRepository);
 app.get("/api/backup/snapshots", authenticateToken, getSnapshots);
 app.get("/api/backup/status", authenticateToken, getBackupStatus);
 app.post("/api/deployment/config", authenticateToken, getDeploymentConfig);

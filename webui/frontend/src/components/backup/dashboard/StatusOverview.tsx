@@ -47,14 +47,6 @@ export default function StatusOverview({ status }: BackupStatusOverviewProps) {
                             color="primary"
                             size="small"
                         />
-                        {status.repository?.repositoryType === "s3" && 
-                         status.repository.details.subType === "aws" && (
-                            <Chip
-                                label="aws"
-                                color="secondary"
-                                size="small"
-                            />
-                        )}
                     </Box>
                 </Box>
 

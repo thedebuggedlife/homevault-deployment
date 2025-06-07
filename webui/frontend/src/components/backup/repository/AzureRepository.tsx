@@ -1,20 +1,20 @@
 import SecretField from "@/components/SecretField";
-import { B2CredentialDetails as B2Credentials, B2Details } from "@backend/types/restic";
+import { AzureCredentialDetails as AzureCredentials, AzureDetails } from "@backend/types/restic";
 import { Grid, TextField } from "@mui/material";
 import _, { Dictionary } from "lodash";
 import { useCallback, useEffect, useState } from "react";
 
-export interface B2RepositoryProps {
-    details: B2Details;
-    credentials?: B2Credentials;
+export interface AzureRepositoryProps {
+    details: AzureDetails;
+    credentials?: AzureCredentials;
     editMode?: boolean;
     allTouched?: boolean;
-    onDetailsChange: (details: B2Details) => void;
-    onCredentialsChange: (credentials: B2Credentials) => void;
+    onDetailsChange: (details: AzureDetails) => void;
+    onCredentialsChange: (credentials: AzureCredentials) => void;
     onValidation: (isValid: boolean) => void;
 }
 
-export default function B2Repository({
+export default function AzureRepository({
     details,
     credentials,
     allTouched,
@@ -22,18 +22,18 @@ export default function B2Repository({
     onDetailsChange,
     onCredentialsChange,
     onValidation,
-}: B2RepositoryProps) {
+}: AzureRepositoryProps) {
     const [touched, setTouched] = useState<Dictionary<boolean>>({});
 
     const handleDetailsChange =
-        (field: "bucket" | "path") => (event: React.ChangeEvent<HTMLInputElement>) => {
+        (field: "accountName" | "containerName" | "path") => (event: React.ChangeEvent<HTMLInputElement>) => {
             const newDetails = _.cloneDeep(details);
             newDetails[field] = event.target.value;
             setTouched((prev) => ({ ...prev, [field]: true }));
             onDetailsChange(newDetails);
         };
 
-    const handleCredentialsChange = (field: keyof B2Credentials) => (value: string) => {
+    const handleCredentialsChange = (field: keyof AzureCredentials) => (value: string) => {
         const newCredentials = _.cloneDeep(credentials ?? {});
         newCredentials[field] = value;
         onCredentialsChange(newCredentials);
@@ -41,9 +41,9 @@ export default function B2Repository({
 
     const handleValidation = useCallback(() => {
         const isValid =
-            !_.isEmpty(details.bucket) &&
+            !_.isEmpty(details.accountName) &&
+            !_.isEmpty(details.containerName) &&
             !_.isEmpty(details.path) &&
-            (!_.isEmpty(credentials?.accountId) || details.accountIdSet) &&
             (!_.isEmpty(credentials?.accountKey) || details.accountKeySet);
         onValidation(isValid);
     }, [details, credentials, onValidation]);
@@ -65,16 +65,27 @@ export default function B2Repository({
             <Grid container spacing={2}>
                 <Grid size={{ xs: 12, lg: 6 }}>
                     <TextField
-                        label="Bucket"
-                        value={details.bucket ?? ""}
+                        label="Account Name"
+                        value={details.accountName ?? ""}
                         fullWidth
                         disabled={!editMode}
                         variant="outlined"
-                        error={isTouched("bucket") && _.isEmpty(details.bucket)}
-                        onChange={handleDetailsChange("bucket")}
+                        error={isTouched("accountName") && _.isEmpty(details.accountName)}
+                        onChange={handleDetailsChange("accountName")}
                     />
                 </Grid>
                 <Grid size={{ xs: 12, lg: 6 }}>
+                    <TextField
+                        label="Container Name"
+                        value={details.containerName ?? ""}
+                        fullWidth
+                        disabled={!editMode}
+                        variant="outlined"
+                        error={isTouched("containerName") && _.isEmpty(details.containerName)}
+                        onChange={handleDetailsChange("containerName")}
+                    />
+                </Grid>
+                <Grid size={12}>
                     <TextField
                         label="Path"
                         value={details.path ?? "/"}
@@ -85,19 +96,7 @@ export default function B2Repository({
                         onChange={handleDetailsChange("path")}
                     />
                 </Grid>
-                <Grid size={{ xs: 12, lg: 6 }}>
-                    <SecretField
-                        label="Account ID"
-                        value={credentials?.accountId ?? ""}
-                        isSet={details.accountIdSet}
-                        fullWidth
-                        disabled={!editMode}
-                        variant="outlined"
-                        validate={allTouched}
-                        onChange={handleCredentialsChange("accountId")}
-                    />
-                </Grid>
-                <Grid size={{ xs: 12, lg: 6 }}>
+                <Grid size={12}>
                     <SecretField
                         label="Account Key"
                         value={credentials?.accountKey ?? ""}

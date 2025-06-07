@@ -70,7 +70,7 @@ const BackupDashboard: React.FC = () => {
         <>
             <Grid container spacing={3}>
                 {/* Quick Actions */}
-                <Grid size={{ xs: 12 }}>
+                <Grid size={12}>
                     <Box display="flex" gap={2}>
                         <Button
                             variant="contained"
@@ -104,7 +104,7 @@ const BackupDashboard: React.FC = () => {
                 </Grid>
 
                 {/* Scheduling Status */}
-                <Grid size={{ xs: 12 }}>
+                <Grid size={12}>
                     <ScheduleStatus
                         schedule={status.schedule}
                         onConfigureSchedule={() => navigate("/backup/scheduling")}

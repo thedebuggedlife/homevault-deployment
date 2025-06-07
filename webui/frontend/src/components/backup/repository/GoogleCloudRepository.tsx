@@ -1,20 +1,20 @@
 import SecretField from "@/components/SecretField";
-import { RESTCredentialDetails as RESTCredentials, RESTDetails } from "@backend/types/restic";
+import { GoogleCloudCredentialDetails as GoogleCloudCredentials, GoogleCloudDetails } from "@backend/types/restic";
 import { Grid, TextField } from "@mui/material";
 import _, { Dictionary } from "lodash";
 import { useCallback, useEffect, useState } from "react";
 
-export interface RESTRepositoryProps {
-    details: RESTDetails;
-    credentials?: RESTCredentials;
+export interface GoogleCloudRepositoryProps {
+    details: GoogleCloudDetails;
+    credentials?: GoogleCloudCredentials;
     editMode?: boolean;
     allTouched?: boolean;
-    onDetailsChange: (details: RESTDetails) => void;
-    onCredentialsChange: (credentials: RESTCredentials) => void;
+    onDetailsChange: (details: GoogleCloudDetails) => void;
+    onCredentialsChange: (credentials: GoogleCloudCredentials) => void;
     onValidation: (isValid: boolean) => void;
 }
 
-export default function RESTRepository({
+export default function GoogleCloudRepository({
     details,
     credentials,
     allTouched,
@@ -22,18 +22,18 @@ export default function RESTRepository({
     onDetailsChange,
     onCredentialsChange,
     onValidation,
-}: RESTRepositoryProps) {
+}: GoogleCloudRepositoryProps) {
     const [touched, setTouched] = useState<Dictionary<boolean>>({});
 
     const handleDetailsChange =
-        (field: "url" | "username") => (event: React.ChangeEvent<HTMLInputElement>) => {
+        (field: "bucket" | "path" | "projectId") => (event: React.ChangeEvent<HTMLInputElement>) => {
             const newDetails = _.cloneDeep(details);
             newDetails[field] = event.target.value;
             setTouched((prev) => ({ ...prev, [field]: true }));
             onDetailsChange(newDetails);
         };
 
-    const handleCredentialsChange = (field: keyof RESTCredentials) => (value: string) => {
+    const handleCredentialsChange = (field: keyof GoogleCloudCredentials) => (value: string) => {
         const newCredentials = _.cloneDeep(credentials ?? {});
         newCredentials[field] = value;
         onCredentialsChange(newCredentials);
@@ -41,8 +41,9 @@ export default function RESTRepository({
 
     const handleValidation = useCallback(() => {
         const isValid =
-            !_.isEmpty(details.url) &&
-            (_.isEmpty(details.username) || !_.isEmpty(credentials?.password) || details.passwordSet);
+            !_.isEmpty(details.bucket) &&
+            !_.isEmpty(details.path) &&
+            (!_.isEmpty(credentials?.applicationCredentials) || details.credentialsSet);
         onValidation(isValid);
     }, [details, credentials, onValidation]);
 
@@ -61,37 +62,49 @@ export default function RESTRepository({
     return (
         <>
             <Grid container spacing={2}>
-                <Grid size={12}>
+                <Grid size={{ xs: 12, lg: 6 }}>
                     <TextField
-                        label="REST Server URL"
-                        value={details.url ?? ""}
+                        label="Bucket"
+                        value={details.bucket ?? ""}
                         fullWidth
                         disabled={!editMode}
                         variant="outlined"
-                        error={isTouched("url") && _.isEmpty(details.url)}
-                        onChange={handleDetailsChange("url")}
+                        error={isTouched("bucket") && _.isEmpty(details.bucket)}
+                        onChange={handleDetailsChange("bucket")}
                     />
                 </Grid>
                 <Grid size={{ xs: 12, lg: 6 }}>
                     <TextField
-                        label="Username"
-                        value={details.username ?? ""}
+                        label="Path"
+                        value={details.path ?? "/"}
                         fullWidth
                         disabled={!editMode}
                         variant="outlined"
-                        onChange={handleDetailsChange("username")}
+                        error={isTouched("path") && _.isEmpty(details.path)}
+                        onChange={handleDetailsChange("path")}
+                    />
+                </Grid>
+                <Grid size={{ xs: 12, lg: 6 }}>
+                    <TextField
+                        label="Project ID"
+                        value={details.projectId ?? ""}
+                        fullWidth
+                        disabled={!editMode}
+                        variant="outlined"
+                        onChange={handleDetailsChange("projectId")}
                     />
                 </Grid>
                 <Grid size={{ xs: 12, lg: 6 }}>
                     <SecretField
-                        label="Password"
-                        value={credentials?.password ?? ""}
-                        isSet={details.passwordSet}
+                        label="Application Credentials"
+                        value={credentials?.applicationCredentials ?? ""}
+                        isSet={details.credentialsSet}
                         fullWidth
                         disabled={!editMode}
                         variant="outlined"
                         validate={allTouched}
-                        onChange={handleCredentialsChange("password")}
+                        onChange={handleCredentialsChange("applicationCredentials")}
+                        helperText={editMode && !details.credentialsSet ? "JSON key file content" : undefined}
                     />
                 </Grid>
             </Grid>
