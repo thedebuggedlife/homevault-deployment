@@ -9,6 +9,8 @@ if [ -z "$NONCE" ]; then
     exit 1
 fi
 
+TIMEOUT_SEC=120
+
 # Get the user who invoked sudo
 FOR_USER="${SUDO_USER:-$(whoami)}"
 
@@ -16,7 +18,8 @@ FOR_USER="${SUDO_USER:-$(whoami)}"
 SUDO_CONTEXT=$(cat <<EOF
 {
     "nonce": "$NONCE",
-    "username": "$FOR_USER"
+    "username": "$FOR_USER",
+    "timeoutSec": $TIMEOUT_SEC
 }
 EOF
 )
@@ -25,7 +28,7 @@ EOF
 response=$(curl -s -X POST http://localhost:3001/api/activity/sudo \
     -H "Content-Type: application/json" \
     -d "$SUDO_CONTEXT" \
-    --max-time 35)
+    --max-time "$TIMEOUT_SEC")
 
 if [ $? -eq 0 ]; then
     echo "$response" | jq -r '.password'

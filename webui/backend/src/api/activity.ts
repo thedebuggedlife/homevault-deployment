@@ -9,6 +9,7 @@ import SessionManager from "@/services/session";
 interface SudoRequest {
     nonce: string,
     username: string,
+    timeoutSec: number,
 }
 
 interface SudoResponse {
@@ -38,7 +39,8 @@ export async function postActivitySudo(req: Request<{}, SudoResponse, SudoReques
         if (!session) {
             throw new ServiceError("Nonce does not match any existing sessions", null, 400);
         }
-        const password = await session.askSudo(sudo.username);
+        const timeoutMs = (req.body.timeoutSec ?? 120) * 1000 - 150;
+        const password = await session.askSudo(sudo.username, timeoutMs);
         return res.status(200).json({ password });
     } catch (error) {
         next(error);

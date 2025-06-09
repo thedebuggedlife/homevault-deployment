@@ -37,6 +37,7 @@ const BackupScheduling: React.FC = () => {
     });
     const [saving, setSaving] = useState(false);
     const [saveError, setSaveError] = useState<string>();
+    const [saveSuccess, setSaveSuccess] = useState(false);
     const [validation, setValidation] = useState({
         cronExpression: false,
         retentionPolicy: false,
@@ -57,10 +58,12 @@ const BackupScheduling: React.FC = () => {
     const handleSave = useCallback(async () => {
         try {
             setSaveError(null);
+            setSaveSuccess(false);
             setSaving(true);
             await backend.updateBackupSchedule(schedule);
             setOriginalSchedule(schedule);
             setStatus({ ...status, schedule });
+            setSaveSuccess(true);
         } catch (error) {
             console.error("Failed to save schedule:", error);
             let message = "Failed to save schedule configuration";
@@ -76,8 +79,15 @@ const BackupScheduling: React.FC = () => {
     const handleReset = () => {
         // Reset to original values
         setSaveError(null);
+        setSaveSuccess(false);
         setSchedule(originalSchedule);
     };
+
+    const handleReload = () => {
+        setSaveError(null);
+        setSaveSuccess(false);
+        reload();
+    }
 
     const handleScheduleChange = (cronExpression: string) => {
         setSchedule((prev) => ({
@@ -126,7 +136,7 @@ const BackupScheduling: React.FC = () => {
         return (
             <Alert severity="error" sx={{ mt: 2 }}>
                 {error}
-                <Button onClick={reload} sx={{ ml: 2 }}>
+                <Button onClick={handleReload} sx={{ ml: 2 }}>
                     Retry
                 </Button>
             </Alert>
@@ -135,14 +145,9 @@ const BackupScheduling: React.FC = () => {
 
     return (
         <>
-            {saveError && (
-                <Alert severity="error" sx={{ mb: 3 }}>
-                    {saveError}
-                </Alert>
-            )}
             <Box sx={{ display: "flex", justifyContent: "end", gap: 2, mb: 3 }}>
                 {!hasChanges && (
-                    <IconButton onClick={reload} color="primary">
+                    <IconButton onClick={handleReload} color="primary">
                         <CachedIcon />
                     </IconButton>
                 )}
@@ -162,6 +167,18 @@ const BackupScheduling: React.FC = () => {
                     Save
                 </Button>
             </Box>
+
+            {/* Error and success alert bars */}
+            {saveError && (
+                <Alert severity="error" sx={{ mb: 3 }} onClose={() => setSaveError(null)}>
+                    {saveError}
+                </Alert>
+            )}
+            {saveSuccess && (
+                <Alert severity="success" sx={{ mb: 3 }} onClose={() => setSaveSuccess(false)}>
+                    Settings saved successfully
+                </Alert>
+            )}
 
             {/* Enable/Disable Schedule */}
             <Card variant="outlined" sx={{ mb: 3 }}>
