@@ -4,13 +4,14 @@ import { ErrorResponse } from "@/types";
 import { Request, Response, NextFunction } from "express";
 import { Socket } from "socket.io";
 
-export interface AuthenticatedRequest<TBody = any> extends Request {
+export interface AuthenticatedRequest<TBody = any, TParams = {}> extends Request<TParams, TBody> {
     token?: TokenPayload;
     headers: {
         authorization?: string;
         [key: string]: any;
     };
     body: TBody;
+    params: TParams;
 }
 
 export async function authenticateToken(req: AuthenticatedRequest, res: Response<ErrorResponse>, next: NextFunction) {

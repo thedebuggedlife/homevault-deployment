@@ -21,6 +21,7 @@ import initRepository from "./api/backup/initRepository";
 import updateSchedule from "./api/backup/updateSchedule";
 import { sessionSocket } from "./socket/session";
 import { requestContext } from "./middleware/context";
+import deleteSnapshot from "./api/backup/deleteSnapshot";
 
 const app = express();
 const server = http.createServer(app);
@@ -43,6 +44,7 @@ app.post("/api/activity/sudo", postActivitySudo);
 app.post("/api/backup/init", authenticateToken, initRepository);
 app.post("/api/backup/schedule", authenticateToken, updateSchedule);
 app.get("/api/backup/snapshots", authenticateToken, getSnapshots);
+app.delete("/api/backup/snapshots/:snapshotId", authenticateToken, deleteSnapshot);
 app.get("/api/backup/status", authenticateToken, getBackupStatus);
 app.post("/api/deployment/config", authenticateToken, getDeploymentConfig);
 app.post("/api/login", [body("username").notEmpty(), body("password").notEmpty(), handleValidationErrors], login);

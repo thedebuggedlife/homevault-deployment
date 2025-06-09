@@ -218,6 +218,11 @@ class InstallerService {
         }
     }
 
+    async deleteSnapshot(snapshotId: string): Promise<void> {
+        const args = ["snapshots", "forget", snapshotId];
+        await this.executeCommand(args);
+    }
+
     async getBackupStatus(): Promise<BackupStatus> {
         try {
             const { backup } = (await this.executeCommand(["backup", "info"])) ?? {};

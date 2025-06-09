@@ -95,11 +95,7 @@ class BackendServer implements EmitterMixin<BackendServerEvents> {
         return response.data;
     }
     async deleteBackupSnapshot(id: string): Promise<void> {
-        // TODO: Replace with actual API call
-        // await this.client.delete(`/api/backup/snapshots/${id}`);
-
-        console.log("Mock: Deleting snapshot", id);
-        return Promise.resolve();
+        await this.client.delete(`/api/backup/snapshots/${id}`);
     }
     async updateBackupSchedule(schedule: BackupSchedule): Promise<void> {
         await this.client.post("/api/backup/schedule", schedule);

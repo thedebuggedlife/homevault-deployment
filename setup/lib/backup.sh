@@ -535,11 +535,13 @@ restic_forget_snapshots() {
         restic_load_env || return 1
 
         log "Deleting snapshot ${Purple}$SNAPSHOT_ID${COff} from repository: ${Cyan}${RESTIC_REPOSITORY}${COff}\n"
-        restic forget "$SNAPSHOT_ID" || {
+        local output
+        output=$(restic forget "$SNAPSHOT_ID" || {
                 log_error "Forget operation failed"
                 return 1
-            }
+            })
 
+        log "$output"
         log
     ) || return 1
 }

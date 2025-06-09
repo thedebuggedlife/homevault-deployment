@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
 import {
-    Container,
     Paper,
     Typography,
     Box,
@@ -13,24 +12,19 @@ import {
     TableContainer,
     TableHead,
     TableRow,
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    DialogContentText,
-    DialogActions,
 } from "@mui/material";
-import {
-    PhotoLibrary as PhotoLibraryIcon,
-    Refresh as RefreshIcon,
-} from "@mui/icons-material";
+import { Refresh as RefreshIcon } from "@mui/icons-material";
 import backend from "@/backend/backend";
 import { BackupSnapshot } from "@backend/types/backup";
 import SnapshotRow from "@/components/backup/snapshots/SnapshotRow";
+import DeleteConfirmationDialog from "@/components/backup/snapshots/DeleteConfirmationDialog";
 
 const BackupSnapshots: React.FC = () => {
     const [snapshots, setSnapshots] = useState<BackupSnapshot[]>([]);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState("");
+    const [error, setError] = useState<string>();
+    const [deleteError, setDeleteError] = useState<string>();
+    const [deletedId, setDeletedId] = useState<string>();
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [selectedSnapshot, setSelectedSnapshot] = useState<BackupSnapshot | null>(null);
     const [deleting, setDeleting] = useState(false);
@@ -44,7 +38,7 @@ const BackupSnapshots: React.FC = () => {
             setLoading(true);
             const response = await backend.getBackupSnapshots();
             setSnapshots(response);
-            setError("");
+            setError(null);
         } catch (err) {
             setError("Failed to load snapshots");
         } finally {
@@ -62,22 +56,27 @@ const BackupSnapshots: React.FC = () => {
 
         try {
             setDeleting(true);
+            setDeleteError(null);
             await backend.deleteBackupSnapshot(selectedSnapshot.id);
-            setDeleteDialogOpen(false);
-            setSelectedSnapshot(null);
-            // Refresh the list
-            await fetchSnapshots();
-        } catch (err) {
-            console.error("Failed to delete snapshot:", err);
-            alert("Failed to delete snapshot");
+            setDeletedId(selectedSnapshot.shortId ?? selectedSnapshot.id);
+            fetchSnapshots();
+        } catch (error) {
+            let message = "Failed to delete snapshot.";
+            if (error.message) {
+                message += " " + error.message;
+            }
+            setDeleteError(message);
         } finally {
+            setDeleteDialogOpen(false);
             setDeleting(false);
         }
     };
 
     const handleDeleteCancel = () => {
-        setDeleteDialogOpen(false);
-        setSelectedSnapshot(null);
+        if (!deleting) {
+            setDeleteDialogOpen(false);
+            setSelectedSnapshot(null);
+        }
     };
 
     if (loading && snapshots.length === 0) {
@@ -100,30 +99,37 @@ const BackupSnapshots: React.FC = () => {
     }
 
     return (
-        <Container maxWidth="lg">
-            <Paper sx={{ p: 3 }}>
-                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                        <PhotoLibraryIcon color="primary" />
-                        <Typography variant="h5">
-                            Backup Snapshots
-                        </Typography>
-                    </Box>
-                    <Button
-                        variant="outlined"
-                        startIcon={<RefreshIcon />}
-                        onClick={fetchSnapshots}
-                        disabled={loading}
-                    >
-                        Refresh
-                    </Button>
-                </Box>
+        <>
+            <Box sx={{ display: "flex", justifyContent: "end", gap: 2, mb: 3 }}>
+                <Button
+                    variant="outlined"
+                    startIcon={<RefreshIcon />}
+                    onClick={fetchSnapshots}
+                    loading={loading}
+                    loadingPosition="start"
+                >
+                    Refresh
+                </Button>
+            </Box>
 
-                {snapshots.length === 0 ? (
-                    <Alert severity="info">
-                        No snapshots found. Run a backup to create your first snapshot.
-                    </Alert>
-                ) : (
+            {deleteError && (
+                <Alert severity="error" sx={{ m: 2 }} onClose={() => setDeleteError(null)}>
+                    {deleteError}
+                </Alert>
+            )}
+
+            {deletedId && (
+                <Alert severity="success" sx={{ m: 2 }} onClose={() => setDeletedId(null)}>
+                    Snapshot <strong>{deletedId}</strong> was deleted successfully.
+                </Alert>
+            )}
+
+            {snapshots.length === 0 ? (
+                <Alert severity="info" sx={{ m: 2 }}>
+                    No snapshots found. Run a backup to create your first snapshot.
+                </Alert>
+            ) : (
+                <Paper sx={{ p: 3 }}>
                     <TableContainer>
                         <Table>
                             <TableHead>
@@ -143,45 +149,23 @@ const BackupSnapshots: React.FC = () => {
                             </TableBody>
                         </Table>
                     </TableContainer>
-                )}
-
-                <Box sx={{ mt: 2 }}>
-                    <Typography variant="body2" color="text.secondary">
-                        Total snapshots: {snapshots.length}
-                    </Typography>
-                </Box>
-            </Paper>
+                    <Box sx={{ mt: 2 }}>
+                        <Typography variant="body2" color="text.secondary">
+                            Total snapshots: {snapshots.length}
+                        </Typography>
+                    </Box>
+                </Paper>
+            )}
 
             {/* Delete Confirmation Dialog */}
-            <Dialog
+            <DeleteConfirmationDialog
                 open={deleteDialogOpen}
+                deleting={deleting}
                 onClose={handleDeleteCancel}
-                aria-labelledby="delete-dialog-title"
-            >
-                <DialogTitle id="delete-dialog-title">
-                    Delete Snapshot?
-                </DialogTitle>
-                <DialogContent>
-                    <DialogContentText>
-                        Are you sure you want to delete snapshot <strong>{selectedSnapshot?.shortId || selectedSnapshot?.id}</strong>?
-                        This action cannot be undone.
-                    </DialogContentText>
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={handleDeleteCancel} disabled={deleting}>
-                        Cancel
-                    </Button>
-                    <Button
-                        onClick={handleDeleteConfirm}
-                        color="error"
-                        variant="contained"
-                        disabled={deleting}
-                    >
-                        {deleting ? <CircularProgress size={20} /> : "Delete"}
-                    </Button>
-                </DialogActions>
-            </Dialog>
-        </Container>
+                onDelete={handleDeleteConfirm}
+                selectedSnapshot={selectedSnapshot}
+            />
+        </>
     );
 };
 

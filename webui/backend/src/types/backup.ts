@@ -34,3 +34,7 @@ export interface BackupRunRequest {
     tag?: string;
     keepForever?: boolean;
 }
+
+export interface DeleteSnapshotParams {
+    snapshotId: string;
+}
