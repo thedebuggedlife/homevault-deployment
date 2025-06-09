@@ -35,27 +35,26 @@ function AppContent() {
         },
         {
             title: "Backup",
-            segment: "backup",
             icon: <BackupIcon />,
             children: [
                 {
                     title: "Overview",
-                    segment: "",
+                    segment: "backup",
                     icon: <DashboardIcon />,
                 },
                 {
                     title: "Repository",
-                    segment: "repository",
+                    segment: "backup/repository",
                     icon: <BookmarkIcon />,
                 },
                 {
                     title: "Snapshots",
-                    segment: "snapshots",
+                    segment: "backup/snapshots",
                     icon: <PhotoLibraryIcon />,
                 },
                 {
                     title: "Scheduling",
-                    segment: "scheduling",
+                    segment: "backup/scheduling",
                     icon: <ScheduleIcon />,
                 },
             ],
