@@ -38,6 +38,7 @@ export const SessionProvider = ({ children }: { children: ReactNode; }) => {
                 const response = await backend.refreshToken(token);
                 localStorage.setItem("token", response.token);
                 scheduleRefresh(response.expiresInSec);
+                setSession(prev => ({ ...prev, token: response.token }));
             } catch (error) {
                 console.error("Failed to refresh token", error);
                 if ([401, 403].includes(error.status)) {
