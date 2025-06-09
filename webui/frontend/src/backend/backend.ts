@@ -9,90 +9,31 @@ import {
     GetModulesResponse,
     LoginResponse,
     SystemStatusResponse,
+    SessionServerEvents,
 } from "@backend/types";
 import { BackupStatus, BackupSnapshot, BackupSchedule, BackupInitRequest } from "@backend/types/backup";
 import axios, { AxiosRequestConfig } from "axios";
 import { createNanoEvents, EmitterMixin } from "nanoevents";
 import { io, Socket } from "socket.io-client";
+import { type DeploymentSocket, DeploymentOperation } from "./deployment";
 
-type DeploymentSocket = Socket<DeploymentServerEvents, DeploymentClientEvents>;
+export type SessionSocket = Socket<SessionServerEvents>;
 
-export interface DeploymentOperationEvents {
-    backfill: (data: string[]) => void;
-    output: (data: string, offset: number) => void;
-    completed: () => void;
-    error: (message: string) => void;
-    closed: () => void;
-}
+export class SessionConnection {
+    private socket?: SessionSocket;
 
-export class DeploymentOperation implements EmitterMixin<DeploymentOperationEvents> {
-    private readonly emitter = createNanoEvents<DeploymentOperationEvents>();
-    private completed = false;
-
-    constructor(
-        private socket: DeploymentSocket,
-        public id?: string
-    ) {
-        socket.on("disconnect", () => {
-            if (!this.completed) {
-                this.completed = true;
-                this.emitter.emit("error", "Disconnected from backend");
-            }
-            this.close();
-        });
-        socket.on("started", (id) => (this.id = id));
-        socket.on("completed", () => {
-            this.completed = true;
-            this.emitter.emit("completed");
-            this.close();
-        });
-        socket.on("error", (error) => {
-            console.error("Received `error` event from server", error);
-            this.completed = true;
-            this.emitter.emit("error", error);
-            this.close();
-        });
-        socket.on("output", (data, offset) => {
-            this.emitter.emit("output", data, offset);
-        });
-        socket.on("backfill", (data) => {
-            this.emitter.emit("backfill", data);
-        });
-    }
-
-    get isInstalling(): boolean {
-        return !this.completed;
-    }
-
-    abort() {
-        this.socket.emit("abort");
-    }
-
-    close() {
-        this.emitter.emit("closed");
-        this.emitter.events = {};
-        try {
-            this.socket?.disconnect();
-            delete this.socket;
-        } catch (error) {
-            console.error("Failed to disconnect socket", error);
-        }
-    }
-
-    on<E extends keyof DeploymentOperationEvents>(event: E, callback: DeploymentOperationEvents[E]) {
-        if (this.completed) {
-            throw new Error("The operation has completed previously");
-        }
-        return this.emitter.on(event, callback);
+    disconnect() {
+        this.socket?.disconnect();
+        delete this.socket;
     }
 }
-
 interface BackendServerEvents {
     deployment: (operation: DeploymentOperation) => void;
 }
 
 class BackendServer implements EmitterMixin<BackendServerEvents> {
-    private token: string;
+    private token?: string;
+    private sessionId?: string;
     private readonly client = axios.create({
         baseURL: config.backendUrl,
     });
@@ -161,11 +102,7 @@ class BackendServer implements EmitterMixin<BackendServerEvents> {
         return Promise.resolve();
     }
     async updateBackupSchedule(schedule: BackupSchedule): Promise<void> {
-        // TODO: Replace with actual API call
-        // await this.client.post("/api/backup/schedule", schedule);
-
-        console.log("Mock: Updating backup schedule", schedule);
-        return Promise.resolve();
+        await this.client.post("/api/backup/schedule", schedule);
     }
     async startBackup(): Promise<DeploymentOperation> {
         // TODO: Replace with actual implementation
@@ -188,11 +125,29 @@ class BackendServer implements EmitterMixin<BackendServerEvents> {
         socket.emit("attach", id);
         return operation;
     }
+    connectSession(): SessionSocket {
+        const url = config.backendUrl + "/session";
+        const socket: SessionSocket = io(url, {
+            auth: {
+                token: this.token,
+            },
+        });
+        socket.on("hello", (sessionId: string) => {
+            console.info("Received session ID: " + sessionId);
+            this.sessionId = sessionId;
+            this.client.defaults.params = { sessionId };
+        });
+        socket.on("disconnect", (reason) => {
+            console.warn("Session socket disconnected due to " + reason);
+            delete this.sessionId;
+            delete this.client.defaults.params;
+        });
+        return socket;
+    }
     private connectDeployment(): Promise<DeploymentSocket> {
         try {
             const url = config.backendUrl + "/deployment";
             const socket: Socket<DeploymentServerEvents, DeploymentClientEvents> = io(url, {
-                path: "/socket.io",
                 auth: {
                     token: this.token,
                 },

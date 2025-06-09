@@ -780,7 +780,7 @@ trap "on_script_exit" EXIT
 
 parse_command_line "$@"
 
-if [ "$UNATTENDED" = true ]; then 
+if [[ "$UNATTENDED" = true && "$SELECTED_ACTION" = deploy ]]; then 
     sudo -v || {
         log_error "Failed to authenticate with sudo as $USER"
         exit 1

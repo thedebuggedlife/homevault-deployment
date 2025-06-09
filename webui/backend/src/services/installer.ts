@@ -7,9 +7,10 @@ import { ServiceError } from "@/errors";
 import { v4 as uuid } from "uuid";
 import { file } from "tmp-promise";
 import * as fs from "fs/promises";
-import { BackupSnapshot, BackupStatus } from "@/types/backup";
+import { BackupSchedule, BackupSnapshot, BackupStatus } from "@/types/backup";
 import _ from "lodash";
 import { generateRepositoryEnvironment, parseRepositoryEnvironment, ResticRepository } from "@/types/restic";
+import { getSessionId } from "@/middleware/context";
 
 export const INSTALLER_PATH = process.env.INSTALLER_PATH ?? "~/homevault/workspace";
 
@@ -90,7 +91,6 @@ export interface DeploymentInstance {
     request: DeploymentRequest;
     events: Emitter<DeploymentEvents>;
     output: string[];
-    sudo: () => string;
     abort?: () => void;
 }
 
@@ -115,16 +115,6 @@ class InstallerService {
                 request: this.currentDeployment.request,
             };
         }
-    }
-
-    sudoForActivity(id: string): string {
-        if (this.currentDeployment) {
-            if (this.currentDeployment.id !== id) {
-                throw new ServiceError("The activity current activity id does not match the sudo request", null, 403);
-            }
-            return this.currentDeployment.sudo();
-        }
-        throw new ServiceError("There is no activity that requires sudo access", null, 400);
     }
 
     getCurrentDeployment(): DeploymentInstance | undefined {
@@ -160,18 +150,11 @@ class InstallerService {
             this.logger.warn("There is already an ongoing deployment");
             throw new ServiceError("There is already an ongoing deployment");
         }
-        const password = request.config?.password;
-        if (!password) {
-            this.logger.warn("Deployment request missing password for sudo");
-            throw new ServiceError("Deployment requires password for sudo");
-        }
-        delete request.config?.password; // Avoid leaking password - remove it from persisted request
         const instance: DeploymentInstance = (this.currentDeployment = {
             id: uuid(),
             request,
             events: createNanoEvents<DeploymentEvents>(),
             output: [],
-            sudo: () => password,
         });
         const args = ["deploy", ...this.getDeploymentArgs(request)];
         const output = (data: string) => {
@@ -187,11 +170,6 @@ class InstallerService {
         const cancellable = this.executeCommand([...args, "--unattended", "--force"], {
             output,
             cancellable: true,
-            env: {
-                ...process.env,
-                SUDO_NONCE: instance.id,
-                SUDO_ASKPASS: `${INSTALLER_PATH}/webui/backend/askpass.sh`,
-            },
         });
         this.logger.info(`Deployment instance ${instance.id} started`);
         cancellable.promise
@@ -285,6 +263,24 @@ class InstallerService {
         }
     }
 
+    async updateSchedule(schedule: BackupSchedule): Promise<void> {
+        const { enabled, cronExpression, retentionPolicy } = schedule;
+        const args = ["backup", "schedule", "--unattended"];
+        if (!enabled) {
+            args.push("--disable");
+        }
+        else {
+            args.push("--enable");
+            if (cronExpression) {
+                args.push("--cron", `'${cronExpression}'`);
+            }
+            if (retentionPolicy) {
+                args.push("--retention", retentionPolicy);
+            }
+        }
+        await this.executeCommand(args);
+    }
+
     private async generateConfFile(config: Record<string, string>): Promise<ConfigFile> {
         const { path, cleanup } = await file();
         const content = Object.entries(config)
@@ -348,7 +344,12 @@ class InstallerService {
                     }
                     options?.output?.(data);
                 },
-                env: options?.env,
+                env: {
+                    ...process.env,
+                    ...options?.env,
+                    SUDO_NONCE: getSessionId(),
+                    SUDO_ASKPASS: `${INSTALLER_PATH}/webui/backend/askpass.sh`,
+                }
             });
             if (options?.cancellable) {
                 return cancellable;

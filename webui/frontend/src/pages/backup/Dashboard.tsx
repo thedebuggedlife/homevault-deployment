@@ -2,7 +2,7 @@ import React, { useContext } from "react";
 import { Container, Grid, Paper, Typography, Box, CircularProgress, Alert, Button, IconButton } from "@mui/material";
 import { Cached as CachedIcon, Error as ErrorIcon, Storage as StorageIcon, PlayArrow as PlayArrowIcon } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
-import backend from "@/backend";
+import backend from "@/backend/backend";
 import StatusOverview from "@/components/backup/dashboard/StatusOverview";
 import BackupStatistics from "@/components/backup/dashboard/BackupStatistics";
 import ScheduleStatus from "@/components/backup/dashboard/ScheduleStatus";
@@ -71,7 +71,13 @@ const BackupDashboard: React.FC = () => {
             <Grid container spacing={3}>
                 {/* Quick Actions */}
                 <Grid size={12}>
-                    <Box display="flex" gap={2}>
+                    <Box display="flex" justifyContent="end" gap={2}>
+                        <IconButton
+                            onClick={reload}
+                            color="primary"
+                        >
+                            <CachedIcon />
+                        </IconButton>
                         <Button
                             variant="contained"
                             startIcon={<PlayArrowIcon />}
@@ -80,12 +86,6 @@ const BackupDashboard: React.FC = () => {
                         >
                             Run Backup Now
                         </Button>
-                        <IconButton
-                            onClick={reload}
-                            color="primary"
-                        >
-                            <CachedIcon />
-                        </IconButton>
                     </Box>
                 </Grid>
 

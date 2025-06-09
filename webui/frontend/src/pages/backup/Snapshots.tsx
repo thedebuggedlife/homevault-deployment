@@ -23,7 +23,7 @@ import {
     PhotoLibrary as PhotoLibraryIcon,
     Refresh as RefreshIcon,
 } from "@mui/icons-material";
-import backend from "@/backend";
+import backend from "@/backend/backend";
 import { BackupSnapshot } from "@backend/types/backup";
 import SnapshotRow from "@/components/backup/snapshots/SnapshotRow";
 

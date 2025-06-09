@@ -8,7 +8,6 @@ import ConfirmationStep from "@/components/deployment/ConfirmationStep";
 import DeploymentHeader from "@/components/deployment/DeploymentHeader";
 import DeploymentStepper from "@/components/deployment/DeploymentStepper";
 import InstallationStep from "@/components/deployment/InstallationStep";
-import PasswordDialog from "@/components/deployment/PasswordDialog";
 import LoadingState from "@/components/deployment/LoadingState";
 import ErrorState from "@/components/deployment/ErrorState";
 import { useDeploymentState } from "@/hooks/useDeploymentState";
@@ -39,7 +38,6 @@ export default function Deployment() {
     const [activeStep, setActiveStep] = useState(STEP_CONFIGURATION);
     const [configValues, setConfigValues] = useState<Record<string, string>>({});
     const [userModified, setUserModified] = useState<Record<string, boolean>>({});
-    const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const isInstalling = operation && !isCompleted;
 
@@ -75,8 +73,21 @@ export default function Deployment() {
         setActiveStep(STEP_CONFIRMATION);
     };
 
-    const handleConfirmDeployment = () => {
-        setPasswordDialogOpen(true);
+    const handleConfirmDeployment = async () => {
+        setActiveStep(STEP_INSTALLATION);
+        setError(null);
+
+        try {
+            await startDeployment({
+                modules: modules,
+                config: {
+                    variables: filterConfigValues()
+                },
+            });
+        } catch (err) {
+            setError("Failed to start deployment. Please try again.");
+            setActiveStep(STEP_CONFIRMATION);
+        }
     };
 
     const filterConfigValues = () => {
@@ -118,29 +129,6 @@ export default function Deployment() {
     const handleUserModified = (variable: string) => {
         setUserModified(prev => ({ ...prev, [variable]: true }));
     }
-
-    const handlePasswordSubmit = async (password: string) => {
-        setPasswordDialogOpen(false);
-        setActiveStep(STEP_INSTALLATION);
-        setError(null);
-
-        try {
-            await startDeployment({
-                modules: modules,
-                config: {
-                    variables: filterConfigValues(),
-                    password,
-                },
-            });
-        } catch (err) {
-            setError("Failed to start deployment. Please try again.");
-            setActiveStep(STEP_CONFIRMATION);
-        }
-    };
-
-    const handlePasswordCancel = () => {
-        setPasswordDialogOpen(false);
-    };
 
     const handleBack = () => {
         setActiveStep((prev) => Math.max(0, prev - 1));
@@ -236,13 +224,6 @@ export default function Deployment() {
                     backTitle={backTitle}
                 />
             )}
-
-            <PasswordDialog
-                open={passwordDialogOpen}
-                username={config?.username ?? "installer"}
-                onSubmit={handlePasswordSubmit}
-                onCancel={handlePasswordCancel}
-            />
         </FullPageLayout>
     );
 }

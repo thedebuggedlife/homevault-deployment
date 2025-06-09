@@ -10,7 +10,8 @@ export interface SecretFieldProps extends BaseTextFieldProps {
 }
 
 export default function SecretField(props: SecretFieldProps) {
-    const { disabled, helperText, isSet, onChange, validate, value } = props;
+    const { isSet, onChange, validate, ...childProps } = props;
+    const { disabled, helperText, value } = childProps;
     const [touched, setTouched] = useState(false);
     const [focused, setFocused] = useState(false);
 
@@ -30,7 +31,7 @@ export default function SecretField(props: SecretFieldProps) {
 
     return (
         <TextField
-            {...props}
+            {...childProps}
             value={displayValue}
             onFocus={() => setFocused(true)}
             onBlur={() => setFocused(false)}

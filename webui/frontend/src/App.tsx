@@ -10,68 +10,67 @@ import {
 import { AppProvider } from "@toolpad/core/AppProvider";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { DialogsProvider, type Authentication, type Navigation, type Router } from "@toolpad/core";
-import SessionContext, { type Session, onAuthStateChanged, restoreSession, signOut } from "./contexts/SessionContext";
+import { SessionProvider } from "./contexts/SessionProvider";
 import { DeploymentProvider } from "./contexts/DeploymentProvider";
-import { User } from "./types";
 import { BackupProvider } from "./contexts/BackupProvider";
+import { useSession } from "./contexts/SessionContext";
 
-const NAVIGATION: Navigation = [
-    {
-        kind: "header",
-        title: "Navigation",
-    },
-    {
-        title: "Dashboard",
-        segment: "dashboard",
-        icon: <DashboardIcon />,
-    },
-    {
-        title: "Modules",
-        segment: "modules",
-        icon: <ExtensionIcon />,
-    },
-    {
-        title: "Backup",
-        segment: "backup",
-        icon: <BackupIcon />,
-        children: [
-            {
-                title: "Overview",
-                segment: "",
-                icon: <DashboardIcon />,
-            },
-            {
-                title: "Repository",
-                segment: "repository",
-                icon: <BookmarkIcon />,
-            },
-            {
-                title: "Snapshots",
-                segment: "snapshots",
-                icon: <PhotoLibraryIcon />,
-            },
-            {
-                title: "Scheduling",
-                segment: "scheduling",
-                icon: <ScheduleIcon />,
-            },
-        ],
-    },
-];
+function AppContent() {
+    const { session, signOut } = useSession();
 
-const BRANDING = {
-    title: "HomeVault",
-};
+    const NAVIGATION: Navigation = [
+        {
+            kind: "header",
+            title: "Navigation",
+        },
+        {
+            title: "Dashboard",
+            segment: "dashboard",
+            icon: <DashboardIcon />,
+        },
+        {
+            title: "Modules",
+            segment: "modules",
+            icon: <ExtensionIcon />,
+        },
+        {
+            title: "Backup",
+            segment: "backup",
+            icon: <BackupIcon />,
+            children: [
+                {
+                    title: "Overview",
+                    segment: "",
+                    icon: <DashboardIcon />,
+                },
+                {
+                    title: "Repository",
+                    segment: "repository",
+                    icon: <BookmarkIcon />,
+                },
+                {
+                    title: "Snapshots",
+                    segment: "snapshots",
+                    icon: <PhotoLibraryIcon />,
+                },
+                {
+                    title: "Scheduling",
+                    segment: "scheduling",
+                    icon: <ScheduleIcon />,
+                },
+            ],
+        },
+    ];
 
-const AUTHENTICATION: Authentication = {
-    signIn: () => {},
-    signOut: signOut,
-};
+    const BRANDING = {
+        title: "HomeVault",
+    };
 
-export default function App() {
-    const [session, setSession] = React.useState<Session | null>(null);
-    const [loading, setLoading] = React.useState(true);
-
+    const AUTHENTICATION: Authentication = {
+        signIn: () => {},
+        signOut: signOut,
+    };
+    
     // Get React Router hooks
     const location = useLocation();
     const navigate = useNavigate();
@@ -85,46 +84,29 @@ export default function App() {
         };
     }, [location, navigate]);
 
-    const sessionContextValue = React.useMemo(
-        () => ({
-            session,
-            setSession,
-            loading,
-        }),
-        [session, loading]
-    );
-
-    React.useEffect(() => {
-        // Returns an `unsubscribe` function to be called during teardown
-        const unsubscribe = onAuthStateChanged((user: User | null) => {
-            if (user) {
-                setSession({ user });
-            } else {
-                setSession(null);
-            }
-            setLoading(false);
-        });
-        restoreSession();
-        return () => unsubscribe();
-    }, []);
-
     return (
-        <SessionContext.Provider value={sessionContextValue}>
-            <DialogsProvider>
-                <DeploymentProvider>
-                    <BackupProvider>
-                        <AppProvider
-                            authentication={AUTHENTICATION}
-                            navigation={NAVIGATION}
-                            branding={BRANDING}
-                            session={session}
-                            router={router}
-                        >
-                            <Outlet />
-                        </AppProvider>
-                    </BackupProvider>
-                </DeploymentProvider>
-            </DialogsProvider>
-        </SessionContext.Provider>
+            <DeploymentProvider>
+                <BackupProvider>
+                    <AppProvider
+                        authentication={AUTHENTICATION}
+                        navigation={NAVIGATION}
+                        branding={BRANDING}
+                        session={session}
+                        router={router}
+                    >
+                        <Outlet />
+                    </AppProvider>
+                </BackupProvider>
+            </DeploymentProvider>
     );
+}
+
+export default function App() {
+    return (
+        <DialogsProvider>
+            <SessionProvider>
+                <AppContent></AppContent>
+            </SessionProvider>
+        </DialogsProvider>
+    )
 }

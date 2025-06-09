@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState } from 'react';
 import { 
     Dialog, 
     DialogTitle, 
@@ -9,45 +9,25 @@ import {
     Typography, 
     Box 
 } from '@mui/material';
+import { DialogProps } from '@toolpad/core';
+import _ from 'lodash';
+import { SudoRequest } from '@backend/types';
 
-interface PasswordDialogProps {
-    open: boolean;
-    username: string;
-    onSubmit: (password: string) => void;
-    onCancel: () => void;
-}
-
-export default function PasswordDialog({ open, username, onSubmit, onCancel }: PasswordDialogProps) {
+export default function PasswordDialog(props: DialogProps<SudoRequest,string>) {
+    const { payload: { username }, open, onClose } = props;
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
 
-    const handleSubmit = useCallback(() => {
-        if (!password.trim()) {
-            setError('Password is required');
-            return;
-        }
-        onSubmit(password);
-        // Clear password after submit
-        setPassword('');
-        setError('');
-    }, [password, onSubmit]);
-
-    const handleCancel = useCallback(() => {
-        setPassword('');
-        setError('');
-        onCancel();
-    }, [onCancel]);
-
     const handleKeyPress = (event: React.KeyboardEvent) => {
-        if (event.key === 'Enter') {
-            handleSubmit();
+        if (event.key === 'Enter' && !_.isEmpty(password)) {
+            onClose(password);
         }
     };
 
     return (
         <Dialog 
             open={open} 
-            onClose={handleCancel}
+            onClose={() => onClose(null)}
             maxWidth="sm"
             fullWidth
         >
@@ -80,13 +60,13 @@ export default function PasswordDialog({ open, username, onSubmit, onCancel }: P
                 />
             </DialogContent>
             <DialogActions>
-                <Button onClick={handleCancel}>
+                <Button onClick={() => onClose(null)}>
                     Cancel
                 </Button>
                 <Button 
-                    onClick={handleSubmit} 
+                    onClick={() => onClose(password)} 
                     variant="contained"
-                    disabled={!password.trim()}
+                    disabled={_.isEmpty(password)}
                 >
                     Continue
                 </Button>

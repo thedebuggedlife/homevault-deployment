@@ -113,7 +113,7 @@ class SystemService {
                     if (code === 0) {
                         resolve(result);
                     } else {
-                        reject(new ServiceError(`Process exited with code ${code}`));
+                        reject(new ServiceError(`Process exited with code ${code}`, { result }));
                     }
                 });
             } catch (error) {

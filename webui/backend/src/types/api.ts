@@ -1,5 +1,4 @@
 import { DockerContainer } from "./docker";
-import { ResticRepository } from "./restic";
 
 export interface User {
     username: string;
@@ -34,7 +33,6 @@ export interface DeploymentRequest {
     }
     config?: {
         variables?: Record<string, string>;
-        password?: string;
     }
 }
 
@@ -102,4 +100,18 @@ export interface ErrorInstance {
 
 export interface ErrorResponse {
     errors: ErrorInstance[];
+}
+
+export interface SudoRequest {
+    username: string;
+    timeoutMs: number;
+}
+
+export interface SudoResponse {
+    password?: string;
+}
+
+export interface SessionServerEvents {
+    hello: (id: string) => void;
+    sudo: (request: SudoRequest, callback: (response: SudoResponse) => void) => void;
 }

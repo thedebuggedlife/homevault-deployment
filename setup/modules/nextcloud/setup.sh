@@ -66,7 +66,7 @@ nextcloud_pre_install() {
     # Provide proper access to ElasticSearch data location
     local search_path="${APPDATA_LOCATION%/}/nextcloud/search"
     ensure_path_exists "$search_path" || exit 1
-    echo -e "Changing ownership of ${Cyan}$search_path${COff} to ${Purple}1000:0${COff}"
+    log "Changing ownership of ${Cyan}$search_path${COff} to ${Purple}1000:0${COff}"
     sudo chown 1000:0 "${APPDATA_LOCATION%/}/nextcloud/search"
 
     # For NextCloud to respect X-Forwarded-* headers the CIDR that includes traefik and nextcloud should be

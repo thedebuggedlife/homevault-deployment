@@ -1,17 +1,8 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import backend, { DeploymentOperation } from '@/backend';
-import { DeploymentActivity } from '@backend/types';
+import backend from '@/backend/backend';
+import { DeploymentActivity, DeploymentRequest } from '@backend/types';
 import { useSession } from '@/contexts/SessionContext';
-
-interface DeploymentRequest {
-    modules: {
-        install: string[];
-    };
-    config: {
-        variables: Record<string, string>;
-        password: string;
-    };
-}
+import { DeploymentOperation } from '@/backend/deployment';
 
 interface UseDeploymentOperationOptions {
     autoAttach?: boolean;

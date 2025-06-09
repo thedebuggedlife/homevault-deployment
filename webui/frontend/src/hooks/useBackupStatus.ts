@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import backend from '@/backend';
+import backend from '@/backend/backend';
 import { BackupStatus } from '@backend/types/backup';
 import { useSession } from '@/contexts/SessionContext';
 

@@ -2,17 +2,16 @@ import { BackupSchedule } from "@backend/types/backup";
 import { Alert, Card, CardContent, FormHelperText, Grid, TextField, Typography } from "@mui/material";
 import { useEffect, useState } from "react";
 import cronParser from "cron-parser";
-import cronstrue from "cronstrue";
 
 interface ScheduleInterfaceProps {
+    disabled: boolean;
     schedule: BackupSchedule;
     onChange: (schedule: string) => void;
     onValidation: (isValid: boolean) => void;
 }
 
-export default function ScheduleConfiguration({ schedule, onChange, onValidation }: ScheduleInterfaceProps) {
+export default function ScheduleConfiguration({ disabled, schedule, onChange, onValidation }: ScheduleInterfaceProps) {
     const [error, setError] = useState<string>(null);
-    const [meaning, setMeaning] = useState<string>("");
 
     const handleChange = (value: string) => {
         onChange(value);
@@ -23,11 +22,9 @@ export default function ScheduleConfiguration({ schedule, onChange, onValidation
             cronParser.parse(schedule.cronExpression);
             setError(null);
             onValidation(true);
-            setMeaning(cronstrue.toString(schedule.cronExpression));
         } catch (error) {
             setError(error.message ?? "Invalid cron expression");
             onValidation(false);
-            setMeaning("");
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [schedule.cronExpression]);
@@ -35,20 +32,21 @@ export default function ScheduleConfiguration({ schedule, onChange, onValidation
     return (
         <Card variant="outlined" sx={{ mb: 3, opacity: schedule.enabled ? 1 : 0.6 }}>
             <CardContent>
-                <Typography variant="h6" gutterBottom>
-                    Schedule Configuration
-                </Typography>
-
                 <Grid container spacing={3}>
+                    <Grid size={12}>
+                        <Typography variant="h6" gutterBottom>
+                            Schedule Configuration
+                        </Typography>
+                    </Grid>
                     <Grid size={12}>
                         <TextField
                             label="Cron Expression"
                             value={schedule.cronExpression}
                             onChange={(e) => handleChange(e.target.value)}
                             fullWidth
-                            disabled={!schedule.enabled}
+                            disabled={disabled || !schedule.enabled}
                             error={!!error}
-                            helperText={error || meaning}
+                            helperText={error}
                         />
                         {!error && (
                             <FormHelperText>

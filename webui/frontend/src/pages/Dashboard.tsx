@@ -13,7 +13,7 @@ import {
 } from "@mui/material";
 import { Computer, Memory, Storage, Speed } from "@mui/icons-material";
 import { SystemResources, SystemStatusResponse } from "@backend/types";
-import backend from "@/backend";
+import backend from "@/backend/backend";
 import { formatBytes } from "@/utils/units";
 
 function memoryUsage(resources?: SystemResources): number {

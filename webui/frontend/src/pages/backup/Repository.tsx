@@ -29,7 +29,7 @@ import GoogleCloudRepository from "@/components/backup/repository/GoogleCloudRep
 import AzureRepository from "@/components/backup/repository/AzureRepository";
 import LocalRepository from "@/components/backup/repository/LocalRepository";
 import SFTPRepository from "@/components/backup/repository/SFTPRepository";
-import backend from "@/backend";
+import backend from "@/backend/backend";
 import { RepositoryCredentials, ResticRepository } from "@backend/types/restic";
 import SecretField from "@/components/SecretField";
 import _ from "lodash";
@@ -291,7 +291,7 @@ const BackupRepository: React.FC = () => {
                     {saveError}
                 </Alert>
             )}
-            <Box sx={{ display: "flex", justifyContent: "end", gap: 1, mb: 3 }}>
+            <Box sx={{ display: "flex", justifyContent: "end", gap: 2, mb: 3 }}>
                 {!editMode && (
                     <IconButton onClick={reload} color="primary">
                         <CachedIcon />

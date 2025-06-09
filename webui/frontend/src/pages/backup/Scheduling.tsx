@@ -1,7 +1,5 @@
 import React, { useCallback, useContext, useEffect, useState } from "react";
 import {
-    Container,
-    Paper,
     Typography,
     Box,
     CircularProgress,
@@ -15,11 +13,10 @@ import {
 } from "@mui/material";
 import {
     Cached as CachedIcon,
-    Schedule as ScheduleIcon,
     Save as SaveIcon,
     Undo as UndoIcon,
 } from "@mui/icons-material";
-import backend from "@/backend";
+import backend from "@/backend/backend";
 import { BackupSchedule } from "@backend/types/backup";
 import ScheduleConfiguration from "@/components/backup/scheduling/ScheduleConfiguration";
 import _ from "lodash";
@@ -46,13 +43,15 @@ const BackupScheduling: React.FC = () => {
     });
 
     // Check if there are any changes from the original
-    const hasChanges = JSON.stringify(schedule) !== JSON.stringify(originalSchedule);
+    const hasChanges = !_.isEqual(schedule, originalSchedule);
     const hasErrors = !_.every(_.values(validation));
 
     useEffect(() => {
         setSaveError(null);
-        setSchedule(status?.schedule);
-        setOriginalSchedule(status?.schedule);
+        if (status?.schedule) {
+            setSchedule(status?.schedule);
+            setOriginalSchedule(status?.schedule);
+        }
     }, [status?.schedule]);
 
     const handleSave = useCallback(async () => {
@@ -135,78 +134,75 @@ const BackupScheduling: React.FC = () => {
     }
 
     return (
-        <Container maxWidth="md">
+        <>
             {saveError && (
                 <Alert severity="error" sx={{ mb: 3 }}>
                     {saveError}
                 </Alert>
             )}
-            <Paper sx={{ p: 3 }}>
-                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                        <ScheduleIcon color="primary" />
-                        <Typography variant="h5">Backup Scheduling</Typography>
-                    </Box>
-                    <Box sx={{ display: "flex", gap: 1 }}>
-                        {!hasChanges && (
-                            <IconButton onClick={reload} color="primary">
-                                <CachedIcon />
-                            </IconButton>
-                        )}
-                        {hasChanges && (
-                            <Button variant="outlined" startIcon={<UndoIcon />} onClick={handleReset} disabled={saving}>
-                                Reset
-                            </Button>
-                        )}
-                        <Button
-                            variant="contained"
-                            startIcon={<SaveIcon />}
-                            onClick={handleSave}
-                            disabled={!hasChanges || saving || hasErrors}
-                        >
-                            {saving ? "Saving..." : "Save Changes"}
-                        </Button>
-                    </Box>
-                </Box>
+            <Box sx={{ display: "flex", justifyContent: "end", gap: 2, mb: 3 }}>
+                {!hasChanges && (
+                    <IconButton onClick={reload} color="primary">
+                        <CachedIcon />
+                    </IconButton>
+                )}
+                {hasChanges && (
+                    <Button variant="outlined" startIcon={<UndoIcon />} onClick={handleReset} disabled={saving}>
+                        Reset
+                    </Button>
+                )}
+                <Button
+                    variant="contained"
+                    startIcon={<SaveIcon />}
+                    onClick={handleSave}
+                    loading={saving}
+                    loadingPosition="start"
+                    disabled={!hasChanges || hasErrors}
+                >
+                    Save
+                </Button>
+            </Box>
 
-                {/* Enable/Disable Schedule */}
-                <Card variant="outlined" sx={{ mb: 3 }}>
-                    <CardContent>
-                        <FormControlLabel
-                            control={
-                                <Switch
-                                    checked={schedule?.enabled}
-                                    onChange={(e) => handleEnabledChange(e.target.checked)}
-                                    color="primary"
-                                />
-                            }
-                            label={
-                                <Box>
-                                    <Typography variant="body1">Enable Automatic Backups</Typography>
-                                    <Typography variant="body2" color="text.secondary">
-                                        When enabled, backups will run automatically according to the schedule
-                                    </Typography>
-                                </Box>
-                            }
-                        />
-                    </CardContent>
-                </Card>
+            {/* Enable/Disable Schedule */}
+            <Card variant="outlined" sx={{ mb: 3 }}>
+                <CardContent>
+                    <FormControlLabel
+                        control={
+                            <Switch
+                                disabled={saving}
+                                checked={schedule?.enabled}
+                                onChange={(e) => handleEnabledChange(e.target.checked)}
+                                color="primary"
+                            />
+                        }
+                        label={
+                            <Box>
+                                <Typography variant="body1">Enable Automatic Backups</Typography>
+                                <Typography variant="body2" color="text.secondary">
+                                    When enabled, backups will run automatically according to the schedule
+                                </Typography>
+                            </Box>
+                        }
+                    />
+                </CardContent>
+            </Card>
 
-                {/* Schedule Configuration */}
-                <ScheduleConfiguration
-                    schedule={schedule}
-                    onChange={handleScheduleChange}
-                    onValidation={handleScheduleValidation}
-                />
+            {/* Schedule Configuration */}
+            <ScheduleConfiguration
+                disabled={saving}
+                schedule={schedule}
+                onChange={handleScheduleChange}
+                onValidation={handleScheduleValidation}
+            />
 
-                {/* Retention Policy */}
-                <RetentionPolicy
-                    schedule={schedule}
-                    onChange={handleRetentionChange}
-                    onValidation={handleRetentionValidation}
-                />
-            </Paper>
-        </Container>
+            {/* Retention Policy */}
+            <RetentionPolicy
+                disabled={saving}
+                schedule={schedule}
+                onChange={handleRetentionChange}
+                onValidation={handleRetentionValidation}
+            />
+        </>
     );
 };
 

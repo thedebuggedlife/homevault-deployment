@@ -9,10 +9,14 @@ if [ -z "$NONCE" ]; then
     exit 1
 fi
 
+# Get the user who invoked sudo
+FOR_USER="${SUDO_USER:-$(whoami)}"
+
 # Collect sudo context information
 SUDO_CONTEXT=$(cat <<EOF
 {
-    "nonce": "$NONCE"
+    "nonce": "$NONCE",
+    "username": "$FOR_USER"
 }
 EOF
 )

@@ -18,6 +18,9 @@ import { deploymentSocket } from "./socket/deployment";
 import getBackupStatus from "./api/backup/getBackupStatus";
 import getSnapshots from "./api/backup/getSnapshots";
 import initRepository from "./api/backup/initRepository";
+import updateSchedule from "./api/backup/updateSchedule";
+import { sessionSocket } from "./socket/session";
+import { requestContext } from "./middleware/context";
 
 const app = express();
 const server = http.createServer(app);
@@ -29,13 +32,16 @@ const io = new SocketIOServer(server, {
 });
 
 io.of("/deployment").use(socketAuth).on("connection", deploymentSocket);
+io.of("/session").use(socketAuth).on("connection", sessionSocket);
 
 app.use(cors());
 app.use(express.json());
+app.use(requestContext());
 
 app.get("/api/activity", authenticateToken, getActivity);
 app.post("/api/activity/sudo", postActivitySudo);
 app.post("/api/backup/init", authenticateToken, initRepository);
+app.post("/api/backup/schedule", authenticateToken, updateSchedule);
 app.get("/api/backup/snapshots", authenticateToken, getSnapshots);
 app.get("/api/backup/status", authenticateToken, getBackupStatus);
 app.post("/api/deployment/config", authenticateToken, getDeploymentConfig);

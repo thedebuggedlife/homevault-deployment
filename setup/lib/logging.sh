@@ -149,7 +149,7 @@ log_error() {
     stack=$(stack_trace)
     log -n "\n🔴 ${BIRed}ERROR:${IRed} $1${COff}\n\n$stack\n\n"
     if [ "$JSON_OUT" = true ]; then
-        JSON_OUTPUT=$(echo "$JSON_OUTPUT" | jq --arg message "$1" stack "$stack" '.errors //= [] | .errors += [{message: $message, stack: $stack}]')
+        JSON_OUTPUT=$(echo "$JSON_OUTPUT" | jq --arg message "$1" --arg stack "$stack" '.errors //= [] | .errors += [{message: $message, stack: $stack}]')
     fi
 }
 
