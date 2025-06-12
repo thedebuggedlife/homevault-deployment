@@ -11,7 +11,6 @@ import { AppProvider } from "@toolpad/core/AppProvider";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { DialogsProvider, type Authentication, type Navigation, type Router } from "@toolpad/core";
 import { SessionProvider } from "./contexts/SessionProvider";
-import { DeploymentProvider } from "./contexts/DeploymentProvider";
 import { BackupProvider } from "./contexts/BackupProvider";
 import { useSession } from "./contexts/SessionContext";
 
@@ -84,19 +83,17 @@ function AppContent() {
     }, [location, navigate]);
 
     return (
-            <DeploymentProvider>
-                <BackupProvider>
-                    <AppProvider
-                        authentication={AUTHENTICATION}
-                        navigation={NAVIGATION}
-                        branding={BRANDING}
-                        session={session}
-                        router={router}
-                    >
-                        <Outlet />
-                    </AppProvider>
-                </BackupProvider>
-            </DeploymentProvider>
+        <BackupProvider>
+            <AppProvider
+                authentication={AUTHENTICATION}
+                navigation={NAVIGATION}
+                branding={BRANDING}
+                session={session}
+                router={router}
+            >
+                <Outlet />
+            </AppProvider>
+        </BackupProvider>
     );
 }
 

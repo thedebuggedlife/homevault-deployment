@@ -2,22 +2,28 @@ import { Stepper, Step, StepLabel, StepIcon, StepIconProps, CircularProgress } f
 
 interface DeploymentStepperProps {
     activeStep: number;
-    isInstalling: boolean;
-    steps: string[];
+    labels: string[];
+    skippedSteps: number[];
+    activeSpinning: boolean;
 }
 
-export default function DeploymentStepper({ activeStep, isInstalling, steps }: DeploymentStepperProps) {
+export default function DeploymentStepper({ activeStep, labels, skippedSteps, activeSpinning }: DeploymentStepperProps) {
     const stepIcon = (props: StepIconProps) => 
-        isInstalling && props.active ? (
+        activeSpinning && props.active ? (
             <CircularProgress size={24} thickness={4} />
         ) : (
             <StepIcon {...props} />
         );
-
+    const isStepCompleted = (index: number): boolean|undefined => {
+        if (skippedSteps.includes(index)) {
+            console.log(`Step ${index} is skipped!`);
+            return false;
+        }
+    }
     return (
         <Stepper activeStep={activeStep}>
-            {steps.map((label) => (
-                <Step key={label}>
+            {labels.map((label, index) => (
+                <Step key={label} completed={isStepCompleted(index)}>
                     <StepLabel slots={{stepIcon}}>
                         {label}
                     </StepLabel>

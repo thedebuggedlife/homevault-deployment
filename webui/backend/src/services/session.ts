@@ -1,13 +1,15 @@
-import { SessionServerEvents } from "@/types";
+import { ServerActivity, SessionClientEvents, SessionServerEvents } from "@/types";
 import { Dictionary } from "lodash";
-import { Socket } from "socket.io";
+import { Namespace, Socket } from "socket.io";
 import { v4 as uuid } from "uuid";
 import { logger as rootLog } from "@/logger";
+import _ from "lodash";
 
-export type SessionSocket = Socket<SessionServerEvents>;
+export type SessionSocket = Socket<SessionClientEvents, SessionServerEvents>;
 
 class Session {
     private readonly logger;
+
     constructor(sessionId: string, private socket: SessionSocket) {
         this.logger = rootLog.child({ source: "Session", sessionId })
         this.socket.emit("hello", sessionId);
@@ -32,8 +34,10 @@ class Session {
 class SessionManager {
     private readonly logger = rootLog.child({ source: "SessionManager" });
     private readonly connections: Dictionary<Session> = {};
+    private namespace?: Namespace<SessionClientEvents, SessionServerEvents>;
 
     register(socket: SessionSocket) {
+        this.namespace = socket.nsp;
         const sessionId = uuid();
         this.logger.info("Session connected", { sessionId });
         socket.on("disconnect", (reason) => {
@@ -45,6 +49,10 @@ class SessionManager {
 
     get(sessionId: string): Session|undefined {
         return this.connections[sessionId];
+    }
+
+    onActivity(activity?: ServerActivity) {
+        this.namespace?.emit("activity", activity);
     }
 }
 

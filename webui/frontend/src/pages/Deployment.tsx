@@ -1,6 +1,6 @@
 // @/pages/Deployment.tsx
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Card, CardContent, Alert } from "@mui/material";
 import FullPageLayout from "@/layouts/fullpage";
 import ConfigurationStep from "@/components/deployment/ConfigurationStep";
@@ -10,63 +10,68 @@ import DeploymentStepper from "@/components/deployment/DeploymentStepper";
 import InstallationStep from "@/components/deployment/InstallationStep";
 import LoadingState from "@/components/deployment/LoadingState";
 import ErrorState from "@/components/deployment/ErrorState";
-import { useDeploymentState } from "@/hooks/useDeploymentState";
 import { useDeploymentConfig } from "@/hooks/useDeploymentConfig";
-import { useDeploymentOperation } from "@/hooks/useDeploymentOperation";
 import { evaluateCondition } from "@/utils/prompts/conditionEvaluator";
+import { DeploymentActivity } from "@backend/types";
+import { DeployModules } from "@/types";
+import _ from "lodash";
+import backend from "@/backend/backend";
 
-const STEP_CONFIGURATION = 0;
-const STEP_CONFIRMATION = 1;
-const STEP_INSTALLATION = 2;
+export const STEP_CONFIGURATION = 0;
+export const STEP_CONFIRMATION = 1;
+export const STEP_INSTALLATION = 2;
+export const STEP_COMPLETED = 3;
 
 const deploymentSteps = ["Configuration", "Confirmation", "Deployment"];
 
+export interface DeploymentState {
+    activity?: DeploymentActivity;
+    modules?: DeployModules;
+    backPath?: string;
+    backTitle?: string;
+}
+
 export default function Deployment() {
     const navigate = useNavigate();
-    const { modules, backPath, backTitle } = useDeploymentState();
-    const { config, loading: configLoading, error: configError, reload: reloadConfig } = useDeploymentConfig(modules.install);
-    const {
-        output,
-        operation,
-        activity,
-        loading: deploymentLoading,
-        error: deploymentError,
-        startDeployment,
-        checkCurrentDeployment,
-        isCompleted,
-    } = useDeploymentOperation();
+    const location = useLocation();
     const [activeStep, setActiveStep] = useState(STEP_CONFIGURATION);
     const [configValues, setConfigValues] = useState<Record<string, string>>({});
     const [userModified, setUserModified] = useState<Record<string, boolean>>({});
+    const [startingInstall, setStartingInstall] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const isInstalling = operation && !isCompleted;
+    const [activity, setActivity] = useState<DeploymentActivity>();
 
-    // Determine which output to show (existing deployment or new deployment)
-    const displayError = deploymentError || error;
-    const displayModules = activity?.request?.modules ? {
-        install: activity?.request?.modules.install ?? [],
-        remove: activity?.request?.modules.remove ?? [],
-    } : modules;
-    const hasInstallations = displayModules.install.length > 0;
+    const state = location.state as DeploymentState;
+    const modules: DeployModules = {
+        install: state?.modules?.install ?? activity?.request?.modules?.install ?? [],
+        remove: state?.modules?.remove ?? activity?.request?.modules?.remove ?? [],
+    };
+    const skippedSteps = _.isEmpty(modules.install) ? [STEP_CONFIGURATION] : [];
+    console.log("Skipped steps", skippedSteps);
+    const {
+        config,
+        loading: configLoading,
+        error: configError,
+        reload: reloadConfig,
+    } = useDeploymentConfig(modules.install);
+    const backPath = state?.backPath ?? "/";
+    const backTitle = state?.backTitle ?? "Home";
 
-    // Check for ongoing deployment on mount
+    // Upon navigation determine what should be the first screen (or navigate back)
     useEffect(() => {
-        if (isInstalling) {
-            // If there's an ongoing deployment, jump to installation step
+        if (state?.activity) {
+            setActivity(state.activity);
             setActiveStep(STEP_INSTALLATION);
-        }
-        else if (activeStep == STEP_CONFIGURATION && !hasInstallations) {
+        } else if (!_.isEmpty(state?.modules?.remove)) {
             setActiveStep(STEP_CONFIRMATION);
-        }
-    }, [hasInstallations, activeStep, isInstalling]);
-
-    // Redirect if no modules and no active deployment
-    useEffect(() => {
-        const modulesProvided = modules.install.length + modules.remove.length;
-        if (modulesProvided === 0 && !deploymentLoading && !deploymentError && !isInstalling) {
+        } else if (_.isEmpty(state?.modules?.install)) {
             navigate(backPath);
         }
-    }, [modules, deploymentLoading, deploymentError, isInstalling, navigate, backPath]);
+    }, [state, navigate, backPath]);
+
+    const handleCompleted = () => {
+        setActiveStep(STEP_COMPLETED);
+    };
 
     const handleConfigurationComplete = (values: Record<string, string>) => {
         setConfigValues(values);
@@ -74,28 +79,32 @@ export default function Deployment() {
     };
 
     const handleConfirmDeployment = async () => {
-        setActiveStep(STEP_INSTALLATION);
         setError(null);
-
+        setStartingInstall(true);
         try {
-            await startDeployment({
+            const request = {
                 modules: modules,
                 config: {
-                    variables: filterConfigValues()
+                    variables: filterConfigValues(),
                 },
-            });
-        } catch (err) {
+            };
+            const { activityId: id } = await backend.startDeployment(request);
+            setActivity({ id, type: "deployment", request });
+            setActiveStep(STEP_INSTALLATION);
+        } catch (error) {
+            console.error("Deployment started error", error);
             setError("Failed to start deployment. Please try again.");
-            setActiveStep(STEP_CONFIRMATION);
+        } finally {
+            setStartingInstall(false);
         }
     };
 
     const filterConfigValues = () => {
         const filteredConfigValues: Record<string, string> = {};
-        
+
         // Only include values for prompts that meet their conditions
         if (config) {
-            config.prompts.forEach(prompt => {
+            config.prompts.forEach((prompt) => {
                 // Check if this prompt meets its condition
                 if (!prompt.condition || evaluateCondition(prompt.condition, configValues)) {
                     // Only include the value if the condition is met
@@ -104,10 +113,10 @@ export default function Deployment() {
                     }
                 }
             });
-        }        
-        
+        }
+
         // Add administrator fields if base module is being installed
-        if (modules.install.includes('base')) {
+        if (modules.install.includes("base")) {
             if (configValues.ADMIN_USERNAME) {
                 filteredConfigValues.ADMIN_USERNAME = configValues.ADMIN_USERNAME;
             }
@@ -124,22 +133,18 @@ export default function Deployment() {
         }
 
         return filteredConfigValues;
-    }
+    };
 
     const handleUserModified = (variable: string) => {
-        setUserModified(prev => ({ ...prev, [variable]: true }));
-    }
+        setUserModified((prev) => ({ ...prev, [variable]: true }));
+    };
 
     const handleBack = () => {
         setActiveStep((prev) => Math.max(0, prev - 1));
     };
 
-    const handleAbort = () => {
-        operation?.abort();
-    }
-
     // Show loading state
-    if (configLoading || deploymentLoading) {
+    if (configLoading) {
         return <LoadingState title="Module Deployment" backPath={backPath} backTitle={backTitle} />;
     }
 
@@ -148,18 +153,6 @@ export default function Deployment() {
             <ErrorState
                 error={configError}
                 onRetry={reloadConfig}
-                title="Module Deployment"
-                backPath={backPath}
-                backTitle={backTitle}
-            />
-        );
-    }
-
-    if (deploymentError && !operation) {
-        return (
-            <ErrorState
-                error={deploymentError}
-                onRetry={checkCurrentDeployment}
                 title="Module Deployment"
                 backPath={backPath}
                 backTitle={backTitle}
@@ -180,20 +173,26 @@ export default function Deployment() {
 
             <Card sx={{ mb: 3 }}>
                 <CardContent>
-                    <DeploymentStepper activeStep={activeStep} isInstalling={isInstalling} steps={deploymentSteps} />
+                    <DeploymentStepper
+                        activeStep={activeStep}
+                        labels={deploymentSteps}
+                        skippedSteps={skippedSteps}
+                        activeSpinning={activeStep == STEP_INSTALLATION}
+                    />
                 </CardContent>
             </Card>
 
             {activeStep === STEP_CONFIGURATION && config && (
                 <Card>
                     <CardContent>
-                        <ConfigurationStep 
-                            modules={modules.install} 
-                            config={config} 
-                            initialValues={configValues} 
+                        <ConfigurationStep
+                            modules={modules.install}
+                            config={config}
+                            initialValues={configValues}
                             userModified={userModified}
                             onUserModified={handleUserModified}
-                            onComplete={handleConfigurationComplete} />
+                            onComplete={handleConfigurationComplete}
+                        />
                     </CardContent>
                 </Card>
             )}
@@ -205,7 +204,8 @@ export default function Deployment() {
                             modules={modules}
                             config={config}
                             values={configValues}
-                            showBack={hasInstallations}
+                            showBack={modules.install.length > 0}
+                            startingInstall={startingInstall}
                             onConfirm={handleConfirmDeployment}
                             onBack={handleBack}
                         />
@@ -213,15 +213,13 @@ export default function Deployment() {
                 </Card>
             )}
 
-            {activeStep === STEP_INSTALLATION && (
+            {activeStep >= STEP_INSTALLATION && (
                 <InstallationStep
-                    modules={displayModules}
-                    isInstalling={isInstalling}
-                    output={output}
-                    error={displayError}
+                    modules={modules}
+                    activity={activity}
                     onReturn={() => navigate(backPath)}
-                    handleAbort={handleAbort}
                     backTitle={backTitle}
+                    onCompleted={handleCompleted}
                 />
             )}
         </FullPageLayout>

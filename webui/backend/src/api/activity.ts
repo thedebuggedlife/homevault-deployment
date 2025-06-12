@@ -1,10 +1,10 @@
 import { ServiceError } from "@/errors";
 import { logger } from "@/logger";
 import { AuthenticatedRequest } from "@/middleware/auth";
-import installer from "@/services/installer";
-import { CurrentActivity } from "@/types";
+import { ServerActivity } from "@/types";
 import { NextFunction, Request, Response } from "express";
 import SessionManager from "@/services/session";
+import activity from "@/services/activity";
 
 interface SudoRequest {
     nonce: string,
@@ -16,10 +16,14 @@ interface SudoResponse {
     password?: string,
 }
 
-export function getActivity(_req: AuthenticatedRequest, res: Response<CurrentActivity>, next: NextFunction) {
+export function getActivity(_req: AuthenticatedRequest, res: Response<ServerActivity>, next: NextFunction) {
     try {
-        const activity = installer.getCurrentActivity() ?? { type: "none" };
-        return res.json(activity);
+        const current = activity.getCurrent();
+        if (current) {
+            return res.json(current);
+        } else {
+            return res.status(404).send();
+        }
     } catch (error) {
         next(error);
     }

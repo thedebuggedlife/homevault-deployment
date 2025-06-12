@@ -1,28 +1,34 @@
 import { Card, CardContent, Typography, Box, Button } from '@mui/material';
-import Terminal from './Terminal';
+import Terminal from '../Terminal';
 import { NavigationBlocker } from '@/components/NavigationBlocker';
 import { DeployModules } from '@/types';
 import { ConfirmOptions, useDialogs } from '@toolpad/core';
+import { DeploymentActivity } from '@backend/types';
+import { useServerActivity } from '@/hooks/useServerActivity';
+import _ from 'lodash';
+import { useEffect } from 'react';
 
 interface InstallationStepProps {
     modules: DeployModules;
-    isInstalling: boolean;
-    output: string[];
-    error: string | null;
-    handleAbort: () => void;
-    onReturn: () => void;
+    activity: DeploymentActivity;
     backTitle: string;
+    onReturn: () => void;
+    onCompleted: () => void;
 }
 
 export default function InstallationStep({ 
     modules, 
-    isInstalling, 
-    output, 
-    error, 
-    handleAbort,
-    onReturn, 
-    backTitle 
+    activity, 
+    backTitle,
+    onReturn,
+    onCompleted,
 }: InstallationStepProps) {
+    const {
+        output,
+        completed,
+        error,
+        abort
+    } = useServerActivity(activity.id);
     const { confirm } = useDialogs();
     const showAbortDialog = async () => {
         const message = <>
@@ -41,13 +47,18 @@ export default function InstallationStep({
         };
         const result = await confirm(message, options);
         if (result) {
-            handleAbort();
+            abort();
         }
     }
+    useEffect(() => {
+        if (completed) {
+            onCompleted();
+        }
+    }, [completed, onCompleted])
     return (
         <Card>
             <CardContent>
-                {isInstalling ? (
+                {!completed ? (
                     <>
                         <Typography variant="h6" gutterBottom>
                             Deployment in Progress
@@ -102,9 +113,9 @@ export default function InstallationStep({
                     </Box>
                 )}
                 
-                <Terminal output={output} />
+                <Terminal output={_.isEmpty(output) ? ["Waiting for output..."] : output} />
                 
-                {isInstalling && (
+                {!completed && (
                     <Box display="flex" justifyContent="center" my={1}>
                         <Button 
                             color="error"
@@ -117,7 +128,7 @@ export default function InstallationStep({
                     </Box>
                 )}
                 
-                {!isInstalling && (
+                {completed && (
                     <Box display="flex" justifyContent="center" my={1}>
                         <Button 
                             variant="contained" 
@@ -130,7 +141,7 @@ export default function InstallationStep({
                 )}
             </CardContent>
             
-            {isInstalling && (
+            {!completed && (
                 <NavigationBlocker
                     title="Deployment in Progress"
                     message="The deployment process will continue to run in the background. Are you sure you want to leave?"

@@ -1,19 +1,22 @@
-import { User } from '@/types';
+import { User } from "@/types";
 import backend, { SessionSocket } from "@/backend/backend";
-import { ReactNode, useCallback, useEffect, useRef, useState } from 'react';
-import { SessionContext, SessionContextType } from './SessionContext';
-import { useDialogs } from '@toolpad/core';
-import PasswordDialog from '@/components/PasswordDialog';
+import { ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { SessionContext, SessionContextType } from "./SessionContext";
+import { useDialogs } from "@toolpad/core";
+import PasswordDialog from "@/components/PasswordDialog";
+import { ServerActivity } from "@backend/types";
+import { isAxiosError } from "axios";
 
 export interface Session {
     user: User;
     token: string;
 }
 
-export const SessionProvider = ({ children }: { children: ReactNode; }) => {
+export const SessionProvider = ({ children }: { children: ReactNode }) => {
     const [session, setSession] = useState<Session | null>(null);
     const [loading, setLoading] = useState(true);
-    const timeoutRef = useRef(null)
+    const [activity, setActivity] = useState<ServerActivity>(null);
+    const timeoutRef = useRef(null);
     const connection = useRef<SessionSocket>(null);
     const dialogs = useDialogs();
 
@@ -22,14 +25,14 @@ export const SessionProvider = ({ children }: { children: ReactNode; }) => {
             connection.current.disconnect();
             connection.current = null;
         }
-    }
+    };
 
     const clearTimeout = () => {
         if (timeoutRef.current) {
             window.clearTimeout(timeoutRef.current);
             timeoutRef.current = null;
         }
-    }
+    };
 
     const refreshSession = async () => {
         const token = localStorage.getItem("token");
@@ -38,7 +41,7 @@ export const SessionProvider = ({ children }: { children: ReactNode; }) => {
                 const response = await backend.refreshToken(token);
                 localStorage.setItem("token", response.token);
                 scheduleRefresh(response.expiresInSec);
-                setSession(prev => ({ ...prev, token: response.token }));
+                setSession((prev) => ({ ...prev, token: response.token }));
             } catch (error) {
                 console.error("Failed to refresh token", error);
                 if ([401, 403].includes(error.status)) {
@@ -69,7 +72,7 @@ export const SessionProvider = ({ children }: { children: ReactNode; }) => {
             console.error("Login failed:", error);
             throw error;
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const signOut = useCallback(async () => {
@@ -78,22 +81,25 @@ export const SessionProvider = ({ children }: { children: ReactNode; }) => {
         await backend.logout();
         disconnect();
     }, []);
-    
+
     const restoreSession = useCallback(async () => {
         try {
             const token = localStorage.getItem("token");
             if (token) {
-                    const response = await backend.refreshToken(token);
-                scheduleRefresh(response.expiresInSec)
+                const response = await backend.refreshToken(token);
+                scheduleRefresh(response.expiresInSec);
                 const user = { name: response.user.username };
                 setSession({ user, token });
             }
         } catch (error) {
+            if (isAxiosError(error) && error.response?.status === 403) {
+                localStorage.removeItem("token");
+            }
             console.error("Failed to validate stored token", error);
         } finally {
             setLoading(false);
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     // Component initialization and cleanup
@@ -114,8 +120,13 @@ export const SessionProvider = ({ children }: { children: ReactNode; }) => {
                 console.warn("Sudo credentials requested", request);
                 const password = await dialogs.open(PasswordDialog, request);
                 cb({ password });
-            })
+            });
+            connection.current.on("activity", (activity) => {
+                console.info("Current activity received", activity);
+                setActivity(activity);
+            });
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [dialogs, session?.user]);
 
     // Update socket auth when token is refreshed
@@ -126,12 +137,13 @@ export const SessionProvider = ({ children }: { children: ReactNode; }) => {
     }, [session?.token]);
 
     const sessionContext: SessionContextType = {
+        activity,
         session,
         loading,
         signIn,
         signOut,
         restore: restoreSession,
-    }
+    };
 
     return (
         <SessionContext.Provider value={sessionContext}>

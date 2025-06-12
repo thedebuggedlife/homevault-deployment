@@ -6,14 +6,14 @@ import { InstalledModulesCard } from '@/components/modules/InstalledModulesCard'
 import { InstallModuleDialog } from '@/components/modules/InstallModuleDialog';
 import { RemoveModuleDialog } from '@/components/modules/RemoveModuleDialog';
 import { useModulesData } from '@/hooks/useModulesData';
-import { useDeployment } from '@/hooks/useDeployment';
+import { useSession } from '@/contexts/SessionContext';
 
 export default function Modules() {
     const [expandedModule, setExpandedModule] = useState<string | null>(null);
     const [installDialogOpen, setInstallDialogOpen] = useState(false);
     const [removeDialogOpen, setRemoveDialogOpen] = useState(false);
     const navigate = useNavigate();
-    const { isDeploying } = useDeployment();
+    const { activity } = useSession();
     
     const {
         status,
@@ -110,7 +110,7 @@ export default function Modules() {
                             variant="contained"
                             startIcon={<AddIcon />}
                             onClick={handleOpenInstallDialog}
-                            disabled={isDeploying}
+                            disabled={!!activity}
                         >
                             Add Modules
                         </Button>
@@ -120,7 +120,7 @@ export default function Modules() {
                                 color="error"
                                 startIcon={<RemoveIcon />}
                                 onClick={handleOpenRemoveDialog}
-                                disabled={isDeploying}
+                                disabled={!!activity}
                             >
                                 Remove Modules
                             </Button>

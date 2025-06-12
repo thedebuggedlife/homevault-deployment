@@ -27,6 +27,7 @@ interface ConfirmationStepProps {
     config: DeploymentConfig;
     values: Record<string, string>;
     showBack: boolean;
+    startingInstall: boolean;
     onConfirm: () => void;
     onBack: () => void;
 }
@@ -36,6 +37,7 @@ export default function ConfirmationStep({
     config,
     values,
     showBack,
+    startingInstall,
     onConfirm,
     onBack,
 }: ConfirmationStepProps) {
@@ -204,7 +206,13 @@ export default function ConfirmationStep({
                         Back
                     </Button>
                 )}
-                <Button onClick={onConfirm} variant="contained" color={hasRemovals ? "error" : "primary"}>
+                <Button
+                    onClick={onConfirm}
+                    variant="contained"
+                    color={hasRemovals ? "error" : "primary"}
+                    loading={startingInstall}
+                    loadingPosition="start"
+                >
                     Begin Deployment
                 </Button>
             </Box>

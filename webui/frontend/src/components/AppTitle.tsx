@@ -2,7 +2,7 @@ import Typography from '@mui/material/Typography';
 import Stack from '@mui/material/Stack';
 import { Link, styled, useTheme } from '@mui/material';
 import HomeVaultLogo from './HomeVaultLogo';
-import DeploymentIndicator from './DeploymentIndicator';
+import DeploymentIndicator from './ActivityIndicator';
 
 const LogoContainer = styled('div')({
   position: 'relative',

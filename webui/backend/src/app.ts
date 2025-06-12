@@ -11,10 +11,9 @@ import { authenticateToken, socketAuth } from "@/middleware/auth";
 import { getStatus } from "@/api/status";
 import { refreshToken } from "@/api/token";
 import { getModules } from "./api/modules";
-import { getDeploymentConfig } from "./api/deployment";
+import { getDeploymentConfig, startDeployment } from "./api/deployment";
 import { logger } from "@/logger";
 import { getActivity, postActivitySudo } from "./api/activity";
-import { deploymentSocket } from "./socket/deployment";
 import getBackupStatus from "./api/backup/getBackupStatus";
 import getSnapshots from "./api/backup/getSnapshots";
 import initRepository from "./api/backup/initRepository";
@@ -22,6 +21,7 @@ import updateSchedule from "./api/backup/updateSchedule";
 import { sessionSocket } from "./socket/session";
 import { requestContext } from "./middleware/context";
 import deleteSnapshot from "./api/backup/deleteSnapshot";
+import { activityNamespace, activitySocket } from "./socket/activity";
 
 const app = express();
 const server = http.createServer(app);
@@ -32,8 +32,8 @@ const io = new SocketIOServer(server, {
     },
 });
 
-io.of("/deployment").use(socketAuth).on("connection", deploymentSocket);
 io.of("/session").use(socketAuth).on("connection", sessionSocket);
+io.of(activityNamespace).use(socketAuth).on("connection", activitySocket);
 
 app.use(cors());
 app.use(express.json());
@@ -47,6 +47,7 @@ app.get("/api/backup/snapshots", authenticateToken, getSnapshots);
 app.delete("/api/backup/snapshots/:snapshotId", authenticateToken, deleteSnapshot);
 app.get("/api/backup/status", authenticateToken, getBackupStatus);
 app.post("/api/deployment/config", authenticateToken, getDeploymentConfig);
+app.post("/api/deployment/start", authenticateToken, startDeployment);
 app.post("/api/login", [body("username").notEmpty(), body("password").notEmpty(), handleValidationErrors], login);
 app.get("/api/modules", authenticateToken, getModules);
 app.get("/api/status", authenticateToken, getStatus);
