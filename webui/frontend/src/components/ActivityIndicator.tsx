@@ -2,8 +2,9 @@ import { Box, Typography } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { keyframes } from '@mui/system';
 import { useSession } from '@/contexts/SessionContext';
-import { useCallback, useState } from 'react';
+import { useState } from 'react';
 import ProgressDialog from './ProgressDialog';
+import { ServerActivity } from '@backend/types';
 
 // Create a pulsing glow animation
 const pulse = keyframes`
@@ -20,8 +21,7 @@ const pulse = keyframes`
 
 export default function DeploymentIndicator() {
     const { activity } = useSession();
-    const [ showProgress, setShowProgress ] = useState(false);
-    const [ activityId, setActivityId ] = useState<string>();
+    const [ showProgress, setShowProgress ] = useState<ServerActivity>();
     const navigate = useNavigate();
 
     const handleClick = () => {
@@ -30,16 +30,14 @@ export default function DeploymentIndicator() {
                 navigate('/deployment', { state: { activity }});
                 break;
             default: 
-                setShowProgress(true);
-                setActivityId(activity.id);
+                setShowProgress(activity);
                 break;
         }
     };
 
-    const handleCloseProgress = useCallback(() => {
-        setShowProgress(false);
-        setActivityId(null);
-    }, [setShowProgress, setActivityId]);
+    const handleCloseProgress = () => {
+        setShowProgress(null);
+    };
 
     if (!activity && !showProgress) {
         return null;
@@ -82,7 +80,7 @@ export default function DeploymentIndicator() {
                     Operation in progress
                 </Typography>
             </Box>
-            <ProgressDialog open={showProgress} activityId={activityId} onClose={handleCloseProgress} />
+            <ProgressDialog activity={showProgress} onClose={handleCloseProgress} />
         </>
     );
 }
