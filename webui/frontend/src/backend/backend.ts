@@ -101,13 +101,8 @@ class BackendServer {
     async updateBackupSchedule(schedule: BackupSchedule): Promise<void> {
         await this.client.post("/api/backup/schedule", schedule);
     }
-    async startBackup(): Promise<void> {
-        // TODO: Replace with actual implementation
-        // This will need to connect to a backup-specific WebSocket endpoint
-
-        console.log("Mock: Starting backup");
-        // For now, throw an error to indicate this is not implemented
-        throw new Error("Backup operation not yet implemented");
+    async startBackup(keepForever: boolean): Promise<void> {
+        await this.client.post("/api/backup/run", { keepForever });
     }
     async startDeployment(request: DeploymentRequest): Promise<DeploymentResponse> {
         const response = await this.client.post("/api/deployment/start", request);

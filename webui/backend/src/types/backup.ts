@@ -31,8 +31,11 @@ export interface BackupInitRequest {
 }
 
 export interface BackupRunRequest {
-    tag?: string;
     keepForever?: boolean;
+}
+
+export interface BackupRunResponse {
+    activityId: string;
 }
 
 export interface DeleteSnapshotParams {

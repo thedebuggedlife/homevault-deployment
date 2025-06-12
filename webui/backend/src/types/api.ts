@@ -1,3 +1,4 @@
+import { BackupRunRequest } from "./backup";
 import { DockerContainer } from "./docker";
 
 export interface User {
@@ -38,6 +39,7 @@ export interface BackupUpdateActivity {
 export interface BackupRunActivity {
     id: string;
     type: "backup_run";
+    request: BackupRunRequest;
 }
 
 export interface DeploymentRequest {

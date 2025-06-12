@@ -5,7 +5,7 @@ import { DeploymentConfig, DeploymentRequest, ServerActivity, ServerActivityWith
 import { ServiceError } from "@/errors";
 import { file } from "tmp-promise";
 import * as fs from "fs/promises";
-import { BackupSchedule, BackupSnapshot, BackupStatus } from "@/types/backup";
+import { BackupRunRequest, BackupSchedule, BackupSnapshot, BackupStatus } from "@/types/backup";
 import _ from "lodash";
 import { generateRepositoryEnvironment, parseRepositoryEnvironment, ResticRepository } from "@/types/restic";
 import { getSessionId } from "@/middleware/context";
@@ -208,6 +208,19 @@ class InstallerService {
         } finally {
             cleanup();
         }
+    }
+
+    async runBackup(request: BackupRunRequest): Promise<void> {
+        const args = ["backup", "run"];
+        if (request.keepForever) {
+            args.push("--keep");
+        }
+        await this.executeCommand(args, {
+            withActivity: {
+                type: "backup_run",
+                request
+            }
+        }).promise;
     }
 
     async updateSchedule(schedule: BackupSchedule): Promise<void> {

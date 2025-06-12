@@ -1,4 +1,4 @@
-import React, { useContext } from "react";
+import React, { useContext, useState } from "react";
 import { Container, Grid, Paper, Typography, Box, CircularProgress, Alert, Button, IconButton } from "@mui/material";
 import { Cached as CachedIcon, Error as ErrorIcon, Storage as StorageIcon, PlayArrow as PlayArrowIcon } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
@@ -7,20 +7,37 @@ import StatusOverview from "@/components/backup/dashboard/StatusOverview";
 import BackupStatistics from "@/components/backup/dashboard/BackupStatistics";
 import ScheduleStatus from "@/components/backup/dashboard/ScheduleStatus";
 import { BackupContext } from "@/contexts/BackupContext";
+import BackupConfirmationDialog from "@/components/backup/dashboard/BackupConfirmationDialog";
 
 const BackupDashboard: React.FC = () => {
     const { status, loading, error, reload } = useContext(BackupContext);
     const navigate = useNavigate();
+    const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
+    const [backupRunning, setBackupRunning] = useState(false);
+    const [backupError, setBackupError] = useState<string>();
+    const [backupSuccess, setBackupSuccess] = useState(false);
 
     const handleRunBackup = async () => {
+        setBackupError(null);
+        setBackupSuccess(false);
+        setConfirmDialogOpen(true);
+    };
+
+    const handleConfirmBackup = async (keepForever: boolean) => {
         try {
-            await backend.startBackup();
-            // Navigate to backup progress page (to be implemented)
-        } catch (err) {
-            console.error("Failed to start backup:", err);
-            // For now, just show an alert
-            alert("Backup functionality not yet implemented");
+            setConfirmDialogOpen(false);
+            setBackupRunning(true);
+            await backend.startBackup(keepForever);
+            setBackupSuccess(true);
+        } catch (error) {
+            setBackupError("Backup operation failed. " + (error.message ?? ""));
+        } finally {
+            setBackupRunning(false);
         }
+    };
+
+    const handleCancelBackup = () => {
+        setConfirmDialogOpen(false);
     };
 
     if (loading) {
@@ -83,11 +100,32 @@ const BackupDashboard: React.FC = () => {
                             startIcon={<PlayArrowIcon />}
                             onClick={handleRunBackup}
                             color="primary"
+                            loading={backupRunning}
+                            loadingPosition="start"
                         >
                             Run Backup Now
                         </Button>
                     </Box>
                 </Grid>
+
+                {/* Error and success alert bars */}
+                {backupError && (
+                    <Grid size={12}>
+                        <Alert severity="error"onClose={() => setBackupError(null)}>
+                            {backupError}
+                        </Alert>
+                    </Grid>
+                )}
+                {backupSuccess && (
+                    <Grid size={12}>
+                        <Alert severity="success" onClose={() => setBackupSuccess(false)}>
+                            Backup completed successfully. Details in this section may be out of date until reloaded.
+                            <Button onClick={reload} sx={{ ml: 2 }}>
+                                Reload Now
+                            </Button>
+                        </Alert>
+                    </Grid>
+                )}
 
                 {/* Status Overview */}
                 <Grid size={{ xs: 12, md: 6 }}>
@@ -111,6 +149,13 @@ const BackupDashboard: React.FC = () => {
                     />
                 </Grid>
             </Grid>
+
+            {/* Backup Confirmation Dialog */}
+            <BackupConfirmationDialog
+                open={confirmDialogOpen}
+                onClose={handleCancelBackup}
+                onConfirm={handleConfirmBackup}
+            />
         </>
     );
 };
