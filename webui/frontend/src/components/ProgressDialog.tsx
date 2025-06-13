@@ -1,4 +1,4 @@
-import { Dialog, DialogContent, DialogTitle, DialogActions, IconButton, Typography, Button, Box, Alert } from "@mui/material";
+import { Dialog, DialogContent, DialogTitle, DialogActions, IconButton, Typography, Button,  Alert } from "@mui/material";
 import { useServerActivity } from "@/hooks/useServerActivity";
 import { Close as CloseIcon } from "@mui/icons-material";
 import { ServerActivity } from "@backend/types";
