@@ -17,6 +17,12 @@ const BackupDashboard: React.FC = () => {
     const [backupError, setBackupError] = useState<string>();
     const [backupSuccess, setBackupSuccess] = useState(false);
 
+    const handleReload = () => {
+        setBackupError(null);
+        setBackupSuccess(false);
+        reload();
+    }
+
     const handleRunBackup = async () => {
         setBackupError(null);
         setBackupSuccess(false);
@@ -52,7 +58,7 @@ const BackupDashboard: React.FC = () => {
         return (
             <Alert severity="error" sx={{ mt: 2 }}>
                 {error}
-                <Button onClick={reload} sx={{ ml: 2 }}>
+                <Button onClick={handleReload} sx={{ ml: 2 }}>
                     Retry
                 </Button>
             </Alert>
@@ -90,7 +96,7 @@ const BackupDashboard: React.FC = () => {
                 <Grid size={12}>
                     <Box display="flex" justifyContent="end" gap={2}>
                         <IconButton
-                            onClick={reload}
+                            onClick={handleReload}
                             color="primary"
                         >
                             <CachedIcon />
@@ -120,7 +126,7 @@ const BackupDashboard: React.FC = () => {
                     <Grid size={12}>
                         <Alert severity="success" onClose={() => setBackupSuccess(false)}>
                             Backup completed successfully. Details in this section may be out of date until reloaded.
-                            <Button onClick={reload} sx={{ ml: 2 }}>
+                            <Button onClick={handleReload} sx={{ ml: 2 }}>
                                 Reload Now
                             </Button>
                         </Alert>
