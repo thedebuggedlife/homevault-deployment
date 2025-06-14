@@ -1,0 +1,172 @@
+import React, { useEffect, useState } from "react";
+import {
+    Paper,
+    Typography,
+    Box,
+    CircularProgress,
+    Alert,
+    Button,
+    Table,
+    TableBody,
+    TableCell,
+    TableContainer,
+    TableHead,
+    TableRow,
+} from "@mui/material";
+import { Refresh as RefreshIcon } from "@mui/icons-material";
+import backend from "@/backend/backend";
+import { BackupSnapshot } from "@backend/types/backup";
+import SnapshotRow from "@/components/backup/snapshots/SnapshotRow";
+import DeleteConfirmationDialog from "@/components/backup/snapshots/DeleteConfirmationDialog";
+
+const BackupSnapshots: React.FC = () => {
+    const [snapshots, setSnapshots] = useState<BackupSnapshot[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string>();
+    const [deleteError, setDeleteError] = useState<string>();
+    const [deletedId, setDeletedId] = useState<string>();
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [selectedSnapshot, setSelectedSnapshot] = useState<BackupSnapshot | null>(null);
+    const [deleting, setDeleting] = useState(false);
+
+    useEffect(() => {
+        fetchSnapshots();
+    }, []);
+
+    const fetchSnapshots = async () => {
+        try {
+            setLoading(true);
+            const response = await backend.getBackupSnapshots();
+            setSnapshots(response);
+            setError(null);
+        } catch (err) {
+            setError("Failed to load snapshots");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleDeleteClick = (snapshot: BackupSnapshot) => {
+        setSelectedSnapshot(snapshot);
+        setDeleteDialogOpen(true);
+    };
+
+    const handleDeleteConfirm = async () => {
+        if (!selectedSnapshot) return;
+
+        try {
+            setDeleting(true);
+            setDeleteError(null);
+            await backend.deleteBackupSnapshot(selectedSnapshot.id);
+            setDeletedId(selectedSnapshot.shortId ?? selectedSnapshot.id);
+            fetchSnapshots();
+        } catch (error) {
+            let message = "Failed to delete snapshot.";
+            if (error.message) {
+                message += " " + error.message;
+            }
+            setDeleteError(message);
+        } finally {
+            setDeleteDialogOpen(false);
+            setDeleting(false);
+        }
+    };
+
+    const handleDeleteCancel = () => {
+        if (!deleting) {
+            setDeleteDialogOpen(false);
+            setSelectedSnapshot(null);
+        }
+    };
+
+    if (loading && snapshots.length === 0) {
+        return (
+            <Box display="flex" justifyContent="center" alignItems="center" minHeight="60vh">
+                <CircularProgress />
+            </Box>
+        );
+    }
+
+    if (error && snapshots.length === 0) {
+        return (
+            <Alert severity="error" sx={{ mt: 2 }}>
+                {error}
+                <Button onClick={fetchSnapshots} sx={{ ml: 2 }}>
+                    Retry
+                </Button>
+            </Alert>
+        );
+    }
+
+    return (
+        <>
+            <Box sx={{ display: "flex", justifyContent: "end", gap: 2, mb: 3 }}>
+                <Button
+                    variant="outlined"
+                    startIcon={<RefreshIcon />}
+                    onClick={fetchSnapshots}
+                    loading={loading}
+                    loadingPosition="start"
+                >
+                    Refresh
+                </Button>
+            </Box>
+
+            {deleteError && (
+                <Alert severity="error" sx={{ m: 2 }} onClose={() => setDeleteError(null)}>
+                    {deleteError}
+                </Alert>
+            )}
+
+            {deletedId && (
+                <Alert severity="success" sx={{ m: 2 }} onClose={() => setDeletedId(null)}>
+                    Snapshot <strong>{deletedId}</strong> was deleted successfully.
+                </Alert>
+            )}
+
+            {snapshots.length === 0 ? (
+                <Alert severity="info" sx={{ m: 2 }}>
+                    No snapshots found. Run a backup to create your first snapshot.
+                </Alert>
+            ) : (
+                <Paper sx={{ p: 3 }}>
+                    <TableContainer>
+                        <Table>
+                            <TableHead>
+                                <TableRow>
+                                    <TableCell>Snapshot ID</TableCell>
+                                    <TableCell>Time</TableCell>
+                                    <TableCell>Hostname</TableCell>
+                                    <TableCell>Tags</TableCell>
+                                    <TableCell>Size</TableCell>
+                                    <TableCell align="right">Actions</TableCell>
+                                </TableRow>
+                            </TableHead>
+                            <TableBody>
+                                {snapshots.map((snapshot) => (
+                                    <SnapshotRow snapshot={snapshot} onDelete={() => handleDeleteClick(snapshot)} />
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </TableContainer>
+                    <Box sx={{ mt: 2 }}>
+                        <Typography variant="body2" color="text.secondary">
+                            Total snapshots: {snapshots.length}
+                        </Typography>
+                    </Box>
+                </Paper>
+            )}
+
+            {/* Delete Confirmation Dialog */}
+            <DeleteConfirmationDialog
+                open={deleteDialogOpen}
+                deleting={deleting}
+                onClose={handleDeleteCancel}
+                onDelete={handleDeleteConfirm}
+                selectedSnapshot={selectedSnapshot}
+            />
+        </>
+    );
+};
+
+export default BackupSnapshots;

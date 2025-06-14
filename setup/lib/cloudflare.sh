@@ -102,7 +102,7 @@ cloudflare_add_or_update_record() {
             exit 1
         fi
         if echo "$response" | jq -e '.success' >/dev/null; then
-            echo "Record updated successfully."
+            log "Record updated successfully."
         else
             log_error "Failed to update record: $response"
             exit 1

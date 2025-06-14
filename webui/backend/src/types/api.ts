@@ -1,3 +1,4 @@
+import { BackupRunRequest } from "./backup";
 import { DockerContainer } from "./docker";
 
 export interface User {
@@ -13,7 +14,11 @@ export interface SystemResources {
     diskUsage: number;
 }
 
-export type CurrentActivity = DeploymentActivity | BackupActivity | { type: 'none' }
+type OmitFromUnion<T, K extends keyof T> = T extends any ? Omit<T, K> : never;
+
+export type ServerActivity = DeploymentActivity | BackupInitActivity | BackupUpdateActivity | BackupRunActivity;
+
+export type ServerActivityWithoutId = OmitFromUnion<ServerActivity, "id">;
 
 export interface DeploymentActivity {
     id: string;
@@ -21,9 +26,20 @@ export interface DeploymentActivity {
     request: DeploymentRequest;
 }
 
-export interface BackupActivity {
+export interface BackupInitActivity {
     id: string;
-    type: 'backup';
+    type: 'backup_init';
+}
+
+export interface BackupUpdateActivity {
+    id: string;
+    type: "backup_update";
+}
+
+export interface BackupRunActivity {
+    id: string;
+    type: "backup_run";
+    request: BackupRunRequest;
 }
 
 export interface DeploymentRequest {
@@ -33,8 +49,11 @@ export interface DeploymentRequest {
     }
     config?: {
         variables?: Record<string, string>;
-        password?: string;
     }
+}
+
+export interface DeploymentResponse {
+    activityId: string;
 }
 
 export interface DeploymentPrompt {
@@ -101,4 +120,34 @@ export interface ErrorInstance {
 
 export interface ErrorResponse {
     errors: ErrorInstance[];
+}
+
+export interface SudoRequest {
+    username: string;
+    timeoutMs: number;
+}
+
+export interface SudoResponse {
+    password?: string;
+}
+
+export interface SessionServerEvents {
+    hello: (id: string) => void;
+    sudo: (request: SudoRequest, callback: (response: SudoResponse) => void) => void;
+    activity: (current?: ServerActivity) => void;
+    output: (activityId: string, output: string[]) => void;
+}
+
+export interface SessionClientEvents {
+    listen: (activityId: string, callback: (output: string[]) => void) => void;
+}
+
+export interface ActivityServerEvents {
+    start: () => void;
+    end: (error?: string) => void;
+    output: (output: string[]) => void;
+}
+
+export interface ActivityClientEvents {
+    abort: () => void;
 }

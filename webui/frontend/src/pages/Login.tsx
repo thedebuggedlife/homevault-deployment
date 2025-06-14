@@ -2,10 +2,10 @@
 import { SignInPage } from "@toolpad/core/SignInPage";
 import LinearProgress from "@mui/material/LinearProgress";
 import { Navigate, useNavigate } from "react-router-dom";
-import { signIn, useSession } from "@/contexts/SessionContext";
+import { useSession } from "@/contexts/SessionContext";
 
 function Login() {
-    const { session, setSession, loading } = useSession();
+    const { session, signIn, loading } = useSession();
     const navigate = useNavigate();
 
     if (loading) {
@@ -33,9 +33,7 @@ function Login() {
                     return { error: 'Username and password are required' };
                 }
                 try {
-                    const user = await signIn(username, password);
-                    const session = { user };
-                    setSession(session);
+                    await signIn(username, password);
                     navigate(callbackUrl || '/', { replace: true });
                     return {};
                 } catch (error) {

@@ -1,14 +1,61 @@
 import winston from "winston";
 import { logger as rootLog } from "@/logger";
-import system, { Cancellable, CommandResult, InputEvents } from "./system";
-import { CurrentActivity, DeploymentConfig, DeploymentRequest } from "@/types";
-import { createNanoEvents, Emitter, EmitterMixin } from "nanoevents";
+import system from "./system";
+import { DeploymentConfig, DeploymentRequest, ServerActivity, ServerActivityWithoutId } from "@/types";
 import { ServiceError } from "@/errors";
-import { v4 as uuid } from "uuid";
-import { file } from 'tmp-promise';
+import { file } from "tmp-promise";
 import * as fs from "fs/promises";
+import { BackupRunRequest, BackupSchedule, BackupSnapshot, BackupStatus } from "@/types/backup";
+import _ from "lodash";
+import { generateRepositoryEnvironment, parseRepositoryEnvironment, ResticRepository } from "@/types/restic";
+import { getSessionId } from "@/middleware/context";
+import activity from "./activity";
 
 export const INSTALLER_PATH = process.env.INSTALLER_PATH ?? "~/homevault/workspace";
+
+interface SnapshotOutput {
+    id: string;
+    shortId: string;
+    hostname: string;
+    username: string;
+    paths: string[];
+    time: string;
+    tags: string[],
+    summary: {
+        backupStart: string;
+        backupEnd: string;
+        filesNew: number;
+        filesChanged: number;
+        filesUnmodified: number;
+        dirsNew: number;
+        dirsChanged: number;
+        dirsUnmodified: number;
+        dataAdded: number;
+        dataAddedPacked: number;
+        totalFilesProcessed: number;
+        totalBytesProcessed: number;
+    }
+}
+
+interface BackupOutput {
+    env: Record<string, string>;
+    stats: {
+        totalSize: number;
+        totalUncompressedSize: number;
+        compressionRatio: number;
+        compressionProgress: number;
+        compressionSpaceSaving: number;
+        totalBlobCount: number;
+        snapshotsCount: number;
+        lastSnapshotTime: string;
+    };
+    schedule?: {
+        enabled: boolean;
+        cron: string;
+        retention: string;
+    };
+    snapshots?: SnapshotOutput[];
+}
 
 interface InstallerOutput {
     version: string;
@@ -17,28 +64,19 @@ interface InstallerOutput {
         available?: Record<string, string>;
     };
     config?: DeploymentConfig;
-    logs: string[];
+    backup?: BackupOutput;
+    logs?: string[];
+    warnings?: string[];
+    errors?: {
+        message: string;
+        stack: string;
+    }[];
 }
 
 interface CommandOptions {
     output?: (data: string) => void;
-    input?: EmitterMixin<InputEvents>;
-    cancellable?: boolean;
-    env?: Record<string, string>
-}
-
-export interface DeploymentEvents {
-    output: (data: string, offset: number) => void;
-    completed: (error?: any) => void;
-}
-
-export interface DeploymentInstance {
-    id: string;
-    request: DeploymentRequest;
-    events: Emitter<DeploymentEvents>;
-    output: string[];
-    sudo: () => string;
-    abort?: () => void;
+    env?: Record<string, string>;
+    withActivity?: ServerActivityWithoutId;
 }
 
 interface ConfigFile {
@@ -48,34 +86,9 @@ interface ConfigFile {
 
 class InstallerService {
     private logger: winston.Logger;
-    private currentDeployment?: DeploymentInstance;
 
     constructor() {
         this.logger = rootLog.child({ source: "InstallerService" });
-    }
-
-    getCurrentActivity(): CurrentActivity | undefined {
-        if (this.currentDeployment) {
-            return {
-                id: this.currentDeployment.id,
-                type: "deployment",
-                request: this.currentDeployment.request,
-            };
-        }
-    }
-
-    sudoForActivity(id: string): string {
-        if (this.currentDeployment) {
-            if (this.currentDeployment.id !== id) {
-                throw new ServiceError("The activity current activity id does not match the sudo request", null, 403);
-            }
-            return this.currentDeployment.sudo();
-        }
-        throw new ServiceError("There is no activity that requires sudo access", null, 400);
-    }
-
-    getCurrentDeployment(): DeploymentInstance | undefined {
-        return this.currentDeployment;
     }
 
     async getVersion(): Promise<string> {
@@ -102,80 +115,146 @@ class InstallerService {
         return output.config;
     }
 
-    async startDeployment(request: DeploymentRequest): Promise<DeploymentInstance> {
-        if (this.currentDeployment) {
-            this.logger.warn("There is already an ongoing deployment");
-            throw new ServiceError("There is already an ongoing deployment");
-        }
-        const password = request.config?.password;
-        if (!password) {
-            this.logger.warn("Deployment request missing password for sudo");
-            throw new ServiceError("Deployment requires password for sudo");
-        }
-        delete request.config?.password; // Avoid leaking password - remove it from persisted request
-        const instance: DeploymentInstance = (this.currentDeployment = {
-            id: uuid(),
-            request,
-            events: createNanoEvents<DeploymentEvents>(),
-            output: [],
-            sudo: () => password,
-        });
+    async startDeployment(request: DeploymentRequest): Promise<ServerActivity> {
         const args = ["deploy", ...this.getDeploymentArgs(request)];
-        const output = (data: string) => {
-            instance.events.emit("output", data, instance.output.length);
-            instance.output.push(data);
-        };
         const variables = request.config?.variables ?? {};
         let configFile: ConfigFile;
         if (Object.entries(variables).length > 0) {
             configFile = await this.generateConfFile(variables);
             args.push("--override", configFile.path);
         }
-        const cancellable = this.executeCommand([...args, "--unattended", "--force"], {
-            output,
-            cancellable: true,
-            env: {
-                ...process.env,
-                SUDO_NONCE: instance.id,
-                SUDO_ASKPASS: `${INSTALLER_PATH}/webui/backend/askpass.sh`,
+        const activity = this.executeCommand([...args, "--unattended", "--force"], {
+            withActivity: {
+                type: "deployment",
+                request
             }
         });
-        this.logger.info(`Deployment instance ${instance.id} started`);
-        cancellable.promise
-            .then(
-                () => {
-                    // Delete current deployment first to avoid race conditions when attaching to ongoing deployment
-                    delete this.currentDeployment;
-                    instance.events.emit("completed");
-                },
-                (error) => {
-                    // Delete current deployment first to avoid race conditions when attaching to ongoing deployment
-                    delete this.currentDeployment;
-                    instance.events.emit("completed", error);
-                }
-            )
-            .finally(() => {
-                instance.events.events = {};
-                configFile?.cleanup();
-            });
-        instance.abort = () => {
-            this.logger.warn("Cancelling deployment instance: " + instance.id);
-            cancellable.cancel();
-        };
-        return instance;
+        return activity;
     }
 
-    private async generateConfFile(config: Record<string,string>): Promise<ConfigFile> {
-        const { path, cleanup } = await file();
+    async listSnapshots(snapshotId?: string): Promise<BackupSnapshot[]> {
+        try {
+            const args = ["snapshots", "list"]
+            if (snapshotId) {
+                args.push(snapshotId);
+            }
+            const result = await this.executeCommand(args);
+            return result?.backup?.snapshots?.map(snapshot => ({
+                id: snapshot.id,
+                shortId: snapshot.shortId,
+                time: snapshot.time,
+                hostname: snapshot.hostname,
+                tags: snapshot.tags,
+                totalSize: snapshot.summary.totalBytesProcessed,
+            })) ?? [];
+        }
+        catch (error) {
+            this.logger.warn("Failed to enumerate snapshots");
+            return [];
+        }
+    }
 
-        this.logger.info("Created temporary file: " + path);
+    async deleteSnapshot(snapshotId: string): Promise<void> {
+        const args = ["snapshots", "forget", snapshotId];
+        await this.executeCommand(args);
+    }
+
+    async getBackupStatus(): Promise<BackupStatus> {
+        try {
+            const { backup } = (await this.executeCommand(["backup", "info"])) ?? {};
+            if (!backup) {
+                this.logger.warn("Empty backup object returned - assuming system is uninitialized");
+                return { initialized: false };
+            }
+            const repositoryLocation = backup.env["RESTIC_REPOSITORY"];
+            if (_.isEmpty(repositoryLocation)) {
+                return { initialized: false };
+            }
+            const repository = parseRepositoryEnvironment(backup.env);
+            return {
+                initialized: true,
+                repository,
+                snapshotCount: backup.stats.snapshotsCount,
+                totalSize: backup.stats.totalSize,
+                totalUncompressedSize: backup.stats.totalUncompressedSize,
+                lastBackupTime: backup.stats.lastSnapshotTime,
+                schedule: {
+                    enabled: backup.schedule?.enabled ?? false,
+                    cronExpression: backup.schedule?.cron,
+                    retentionPolicy: backup.schedule?.retention,
+                },
+                environment: backup.env,
+            }
+        } catch (error) {
+            this.logger.warn("Could not get backup information - assuming system is uninitialized");
+            return { initialized: false };
+        }
+    }
+
+    async initRepository(repository: ResticRepository): Promise<void> {
+        const { backup } = (await this.executeCommand(["backup", "info", "--env-only"])) ?? {};
+        const newEnv = generateRepositoryEnvironment(repository, backup?.env);
+        const { path: envPath, cleanup } = await this.generateConfFile(newEnv);
+
+        try {
+            const activity = this.executeCommand(["backup", "init", "--restic-env", envPath], {
+                withActivity: {
+                    type: "backup_init"
+                }
+            });
+            await activity.promise;
+        } catch {
+            throw new ServiceError("Failed to initialize restic repository.");
+        } finally {
+            cleanup();
+        }
+    }
+
+    async runBackup(request: BackupRunRequest): Promise<void> {
+        const args = ["backup", "run"];
+        if (request.keepForever) {
+            args.push("--keep");
+        }
+        await this.executeCommand(args, {
+            withActivity: {
+                type: "backup_run",
+                request
+            }
+        }).promise;
+    }
+
+    async updateSchedule(schedule: BackupSchedule): Promise<void> {
+        const { enabled, cronExpression, retentionPolicy } = schedule;
+        const args = ["backup", "schedule", "--unattended"];
+        if (!enabled) {
+            args.push("--disable");
+        }
+        else {
+            args.push("--enable");
+            if (cronExpression) {
+                args.push("--cron", `'${cronExpression}'`);
+            }
+            if (retentionPolicy) {
+                args.push("--retention", retentionPolicy);
+            }
+        }
+        const activity = this.executeCommand(args, {
+            withActivity: {
+                type: "backup_update"
+            }
+        });
+        await activity.promise;
+    }
+
+    private async generateConfFile(config: Record<string, string>): Promise<ConfigFile> {
+        const { path, cleanup } = await file();
         const content = Object.entries(config)
             .map(([key, value]) => `${key}=${value}`)
-            .join('\n');
+            .join("\n");
 
-        const fileHandle = await fs.open(path, 'w');
+        const fileHandle = await fs.open(path, "w");
         try {
-            await fileHandle.write(content, 0, 'utf8');
+            await fileHandle.write(content, 0, "utf8");
         } finally {
             await fileHandle.close();
         }
@@ -196,44 +275,59 @@ class InstallerService {
 
     private executeCommand(
         args: string[],
-        options: CommandOptions & { cancellable: true }
-    ): Cancellable<CommandResult<InstallerOutput>>;
+        options: CommandOptions & { withActivity: ServerActivityWithoutId }
+    ): ServerActivity & { promise: Promise<unknown> };
 
     private executeCommand(
         args: string[],
-        options?: CommandOptions & { cancellable?: false | undefined }
+        options?: CommandOptions & { withActivity?: undefined }
     ): Promise<InstallerOutput | undefined>;
 
     private executeCommand(
         args: string[],
         options?: CommandOptions
-    ): Promise<InstallerOutput | undefined> | Cancellable<CommandResult<InstallerOutput>> {
+    ): Promise<InstallerOutput | undefined> | ServerActivity & { promise: Promise<unknown> } {
         let lastError: string | undefined;
+        let activityId: string|undefined;
         try {
-            const jsonOutput = !options?.output;
+            const jsonOutput = !options?.output && !options?.withActivity;
             if (jsonOutput) {
                 args.unshift("--json");
             }
             args.unshift("hv");
+            const activityId = options?.withActivity ? activity.onStart(options.withActivity) : null;
+            const output = (data: string) => {
+                if (activityId) {
+                    activity.onOutput(activityId, [data]);
+                }
+                options?.output?.(data);
+            }
             const cancellable = system.executeCommand<InstallerOutput>("bash", args, {
                 cwd: INSTALLER_PATH,
                 jsonOutput,
-                stdin: options?.input,
-                stdout: options?.output,
-                stderr: (data: string) => {
-                    const lines = data.split("\n");
-                    for (const line of lines) {
-                        // TODO: Does not always catch the last error
-                        if (line.startsWith("🔴 ERROR: ")) {
-                            lastError = data.substring(9);
-                        }
-                    }
-                    options?.output?.(data);
-                },
-                env: options?.env,
+                stdout: output,
+                stderr: output,
+                env: {
+                    ...process.env,
+                    ...options?.env,
+                    SUDO_NONCE: getSessionId(),
+                    SUDO_ASKPASS: `${INSTALLER_PATH}/webui/backend/askpass.sh`,
+                }
             });
-            if (options?.cancellable) {
-                return cancellable;
+            if (options?.withActivity) {
+                cancellable.promise.then(
+                    () => {
+                        activity.onEnd(activityId!);
+                    }, 
+                    (error) => {
+                        activity.onEnd(activityId!, error);
+                    }
+                );
+                return {
+                    ...options.withActivity,
+                    id: activityId!,
+                    promise: cancellable.promise,
+                }
             }
             return cancellable.promise.then(
                 (result) => {
@@ -252,6 +346,9 @@ class InstallerService {
                 }
             );
         } catch (error) {
+            if (activityId) {
+                activity.onEnd(activityId, error);
+            }
             throw new ServiceError("Failed to execute installer command", { args, error });
         }
     }

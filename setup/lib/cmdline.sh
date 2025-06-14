@@ -38,8 +38,11 @@ print_usage() {
         log "\nUsage: $0 [global options] backup <action> [backup options]"
         log "\nBackup actions:\n"
         log "  init                         Initialize the backup configuration. Must be run once before creating a snapshot."
+        log "  info                         Show configuration and statistics about the repository."
         log "  run                          Create a new recovery snapshot."
         log "  schedule                     Configure (or disable) the schedule for background backup operations."
+        log "\nBackup 'info' options:\n"
+        log "  --env-only                   Only show restic configuration."
         log "\nBackup 'init' options:\n"
         log "  --restic-env <env_file>      Use the specified file to initialize restic environment variables."
         log "  --restic-var <var>=<value>   Specify a restic variable value. Can be specified multiple times."
@@ -72,7 +75,8 @@ print_usage() {
     elif [ "$SELECTED_ACTION" = "snapshots" ]; then
         log "\nUsage: $0 [global options] snapshots <action> [snapshot options]"
         log "\Snapshot actions:\n"
-        log "  list                         Show a list of snapshots that have been taken."
+        log "  list [snapshot_id]           Show a list of snapshots that have been taken."
+        log "                               You can specify single snapshot ID to filter output (optional)."
         log "  browse <snapshot_id> [dir]   Show the contents of a snapshot. Optionally, only files under [dir]."
         log "  forget <snapshot_id>         Configure (or disable) the schedule for background backup operations."
         log "\nSnapshot 'browse' options:\n"
@@ -209,7 +213,7 @@ parse_deploy_option() {
 #                              BACKUP OPTIONS
 
 is_valid_backup_action() {
-    local -a valid_actions=("init" "run" "schedule")
+    local -a valid_actions=("init" "run" "schedule" "info")
     array_contains "$1" "${valid_actions[@]}" || return 1
 }
 
@@ -224,7 +228,15 @@ parse_backup_init_option() {
             return 2
             ;;
     esac
-    return 1
+}
+
+parse_backup_info_option() {
+    case "$(echo "$1" | tr '[:upper:]' '[:lower:]')" in
+        --env-only)
+            BACKUP_ENV_ONLY=true
+            return 1
+            ;;
+    esac
 }
 
 parse_backup_run_option() {
@@ -355,6 +367,15 @@ parse_snapshots_option() {
             SNAPSHOT_ACTION="$action"
             ## Check for required options
             case "$action" in
+                list)
+                    if [[ -n "$2" && "$2" != -* ]]; then
+                        SNAPSHOT_ID="$2"
+                        return 2
+                    else
+                        SNAPSHOT_ID=
+                        return 1
+                    fi
+                    ;;
                 browse)
                     if [[ -n "$2" && "$2" != -* ]]; then
                         SNAPSHOT_ID="$2"

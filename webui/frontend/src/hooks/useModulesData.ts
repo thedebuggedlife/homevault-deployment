@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import backend from '../backend';
+import backend from '../backend/backend';
 import { SystemStatusResponse, GetModulesResponse } from '@backend/types';
 
 export function useModulesData() {

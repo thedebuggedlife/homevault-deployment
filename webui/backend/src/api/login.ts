@@ -4,7 +4,7 @@ import { NextFunction, Request, Response } from "express";
 import tokenGenerator, { JWT_EXPIRES } from "@/tokenGenerator";
 import { LoginResponse, User } from "@/types";
 import { readFile } from "fs/promises";
-import { promisify } from "util";
+import { promisify } from "node:util";
 import { ServiceError } from "@/errors";
 
 const execAsync = promisify(exec);

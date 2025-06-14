@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { DeploymentConfig } from '@backend/types';
-import backend from '@/backend';
+import backend from '@/backend/backend';
 
 export function useDeploymentConfig(modules: string[]) {
     const [config, setConfig] = useState<DeploymentConfig | null>(null);

@@ -50,8 +50,10 @@ export default function Terminal({
         // Open terminal in the DOM element
         xterm.open(terminalRef.current);
         
-        // Initial fit
-        fitAddon.fit();
+        // Wait for next tick before fitting
+        requestAnimationFrame(() => {
+            fitAddon.fit();
+        });
 
         // Store references
         xtermRef.current = xterm;
@@ -59,7 +61,13 @@ export default function Terminal({
 
         // Handle window resize
         const handleResize = () => {
-            fitAddon.fit();
+            if (fitAddonRef.current && xtermRef.current) {
+                try {
+                    fitAddonRef.current.fit();
+                } catch (error) {
+                    console.warn('Resize fit failed:', error);
+                }
+            }
         };
         window.addEventListener('resize', handleResize);
 
@@ -117,7 +125,13 @@ export default function Terminal({
         if (!fitAddonRef.current || !terminalRef.current) return;
 
         const resizeObserver = new ResizeObserver(() => {
-            fitAddonRef.current?.fit();
+            if (fitAddonRef.current) {
+                try {
+                    fitAddonRef.current.fit();
+                } catch (error) {
+                    console.warn('ResizeObserver fit failed:', error);
+                }
+            }
         });
 
         resizeObserver.observe(terminalRef.current);

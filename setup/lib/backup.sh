@@ -22,6 +22,8 @@ declare -A RESTIC_OVERRIDES
 BACKUP_ACTION=
 # Set with hv backup run --keep
 BACKUP_KEEP=false
+# Set with hv backup info --env-only
+BACKUP_ENV_ONLY=false
 
 # Indicates whether background backups are set to run automatically
 BACKUP_ENABLED=
@@ -172,16 +174,19 @@ validate_retention_policy() {
 #
 # @option   -v  {list}      Colon-separated list of directories to map
 # @option   -m  {manifest}  Manifest JSON file (for backup operations only)
+# @option   -e  {path}      File with environment variables to use for restic. Defaults to: $RESTIC_ENV.
 # @param    $@              Any additional parameters are passed down to restic
 # @return   {string}        Any output from restic
 ###
 restic() {
     local data_paths manifest_file exit_code
+    local env_file="$RESTIC_ENV"
     OPTIND=1
-    while getopts ":v:m:" opt; do
+    while getopts ":v:m:e:" opt; do
         case $opt in
             v) data_paths="$OPTARG" ;;
             m) manifest_file="$OPTARG" ;;
+            e) env_file="$OPTARG" ;;
             \?) log_warn "Invalid option: -$OPTARG" ;;
             :) log_warn "Option -$OPTARG requires an argument" ;;
         esac
@@ -201,14 +206,17 @@ restic() {
     if [ -n "$manifest_file" ]; then
         cmd+=" -v '$manifest_file':$RESTIC_DATA_ROOT/manifest.json"
     fi
-    if [ -n "$RESTIC_ENV" ]; then
-        cmd+=" --env-file '$RESTIC_ENV' "
+    if [ -n "$env_file" ]; then
+        cmd+=" --env-file '$env_file' "
     fi
     if [ -d "$RESTIC_CONFIG" ]; then
         cmd+=" -v '$RESTIC_CONFIG:/config' "
     fi
     if [ -d "$RESTIC_REPOSITORY" ]; then
         cmd+=" -v '$RESTIC_REPOSITORY:/repo' "
+    fi
+    if [ -d "${APPDATA_LOCATION%/}/backup/cache" ]; then
+        cmd+=" -v ${APPDATA_LOCATION%/}/backup/cache:/cache -e RESTIC_CACHE_DIR=/cache "
     fi
     # The restic container
     cmd+="ghcr.io/restic/restic:$RESTIC_VERSION "
@@ -244,58 +252,129 @@ restic_load_env() {
     source "$RESTIC_ENV"
 }
 
+restic_print_env() {
+    local env_file="${RESTIC_ENV:-${APPDATA_LOCATION%/}/backup/restic.env}"
+    local private_keys=("RESTIC_PASSWORD" "AWS_SECRET_ACCESS_KEY")
+
+    if [ ! -f "$env_file" ]; then
+        log_warn "The repository for backups has not been initialized"
+        return 0
+    fi
+
+    log_header "Repository Configuration"
+
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        # Skip empty lines and comments
+        if [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]]; then
+            continue
+        fi
+        
+        # Check if line matches KEY=VALUE pattern
+        if [[ "$line" =~ ^[[:space:]]*([^=]+)=(.*)$ ]]; then
+            local key="${BASH_REMATCH[1]}"
+            local value="${BASH_REMATCH[2]}"
+            
+            # Remove leading/trailing whitespace from key
+            key=$(echo "$key" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+            
+            # Check if key is in private_keys array
+            local is_private=false
+            for private_key in "${private_keys[@]}"; do
+                if [[ "$key" == "$private_key" ]]; then
+                    is_private=true
+                    break
+                fi
+            done
+            
+            # Prepare values for display and JSON
+            local display_value="$value"
+            
+            if [[ "$is_private" == true ]]; then
+                display_value="*******"
+            fi
+            
+            # Print to console
+            log "${key}=${display_value}"
+            
+            # Add to JSON_OUTPUT using jq
+            JSON_OUTPUT=$(echo "$JSON_OUTPUT" | jq --arg k "$key" --arg v "$value" '.backup.env[$k] = $v')
+        fi
+    done < "$env_file"
+
+    log
+}
+
+###
+# Generates an .env file for use with restic
+#
+# @param    $1  {path}  Path to the .env file to create
+###
 restic_init_env() {
+    local temp_env=$1
+
+    ## TODO: Support assisted initialization of restic for different repository types
+
+    if [ -n "$RESTIC_INIT_ENV" ]; then
+        copy_env_values "$RESTIC_INIT_ENV" "$temp_env" -o || return 1
+    fi
+
+    local key
+    for key in "${!RESTIC_OVERRIDES[@]}"; do
+        save_env "$key" "${RESTIC_OVERRIDES[$key]}" "$temp_env"
+    done
+
+    source "$temp_env"
+}
+
+###
+# Copies a temporary restic .env file to the path where it'll be used for backup/snapshot operations
+#
+# @param    $1  {path}      Path to the temporary .env file
+###
+restic_copy_env() {
+    local temp_env=$1
+
+    if [ ! -f "$temp_env" ]; then
+        log_error "File '$temp_env' does not exist"
+        return 1
+    fi
+
     RESTIC_ENV="${RESTIC_ENV:-${APPDATA_LOCATION%/}/backup/restic.env}"
 
     if [ -f "$RESTIC_ENV" ]; then
         local bak_file
         bak_file="$RESTIC_ENV.$(date +%s).bak"
         log_warn "A previous restic environment exists at '$RESTIC_ENV'"
-        ask_confirmation -y -p "Do you want to reuse the existing file? (use CTRL+C to exit)" && {
-            if cp "$RESTIC_ENV" "$bak_file"; then
-                log "Previous environment file copied to: ${Cyan}$bak_file${COff}"
-            else
-                log_error "Failed to make a copy of previous environment file: '$bak_file'"
-                return 1
-            fi
-        } || {
-            if mv "$RESTIC_ENV" "$bak_file"; then
-                log "Previous environment file moved to: ${Cyan}$bak_file${COff}"
-            else
-                log_error "Failed to make a copy of previous environment file: '$bak_file'"
-                return 1
-            fi
-        }
-    fi
-
-    if [ ! -f "$RESTIC_ENV" ]; then
-        ensure_path_exists "$(dirname "$RESTIC_ENV")" || return 1
-        log "Creating restic environment file: ${Cyan}$RESTIC_ENV${COff}"
-        touch "$RESTIC_ENV" && chmod 600 "$RESTIC_ENV" || {
-            log_error "Failed to create restic environment file: '$RESTIC_ENV'"
+        if mv "$RESTIC_ENV" "$bak_file"; then
+            log "Previous environment file moved to: ${Cyan}$bak_file${COff}"
+        else
+            log_error "Failed to make a copy of previous environment file: '$bak_file'"
             return 1
-        }
+        fi
     fi
 
-    ## TODO: Support assisted initialization of restic for different repository types
+    log "Creating restic environment file: ${Cyan}$RESTIC_ENV${COff}"
 
-    if [ -n "$RESTIC_INIT_ENV" ]; then
-        copy_env_values "$RESTIC_INIT_ENV" "$RESTIC_ENV" -o || return 1
-    fi
-
-    local key
-    for key in "${!RESTIC_OVERRIDES[@]}"; do
-        save_env "$key" "${RESTIC_OVERRIDES[$key]}" "$RESTIC_ENV"
-    done
+    ensure_path_exists "$(dirname "$RESTIC_ENV")" || return 1
+    cp -f "$temp_env" "$RESTIC_ENV" && chmod 600 "$RESTIC_ENV" || {
+        log_error "Failed to create restic environment file: '$RESTIC_ENV'"
+        return 1
+    }
 }
 
 restic_init_repository() {
+    log_header "Initializing restic repository"
+
+    local temp_env
+    temp_env=$(mktemp)
+
+    local return_code=0
     # Using a subshell to isolate code with access to restic ENV values
     (
-        restic_load_env || return 1
+        restic_init_env "$temp_env" || return 1
 
         if [ -z "$RESTIC_HOST" ]; then
-            save_env RESTIC_HOST "$HOSTNAME" "$RESTIC_ENV"
+            save_env RESTIC_HOST "$HOSTNAME" "$temp_env"
         fi
 
         if [ -z "$RESTIC_REPOSITORY" ]; then
@@ -306,29 +385,31 @@ restic_init_repository() {
             local full_path
             full_path="$(readlink -f "$RESTIC_REPOSITORY")"
             if [ "$full_path" != "$RESTIC_REPOSITORY" ]; then
-                save_env RESTIC_REPOSITORY "" "$RESTIC_ENV"
+                save_env RESTIC_REPOSITORY "" "$temp_env"
             fi
         fi
 
         if [ -z "$RESTIC_PASSWORD" ]; then
             log_warn "A recovery password was not specified. A new one will be been generated for you."
-            save_env_id RESTIC_PASSWORD -l 32 -f "$RESTIC_ENV"
+            save_env_id RESTIC_PASSWORD -l 32 -f "$temp_env"
             log "Recovery password: ${BIPurple}$RESTIC_PASSWORD${COff}"
             log "Please store this password in a safe place NOW. Press any key to continue..."
             read -n 1 -s -r
             log
         fi
 
-        if restic snapshots >/dev/null 2>&1; then
+        if restic -e "$temp_env" stats >/dev/null 2>&1; then
             log "\nExisting repository found at: ${Cyan}${RESTIC_REPOSITORY}${COff}\n"
             log_warn "An existing repository was found at this location and will be reused for future snapshots."
         else
             log "\nInitializing repository: ${Cyan}${RESTIC_REPOSITORY}${COff}\n"
-            restic init -q || {
+            restic -e "$temp_env" init -q || {
                 log_error "Failed to initialize backup repository"
                 return 1
             }
         fi
+
+        restic_copy_env "$temp_env"
 
         local password_file="${SECRETS_PATH%/}/restic_password"
         log "Saving restic password to ${Cyan}$password_file${COff}"
@@ -337,7 +418,10 @@ restic_init_repository() {
                 log_error "Failed to save restic password to '$password_file'"
                 return 1
             }
-    ) || return 1
+    ) || return_code=1
+
+    rm "$temp_env"
+    return $return_code
 }
 
 restic_run_backup() {
@@ -377,20 +461,53 @@ restic_run_backup() {
     return $exit_code
 }
 
+restic_show_stats() {
+    local -a opts=()
+    if [ "$JSON_OUT" = true ]; then opts+=("--json"); fi
+
+    local output
+    output=$(
+        restic_load_env || return 1
+        restic stats --mode raw-data "${opts[@]}"
+    ) || return 1
+
+    if [ "$JSON_OUT" = true ]; then
+        output=$(json_snake_to_camel "$output")
+        JSON_OUTPUT=$(echo "$JSON_OUTPUT" | jq --argjson stats "$output" '.backup.stats = $stats')
+    else
+        log_header "Repository Statistics"
+        log "$output"
+    fi
+}
+
 restic_list_snapshots() {
+    local output
     # Using a subshell to isolate code with access to restic ENV values
-    (
+    output=$(
         restic_load_env || return 1
 
+        local -a opts=()
+        local output
+
+        if [ -n "$SNAPSHOT_ID" ]; then opts+=("$SNAPSHOT_ID"); fi
+        if [ "$JSON_OUT" = true ]; then opts+=("--json"); fi
+
         log "Listing snapshots in repository: ${Cyan}${RESTIC_REPOSITORY}${COff}\n"
-        restic snapshots \
+        restic snapshots "${opts[@]}" \
             --tag "$COMPOSE_PROJECT_NAME" || {
                 log_error "Snapshots operation failed"
                 return 1
             }
-
-        log
     ) || return 1
+
+    if [ "$JSON_OUT" = true ]; then
+        output=$(json_snake_to_camel "$output")
+        JSON_OUTPUT=$(echo "$JSON_OUTPUT" | jq -c --argjson snapshots "$output" '.backup.snapshots = $snapshots')
+    else
+        log "$output"
+        log
+    fi
+
 }
 
 restic_browse_snapshot() {
@@ -418,11 +535,13 @@ restic_forget_snapshots() {
         restic_load_env || return 1
 
         log "Deleting snapshot ${Purple}$SNAPSHOT_ID${COff} from repository: ${Cyan}${RESTIC_REPOSITORY}${COff}\n"
-        restic forget "$SNAPSHOT_ID" || {
+        local output
+        output=$(restic forget "$SNAPSHOT_ID" || {
                 log_error "Forget operation failed"
                 return 1
-            }
+            })
 
+        log "$output"
         log
     ) || return 1
 }
@@ -542,6 +661,24 @@ backup_configure_retention() {
     else
         save_env BACKUP_ENABLE_FORGET true
         save_env BACKUP_RETENTION_POLICY "$BACKUP_RETENTION_POLICY_CHANGE"
+    fi
+}
+
+backup_schedule_info() {
+    log_header "Scheduled Backup Configuration"
+    log "Background backups:    $([ "$BACKUP_ENABLED" == true ] && echo "enabled" || echo "disabled")"
+    log "Backup schedule:       ${BACKUP_SCHEDULE:-"(Not set)"}"
+    log "Retention policy:      ${BACKUP_RETENTION_POLICY:-"(Not set)"}"
+
+    if [ "$JSON_OUT" = true ]; then
+        JSON_OUTPUT=$(echo "$JSON_OUTPUT" | jq -c \
+            --argjson enabled "$([ "$BACKUP_ENABLED" == true ] && echo "true" || echo "false")" \
+            --arg cron "$BACKUP_SCHEDULE" \
+            --arg retention "$BACKUP_RETENTION_POLICY" '
+            .backup.schedule.enabled=$enabled |
+            .backup.schedule.cron=$cron |
+            .backup.schedule.retention=$retention
+        ')
     fi
 }
 

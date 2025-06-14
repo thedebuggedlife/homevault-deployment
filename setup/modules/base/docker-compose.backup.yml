@@ -24,13 +24,14 @@ services:
       - ${APPDATA_LOCATION}/backup/config:/config:ro
       - ${APPDATA_LOCATION}/backup/hooks:/hooks:ro
       # Cache volume for better restic performance
-      - restic-cache:/root/.cache/restic
+      - ${APPDATA_LOCATION}/backup/cache:/cache
       # Backup locations
       - ${APPDATA_LOCATION}:/data/${APPDATA_LOCATION}:ro
     env_file: ${APPDATA_LOCATION}/backup/restic.env
     environment:
       - TZ
       - CRON_SCHEDULE=${BACKUP_SCHEDULE:-0 2 * * *}
+      - RESTIC_CACHE_DIR=/cache
       # Remove the password from the environment (in case it is set in restic.env)
       - RESTIC_PASSWORD=
       # Use the docker secret instead
