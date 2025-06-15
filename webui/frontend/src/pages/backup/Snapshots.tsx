@@ -13,11 +13,12 @@ import {
     TableHead,
     TableRow,
 } from "@mui/material";
-import { Refresh as RefreshIcon } from "@mui/icons-material";
+import { Refresh as RefreshIcon, PlayArrow as PlayArrowIcon } from "@mui/icons-material";
 import backend from "@/backend/backend";
 import { BackupSnapshot } from "@backend/types/backup";
 import SnapshotRow from "@/components/backup/snapshots/SnapshotRow";
 import DeleteConfirmationDialog from "@/components/backup/snapshots/DeleteConfirmationDialog";
+import BackupConfirmationDialog from "@/components/backup/snapshots/BackupConfirmationDialog";
 
 const BackupSnapshots: React.FC = () => {
     const [snapshots, setSnapshots] = useState<BackupSnapshot[]>([]);
@@ -28,6 +29,10 @@ const BackupSnapshots: React.FC = () => {
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [selectedSnapshot, setSelectedSnapshot] = useState<BackupSnapshot | null>(null);
     const [deleting, setDeleting] = useState(false);
+    const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
+    const [backupRunning, setBackupRunning] = useState(false);
+    const [backupError, setBackupError] = useState<string>();
+    const [backupSuccess, setBackupSuccess] = useState(false);
 
     useEffect(() => {
         fetchSnapshots();
@@ -79,6 +84,30 @@ const BackupSnapshots: React.FC = () => {
         }
     };
 
+    const handleRunBackup = async () => {
+        setBackupError(null);
+        setBackupSuccess(false);
+        setConfirmDialogOpen(true);
+    };
+
+    const handleConfirmBackup = async (keepForever: boolean) => {
+        try {
+            setConfirmDialogOpen(false);
+            setBackupRunning(true);
+            await backend.startBackup(keepForever);
+            setBackupSuccess(true);
+            fetchSnapshots(); // Refresh the snapshots list after backup
+        } catch (error) {
+            setBackupError("Backup operation failed. " + (error.message ?? ""));
+        } finally {
+            setBackupRunning(false);
+        }
+    };
+
+    const handleCancelBackup = () => {
+        setConfirmDialogOpen(false);
+    };
+
     if (loading && snapshots.length === 0) {
         return (
             <Box display="flex" justifyContent="center" alignItems="center" minHeight="60vh">
@@ -110,7 +139,29 @@ const BackupSnapshots: React.FC = () => {
                 >
                     Refresh
                 </Button>
+                <Button
+                    variant="contained"
+                    startIcon={<PlayArrowIcon />}
+                    onClick={handleRunBackup}
+                    color="primary"
+                    loading={backupRunning}
+                    loadingPosition="start"
+                >
+                    Run Backup Now
+                </Button>
             </Box>
+
+            {backupError && (
+                <Alert severity="error" sx={{ m: 2 }} onClose={() => setBackupError(null)}>
+                    {backupError}
+                </Alert>
+            )}
+
+            {backupSuccess && (
+                <Alert severity="success" sx={{ m: 2 }} onClose={() => setBackupSuccess(false)}>
+                    Backup completed successfully. The snapshots list has been refreshed.
+                </Alert>
+            )}
 
             {deleteError && (
                 <Alert severity="error" sx={{ m: 2 }} onClose={() => setDeleteError(null)}>
@@ -164,6 +215,13 @@ const BackupSnapshots: React.FC = () => {
                 onClose={handleDeleteCancel}
                 onDelete={handleDeleteConfirm}
                 selectedSnapshot={selectedSnapshot}
+            />
+
+            {/* Backup Confirmation Dialog */}
+            <BackupConfirmationDialog
+                open={confirmDialogOpen}
+                onClose={handleCancelBackup}
+                onConfirm={handleConfirmBackup}
             />
         </>
     );

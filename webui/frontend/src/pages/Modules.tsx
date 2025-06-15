@@ -2,11 +2,11 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Typography, Grid, Box, CircularProgress, Button } from '@mui/material';
 import { Add as AddIcon, Remove as RemoveIcon } from '@mui/icons-material';
-import { InstalledModulesCard } from '@/components/modules/InstalledModulesCard';
 import { InstallModuleDialog } from '@/components/modules/InstallModuleDialog';
 import { RemoveModuleDialog } from '@/components/modules/RemoveModuleDialog';
 import { useModulesData } from '@/hooks/useModulesData';
 import { useSession } from '@/contexts/SessionContext';
+import ModulesList from '@/components/modules/ModulesList';
 
 export default function Modules() {
     const [expandedModule, setExpandedModule] = useState<string | null>(null);
@@ -89,43 +89,53 @@ export default function Modules() {
         );
     }
 
+    const hasModules = status?.installedModules && status?.installedModules.length > 0;
+
     const hasRemovableModules = status?.installedModules && 
         status.installedModules.filter(m => m !== 'base').length > 0;
 
     return (
         <>
-            <Grid container spacing={3}>
-                <Grid size={{ xs: 12 }}>
-                    <InstalledModulesCard
-                        modules={status?.installedModules || []}
-                        dockerContainers={status?.dockerContainers || []}
-                        expandedModule={expandedModule}
-                        onModuleClick={handleModuleClick}
-                    />
-                </Grid>
-                
-                <Grid size={{ xs: 12 }}>
-                    <Box display="flex" gap={2}>
+            <Grid size={{ xs: 12 }}>
+                <Box sx={{ display: "flex", justifyContent: "end", gap: 2, mb: 3 }}>
+                    <Button
+                        variant="contained"
+                        startIcon={<AddIcon />}
+                        onClick={handleOpenInstallDialog}
+                        disabled={!!activity}
+                    >
+                        Add Modules
+                    </Button>
+                    {hasRemovableModules && (
                         <Button
-                            variant="contained"
-                            startIcon={<AddIcon />}
-                            onClick={handleOpenInstallDialog}
+                            variant="outlined"
+                            color="error"
+                            startIcon={<RemoveIcon />}
+                            onClick={handleOpenRemoveDialog}
                             disabled={!!activity}
                         >
-                            Add Modules
+                            Remove Modules
                         </Button>
-                        {hasRemovableModules && (
-                            <Button
-                                variant="outlined"
-                                color="error"
-                                startIcon={<RemoveIcon />}
-                                onClick={handleOpenRemoveDialog}
-                                disabled={!!activity}
-                            >
-                                Remove Modules
-                            </Button>
-                        )}
-                    </Box>
+                    )}
+                </Box>
+            </Grid>
+
+            <Grid container spacing={3}>
+                <Grid size={{ xs: 12 }}>
+                    {hasModules ? (
+                        <ModulesList
+                            modules={status?.installedModules}
+                            dockerContainers={status?.dockerContainers}
+                            expandedModule={expandedModule}
+                            onModuleClick={handleModuleClick}
+                        />
+                    ) : (
+                        <Box textAlign="center" py={4}>
+                            <Typography variant="body1" color="text.secondary" gutterBottom>
+                                There are no modules installed
+                            </Typography>
+                        </Box>
+                    )}
                 </Grid>
             </Grid>
 

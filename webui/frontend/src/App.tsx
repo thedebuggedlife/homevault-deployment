@@ -37,11 +37,6 @@ function AppContent() {
             icon: <BackupIcon />,
             children: [
                 {
-                    title: "Overview",
-                    segment: "backup",
-                    icon: <DashboardIcon />,
-                },
-                {
                     title: "Repository",
                     segment: "backup/repository",
                     icon: <BookmarkIcon />,
